@@ -1,0 +1,8 @@
+[workspace]
+name = "Os-race"
+version = "0.1.0"
+edition = "2018"
+members = [
+    "os",
+    "bootloader",
+]

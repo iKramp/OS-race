@@ -1,0 +1,10 @@
+[package]
+name = "bootloader"
+version = "0.1.0"
+edition = "2018"
+
+[[bin]]
+name = "bootloader"
+path = "src/main.rs"
+
+[dependencies]
