@@ -1,8 +1,14 @@
 [workspace]
-name = "Os-race"
+name = "os-race"
 version = "0.1.0"
 edition = "2018"
 members = [
     "os",
     "bootloader",
 ]
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"

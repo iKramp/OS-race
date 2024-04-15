@@ -7,4 +7,8 @@ edition = "2018"
 name = "os"
 path = "src/main.rs"
 
-[dependencies]
+[profile.dev]
+workspace = true
+
+[profile.release]
+workspace = true
