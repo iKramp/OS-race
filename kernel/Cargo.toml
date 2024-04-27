@@ -1,11 +1,14 @@
 [package]
-name = "os"
+name = "kernel"
 version = "0.1.0"
 edition = "2018"
 
 [[bin]]
-name = "os"
+name = "kernel"
 path = "src/main.rs"
+
+[dependencies]
+bootloader_api = "0.11.7"
 
 [profile.dev]
 workspace = true

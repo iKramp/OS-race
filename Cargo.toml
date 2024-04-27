@@ -1,11 +1,22 @@
+[package]
+name = "os-race"
+version = "0.1.0"
+
 [workspace]
 name = "os-race"
 version = "0.1.0"
 edition = "2018"
 members = [
-    "os",
-    "bootloader",
+    "kernel",
 ]
+
+[build-dependencies]
+kernel = { path = "kernel", artifact = "bin", target = "x86_64-unknown-none" }
+bootloader = "0.11"
+
+[dependencies]
+# used for UEFI booting in QEMU
+ovmf-prebuilt = "0.1.0-alpha.1"
 
 [profile.dev]
 panic = "abort"
