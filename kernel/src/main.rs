@@ -38,9 +38,6 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
 
     unsafe {
         vga::VGA_TEXT.write_text("TEST\nthis is a sentance in a new line");
-        vga::VGA_TEXT.foreground = (255, 255, 0);
-        vga::VGA_TEXT.background = (0, 255, 255);
-        vga::VGA_TEXT.write_text("this should\nbe colored");
     }
 
     #[allow(clippy::empty_loop)]
