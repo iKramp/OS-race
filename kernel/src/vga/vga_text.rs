@@ -38,7 +38,11 @@ impl VgaText {
         };
     }
 
-    pub unsafe fn write_character(&mut self, character: &u8) {
+    pub unsafe fn write_character(&mut self, mut character: &u8) {
+        if !(0x20..0x7f).contains(character) {
+            character = &0xfe
+        }
+
         let character = &DEFAULT_FONT[*character as usize * 8..(*character as usize + 1) * 8];
         let mut curr_off = self.offset;
         for char_line in character {
@@ -116,5 +120,14 @@ pub fn init_vga_text(width: usize, height: usize) {
     unsafe {
         VGA_TEXT.height_lines = height / (CHAR_HEIGHT * 2);
         VGA_TEXT.width_chars = width / (CHAR_WIDTH * 2);
+    }
+}
+
+pub fn clear_screen() {
+    super::vga_driver::clear_screen();
+    unsafe {
+        VGA_TEXT.line = 0;
+        VGA_TEXT.char = 0;
+        VGA_TEXT.offset = 0;
     }
 }

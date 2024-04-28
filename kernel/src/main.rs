@@ -37,7 +37,8 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
     vga::clear_screen();
 
     unsafe {
-        vga::VGA_TEXT.write_text("TEST\nthis is a sentance in a new line");
+        vga::VGA_TEXT.write_text("TEST\nthis is a sentance in a new line, attempting non-ascii: ");
+        vga::VGA_TEXT.write_text("π");
     }
 
     #[allow(clippy::empty_loop)]
