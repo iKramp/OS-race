@@ -7,7 +7,8 @@ use core::panic::PanicInfo;
 mod vga;
 
 #[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
+fn panic(info: &PanicInfo) -> ! {
+    println!("{}", info);
     loop {}
 }
 
@@ -36,11 +37,14 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
 
     vga::clear_screen();
 
-    unsafe {
-        vga::VGA_TEXT.write_text("TEST\nthis is a sentance in a new line, attempting non-ascii: ");
-        vga::VGA_TEXT.write_text("π");
-    }
+    let mut i = 0;
 
     #[allow(clippy::empty_loop)]
-    loop {}
+    loop {
+        i += 1;
+        println!("number is {}", i);
+        if i == 1000 {
+            panic!("test this message {}", i);
+        }
+    }
 }

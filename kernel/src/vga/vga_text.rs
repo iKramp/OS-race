@@ -3,7 +3,7 @@ use core::arch::asm;
 use super::font::*;
 use super::vga_driver::VGA_BINDING;
 
-pub struct VgaText {
+struct VgaText {
     pub foreground: (u8, u8, u8),
     pub background: (u8, u8, u8),
     height_lines: usize,
@@ -106,7 +106,14 @@ impl VgaText {
     }
 }
 
-pub static mut VGA_TEXT: VgaText = VgaText {
+impl core::fmt::Write for VgaText {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        self.write_text(s);
+        Ok(())
+    }
+}
+
+static mut VGA_TEXT: VgaText = VgaText {
     background: (0, 0, 0),
     foreground: (255, 255, 255),
     height_lines: 0,
@@ -130,4 +137,21 @@ pub fn clear_screen() {
         VGA_TEXT.char = 0;
         VGA_TEXT.offset = 0;
     }
+}
+
+#[macro_export]
+macro_rules! print {
+    ($($arg:tt)*) => ($crate::vga::vga_text::_print(format_args!($($arg)*)));
+}
+
+#[macro_export]
+macro_rules! println {
+    () => ($crate::print!("\n"));
+    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+}
+
+#[doc(hidden)]
+pub fn _print(args: core::fmt::Arguments) {
+    use core::fmt::Write;
+    unsafe { VGA_TEXT.write_fmt(args).unwrap() };
 }
