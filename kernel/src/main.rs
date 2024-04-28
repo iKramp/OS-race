@@ -1,24 +1,21 @@
 #![no_std]
 #![no_main]
 
-use bootloader_api::{entry_point, BootloaderConfig};
+use bootloader_api::entry_point;
+use core::arch::asm;
 use core::panic::PanicInfo;
 
+mod tests;
 mod vga;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
+    vga::vga_text::set_vga_text_foreground((0, 0, 255));
     println!("{}", info);
     loop {}
 }
 
-pub static BOOTLOADER_CONFIG: BootloaderConfig = {
-    let mut config = BootloaderConfig::new_default();
-    config.kernel_stack_size = 100 * 1024;
-    config
-};
-
-entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
+entry_point!(kernel_main);
 
 #[no_mangle]
 fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
@@ -37,14 +34,31 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
 
     vga::clear_screen();
 
-    let mut i = 0;
+    println!("Hello world");
+
+    #[cfg(feature = "run_tests")]
+    {
+        println!("Hello world");
+        use crate::tests::test_runner;
+        test_runner();
+    }
 
     #[allow(clippy::empty_loop)]
-    loop {
-        i += 1;
-        println!("number is {}", i);
-        if i == 1000 {
-            panic!("test this message {}", i);
-        }
-    }
+    loop {}
 }
+
+/*pub unsafe fn exit_qemu(ok: bool) {
+    if ok {
+        asm!(
+            "mov eax, 0x10",
+            "out 0xf4, eax",
+            out("eax") _
+        );
+    } else {
+        asm!(
+            "mov eax, 0x11",
+            "out 0xf4, eax",
+            out("eax") _
+        );
+    }
+}*/

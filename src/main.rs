@@ -22,6 +22,12 @@ fn main() {
         cmd.arg("-S");
     }
 
+    #[cfg(test)]
+    {
+        cmd.arg("-device")
+            .arg("isa-debug-exit,iobase=0xf4,iosize=0x04");
+    }
+
     if uefi {
         cmd.arg("-bios").arg(ovmf_prebuilt::ovmf_pure_efi());
         cmd.arg("-drive")
@@ -32,4 +38,9 @@ fn main() {
     }
     let mut child = cmd.spawn().unwrap();
     child.wait().unwrap();
+}
+
+#[test]
+fn test_run() {
+    main();
 }

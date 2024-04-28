@@ -130,6 +130,17 @@ pub fn init_vga_text(width: usize, height: usize) {
     }
 }
 
+pub fn set_vga_text_foreground(color: (u8, u8, u8)) {
+    unsafe { VGA_TEXT.foreground = color }
+}
+pub fn set_vga_text_background(color: (u8, u8, u8)) {
+    unsafe { VGA_TEXT.background = color }
+}
+pub fn set_vga_text_colors(fg_color: (u8, u8, u8), bg_color: (u8, u8, u8)) {
+    set_vga_text_background(bg_color);
+    set_vga_text_foreground(fg_color);
+}
+
 pub fn clear_screen() {
     super::vga_driver::clear_screen();
     unsafe {

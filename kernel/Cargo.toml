@@ -7,8 +7,12 @@ edition = "2018"
 name = "kernel"
 path = "src/main.rs"
 
+[features]
+run_tests = []
+
 [dependencies]
 bootloader_api = "0.11.7"
+kernel_test = { path = "../kernel_test"}
 
 [profile.dev]
 workspace = true
