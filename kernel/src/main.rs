@@ -4,9 +4,7 @@
 use bootloader_api::{entry_point, BootloaderConfig};
 use core::panic::PanicInfo;
 
-use crate::vga_driver::init_vga_driver;
-
-mod vga_driver;
+mod vga;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
@@ -28,7 +26,7 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
         binding.info().pixel_format,
         bootloader_api::info::PixelFormat::Bgr
     );
-    init_vga_driver(
+    vga::init_vga_driver(
         binding.info().width,
         binding.info().height,
         binding.info().stride,
@@ -36,7 +34,14 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
         binding.buffer_mut().as_mut_ptr(),
     );
 
-    vga_driver::clear_screen();
+    vga::clear_screen();
+
+    unsafe {
+        vga::VGA_TEXT.write_text("TEST\nthis is a sentance in a new line");
+        vga::VGA_TEXT.foreground = (255, 255, 0);
+        vga::VGA_TEXT.background = (0, 255, 255);
+        vga::VGA_TEXT.write_text("this should\nbe colored");
+    }
 
     #[allow(clippy::empty_loop)]
     loop {}
