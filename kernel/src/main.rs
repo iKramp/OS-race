@@ -43,6 +43,8 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
         test_runner();
     }
 
+    println!("This message is created after tests");
+
     #[allow(clippy::empty_loop)]
     loop {}
 }
