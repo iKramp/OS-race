@@ -23,7 +23,7 @@ pub fn test_runner() {
     println!("Running {} tests", tests.len());
     for (test, name) in tests {
         set_vga_text_foreground((0, 255, 255));
-        print!("testing {name} ... ");
+        println!("testing {name} ... ");
         test();
 
         set_vga_text_foreground((0, 255, 0));

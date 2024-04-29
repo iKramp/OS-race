@@ -2,9 +2,10 @@
 #![no_main]
 
 use bootloader_api::entry_point;
-use core::arch::asm;
 use core::panic::PanicInfo;
 
+mod interrupts;
+#[allow(unused_imports)]
 mod tests;
 mod vga;
 
@@ -34,13 +35,21 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
 
     vga::clear_screen();
 
-    println!("Hello world");
+    interrupts::setup_idt();
+
+    print!("Hello via ");
+
+    vga::vga_text::set_vga_text_foreground((30, 105, 210));
+
+    println!("RustOS");
 
     #[cfg(feature = "run_tests")]
     {
-        println!("Hello world");
-        use crate::tests::test_runner;
-        test_runner();
+        if true {
+            println!("Hello world");
+            use crate::tests::test_runner;
+            test_runner();
+        }
     }
 
     println!("This message is created after tests");

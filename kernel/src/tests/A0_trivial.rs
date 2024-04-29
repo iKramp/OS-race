@@ -7,3 +7,8 @@ fn trivial_test_1() {
     println!("test");
     assert!(0 == 0);
 }
+
+#[kernel_test]
+fn trivial_test_2() {
+    assert!(1 == 0);
+}
