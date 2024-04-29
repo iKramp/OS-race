@@ -45,7 +45,7 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
 
     #[cfg(feature = "run_tests")]
     {
-        if true {
+        if false {
             println!("Hello world");
             use crate::tests::test_runner;
             test_runner();

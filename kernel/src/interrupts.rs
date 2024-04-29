@@ -1,18 +1,6 @@
 use crate::println;
 use crate::vga::vga_text::set_vga_text_foreground;
 
-const IDT_SIZE: usize = 256;
-
-pub struct Idt {
-    entry_table: [Entry; IDT_SIZE],
-}
-
-#[repr(C, packed)]
-struct IDTPointer {
-    limit: u16,
-    base: u64,
-}
-
 macro_rules! interrupt_message {
     ($name: expr) => {{
         extern "C" fn wrapper() -> ! {
@@ -26,7 +14,19 @@ macro_rules! interrupt_message {
     }};
 }
 
+#[repr(C, packed)]
+struct IDTPointer {
+    limit: u16,
+    base: u64,
+}
+
 static mut IDT_POINTER: IDTPointer = IDTPointer { limit: 0, base: 0 };
+
+const IDT_SIZE: usize = 256;
+
+pub struct Idt {
+    entry_table: [Entry; IDT_SIZE],
+}
 
 static mut IDT: Idt = Idt::new();
 
@@ -137,8 +137,8 @@ pub fn setup_idt() {
         byte_to_port(PIC1_DATA, 0x01);
         byte_to_port(PIC2_DATA, 0x01);
 
-        byte_to_port(PIC1_DATA, 0x00);
-        byte_to_port(PIC2_DATA, 0x00);
+        byte_to_port(PIC1_DATA, 0x01);
+        byte_to_port(PIC2_DATA, 0x01);
 
         IDT.load();
     }
