@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 #![feature(naked_functions)]
+#![feature(abi_x86_interrupt)]
 
 use bootloader_api::entry_point;
 use core::panic::PanicInfo;
@@ -33,7 +34,7 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
 
     vga::clear_screen();
 
-    interrupts::setup_idt();
+    interrupts::init_interrupts();
 
     print!("Hello via ");
 
@@ -45,7 +46,7 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
         //core::arch::asm!("mov dx, 0", "div dx", out("dx") _); //div by zero
         //core::arch::asm!("ud2"); //invalid p[code
         //core::arch::asm!("mov qword ptr [0x00], 42") //page fault
-        core::arch::asm!("int3");
+        //core::arch::asm!("int3");
     }
 
     #[cfg(feature = "run_tests")]

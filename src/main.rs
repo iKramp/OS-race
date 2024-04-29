@@ -12,11 +12,7 @@ fn main() {
     let debug = false;
 
     let mut cmd = std::process::Command::new("qemu-system-x86_64");
-    cmd.arg("-d")
-        .arg("int")
-        .arg("-D")
-        .arg("./log.txt")
-        .arg("-no-reboot");
+    cmd.arg("-d").arg("int").arg("-D").arg("./log.txt").arg("-no-reboot");
     if debug {
         cmd.arg("-s");
         cmd.arg("-S");
@@ -24,17 +20,14 @@ fn main() {
 
     #[cfg(test)]
     {
-        cmd.arg("-device")
-            .arg("isa-debug-exit,iobase=0xf4,iosize=0x04");
+        cmd.arg("-device").arg("isa-debug-exit,iobase=0xf4,iosize=0x04");
     }
 
     if uefi {
         cmd.arg("-bios").arg(ovmf_prebuilt::ovmf_pure_efi());
-        cmd.arg("-drive")
-            .arg(format!("format=raw,file={uefi_path}"));
+        cmd.arg("-drive").arg(format!("format=raw,file={uefi_path}"));
     } else {
-        cmd.arg("-drive")
-            .arg(format!("format=raw,file={bios_path}"));
+        cmd.arg("-drive").arg(format!("format=raw,file={bios_path}"));
     }
     let mut child = cmd.spawn().unwrap();
     child.wait().unwrap();
