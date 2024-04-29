@@ -29,13 +29,11 @@ impl VgaText {
     fn do_newline(&mut self) {
         self.char = 0;
         self.line += 1;
-        if self.line >= self.height_lines {
+        if self.line >= self.height_lines - 1 {
             self.line -= 1;
             unsafe { self.scroll() };
         }
-        self.offset = unsafe {
-            VGA_BINDING.stride * self.line * CHAR_HEIGHT * 2 * VGA_BINDING.bytes_per_pixel
-        };
+        self.offset = unsafe { VGA_BINDING.stride * self.line * CHAR_HEIGHT * 2 * VGA_BINDING.bytes_per_pixel };
     }
 
     pub unsafe fn write_character(&mut self, mut character: &u8) {
@@ -53,9 +51,7 @@ impl VgaText {
                         true => self.foreground,
                         false => self.background,
                     };
-                    *VGA_BINDING
-                        .buffer
-                        .add(curr_off + i * VGA_BINDING.bytes_per_pixel * 2) = color.0;
+                    *VGA_BINDING.buffer.add(curr_off + i * VGA_BINDING.bytes_per_pixel * 2) = color.0;
                     *VGA_BINDING
                         .buffer
                         .add(curr_off + i * VGA_BINDING.bytes_per_pixel * 2 + 1) = color.1;

@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+#![feature(naked_functions)]
 
 use bootloader_api::entry_point;
 use core::panic::PanicInfo;
@@ -21,10 +22,7 @@ entry_point!(kernel_main);
 #[no_mangle]
 fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
     let binding = boot_info.framebuffer.as_mut().unwrap();
-    assert_eq!(
-        binding.info().pixel_format,
-        bootloader_api::info::PixelFormat::Bgr
-    );
+    assert_eq!(binding.info().pixel_format, bootloader_api::info::PixelFormat::Bgr);
     vga::init_vga_driver(
         binding.info().width,
         binding.info().height,
@@ -43,9 +41,16 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
 
     println!("RustOS");
 
+    unsafe {
+        //core::arch::asm!("mov dx, 0", "div dx", out("dx") _); //div by zero
+        //core::arch::asm!("ud2"); //invalid p[code
+        //core::arch::asm!("mov qword ptr [0x00], 42") //page fault
+        core::arch::asm!("int3");
+    }
+
     #[cfg(feature = "run_tests")]
     {
-        if false {
+        if true {
             println!("Hello world");
             use crate::tests::test_runner;
             test_runner();

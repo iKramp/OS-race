@@ -1,5 +1,11 @@
 use crate::println;
 use crate::vga::vga_text::set_vga_text_foreground;
+use core::arch::asm;
+
+#[macro_use]
+mod handlers;
+
+use handlers::*;
 
 macro_rules! interrupt_message {
     ($name: expr) => {{
@@ -47,47 +53,26 @@ impl Idt {
                 base: self as *const _ as u64,
                 limit: (core::mem::size_of::<Self>() - 1) as u16,
             };
-            core::arch::asm!("lidt [{}]", "sti", in(reg) core::ptr::addr_of!(IDT_POINTER));
+            asm!("lidt [{}]", "sti", in(reg) core::ptr::addr_of!(IDT_POINTER));
         }
     }
 
     pub fn set_entries(&mut self) {
-        self.set_entry(Entry::default(interrupt_message!("divide by zero")), 0);
+        self.set_entry(Entry::default(handler!(divide_by_zero)), 0);
         self.set_entry(Entry::default(interrupt_message!("bebug")), 1);
-        self.set_entry(
-            Entry::default(interrupt_message!("non maskable interrupt")),
-            2,
-        );
-        self.set_entry(Entry::default(interrupt_message!("breakpoint")), 3);
+        self.set_entry(Entry::default(interrupt_message!("non maskable interrupt")), 2);
+        self.set_entry(Entry::default(handler!(breakpoint)), 3);
         self.set_entry(Entry::default(interrupt_message!("overflow")), 4);
-        self.set_entry(
-            Entry::default(interrupt_message!("bound range exceeded")),
-            5,
-        );
-        self.set_entry(Entry::default(interrupt_message!("invalid opcode")), 6);
-        self.set_entry(
-            Entry::default(interrupt_message!("device not available")),
-            7,
-        );
+        self.set_entry(Entry::default(interrupt_message!("bound range exceeded")), 5);
+        self.set_entry(Entry::default(handler!(invalid_opcode)), 6);
+        self.set_entry(Entry::default(interrupt_message!("device not available")), 7);
         self.set_entry(Entry::default(interrupt_message!("double fault")), 8);
-        self.set_entry(
-            Entry::default(interrupt_message!("coprocessor segment overrun")),
-            9,
-        );
+        self.set_entry(Entry::default(interrupt_message!("coprocessor segment overrun")), 9);
         self.set_entry(Entry::default(interrupt_message!("invalid tss")), 10);
-        self.set_entry(
-            Entry::default(interrupt_message!("segment not present")),
-            11,
-        );
-        self.set_entry(
-            Entry::default(interrupt_message!("stack segment fault")),
-            12,
-        );
-        self.set_entry(
-            Entry::default(interrupt_message!("general protection fault")),
-            13,
-        );
-        self.set_entry(Entry::default(interrupt_message!("page fault")), 14);
+        self.set_entry(Entry::default(interrupt_message!("segment not present")), 11);
+        self.set_entry(Entry::default(interrupt_message!("stack segment fault")), 12);
+        self.set_entry(Entry::default(interrupt_message!("general protection fault")), 13);
+        self.set_entry(Entry::default(handler_with_error!(page_fault)), 14);
         self.set_entry(Entry::default(interrupt_message!("reserved")), 15);
         self.set_entry(Entry::default(interrupt_message!("FPU error")), 16);
         self.set_entry(Entry::default(interrupt_message!("alignment check")), 17);
@@ -105,12 +90,13 @@ impl Idt {
         self.set_entry(Entry::default(interrupt_message!("reserved")), 29);
         self.set_entry(Entry::default(interrupt_message!("reserved")), 30);
         self.set_entry(Entry::default(interrupt_message!("reserved")), 31);
+        self.set_entry(Entry::default(interrupt_message!("reserved")), 31);
     }
 }
 
 fn byte_to_port(port: u16, byte: u8) {
     unsafe {
-        core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
+        asm!("out dx, al", in("dx") port, in("al") byte);
     }
 }
 
@@ -192,8 +178,7 @@ fn construct_entry_options(
 ) -> u16 {
     assert!(interrupt_stack_table_index < 8);
     assert!(descriptor_privilege_level < 4);
-    let mut num: u16 =
-        0b0000111000000000 | interrupt_stack_table_index | (descriptor_privilege_level << 13);
+    let mut num: u16 = 0b0000111000000000 | interrupt_stack_table_index | (descriptor_privilege_level << 13);
     if present {
         num |= 1 << 15;
     }
