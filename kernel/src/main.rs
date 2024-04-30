@@ -44,10 +44,10 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
     println!("RustOS");
 
     unsafe {
-        core::arch::asm!("mov dx, 0", "div dx", out("dx") _); //div by zero
-                                                              //core::arch::asm!("ud2"); //invalid opcode
-                                                              //core::arch::asm!("mov qword ptr [0x00], 42") //page fault
-                                                              //core::arch::asm!("int3");
+        //core::arch::asm!("mov dx, 0", "div dx", out("dx") _); //div by zero
+        //core::arch::asm!("ud2"); //invalid opcode
+        //core::arch::asm!("mov qword ptr [0x00], 42") //page fault
+        //core::arch::asm!("int3");
     }
 
     fn rec() {

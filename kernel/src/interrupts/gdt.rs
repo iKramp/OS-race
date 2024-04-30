@@ -154,8 +154,8 @@ pub fn init_gdt() {
     unsafe {
         GDT.0.load();
         //can probably remain commented because it has the same offset as the bootloader defined cs
-        //set_cs(GDT.1.kernel_code_selector, GDT.1.kernel_data_selector); //TODO implement later
-        //core::arch::asm!("ltr {0:x}", in(reg) GDT.1.tss_selector, options(nostack, preserves_flags));
+        set_cs(GDT.1.kernel_code_selector, GDT.1.kernel_data_selector); //TODO implement later
+        core::arch::asm!("ltr {0:x}", in(reg) GDT.1.tss_selector, options(nostack, preserves_flags));
     }
 }
 
@@ -165,7 +165,7 @@ fn set_cs(code_seg: u16, data_seg: u16) {
             "push {code_seg}",
             "lea {tmp}, [2f + rip]",
             "push {tmp}",
-            "iretq",
+            "retfq",
             "2:",
             "mov ds, ax",
             "mov es, ax",
@@ -175,7 +175,6 @@ fn set_cs(code_seg: u16, data_seg: u16) {
             code_seg = in(reg) u64::from(code_seg),
             in("ax") u64::from(data_seg),
             tmp = lateout(reg) _,
-            lateout("ax") _,
             options(preserves_flags),
         );
     }
