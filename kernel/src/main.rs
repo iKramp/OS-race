@@ -2,6 +2,7 @@
 #![no_main]
 #![feature(naked_functions)]
 #![feature(abi_x86_interrupt)]
+#![feature(stmt_expr_attributes)]
 
 use bootloader_api::entry_point;
 use core::panic::PanicInfo;
@@ -43,11 +44,17 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
     println!("RustOS");
 
     unsafe {
-        //core::arch::asm!("mov dx, 0", "div dx", out("dx") _); //div by zero
-        //core::arch::asm!("ud2"); //invalid p[code
-        //core::arch::asm!("mov qword ptr [0x00], 42") //page fault
-        //core::arch::asm!("int3");
+        core::arch::asm!("mov dx, 0", "div dx", out("dx") _); //div by zero
+                                                              //core::arch::asm!("ud2"); //invalid opcode
+                                                              //core::arch::asm!("mov qword ptr [0x00], 42") //page fault
+                                                              //core::arch::asm!("int3");
     }
+
+    fn rec() {
+        rec();
+    }
+
+    //rec();
 
     #[cfg(feature = "run_tests")]
     {

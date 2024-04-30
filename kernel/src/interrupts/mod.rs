@@ -5,6 +5,7 @@ mod handlers;
 mod idt;
 
 pub fn init_interrupts() {
+    gdt::init_tss();
     gdt::init_gdt();
     idt::init_idt();
 }

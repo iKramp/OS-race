@@ -159,4 +159,12 @@ pub extern "C" fn page_fault(stack_frame: &ExceptionStackFrame, error_code: u64)
         stack_frame
     );
     set_vga_text_foreground((255, 255, 255));
+    loop {}
+}
+
+pub extern "C" fn other_interrupt(stack_frame: &ExceptionStackFrame) {
+    set_vga_text_foreground((0, 0, 255));
+    println!("some interrupt");
+    set_vga_text_foreground((255, 255, 255));
+    loop {}
 }

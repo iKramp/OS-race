@@ -1,3 +1,4 @@
+use super::gdt::DOUBLE_FAULT_IST_INDEX;
 use super::handlers::*;
 use crate::println;
 use crate::vga::vga_text::set_vga_text_foreground;
@@ -9,7 +10,6 @@ macro_rules! interrupt_message {
             set_vga_text_foreground((0, 0, 255));
             println!("{} exception", $name);
             set_vga_text_foreground((255, 255, 255));
-            //unsafe { core::arch::asm!("iretq") };
             loop {}
         }
         wrapper
@@ -62,14 +62,17 @@ impl Idt {
         self.set_entry(Entry::default(interrupt_message!("bound range exceeded")), 5);
         self.set_entry(Entry::default(handler!(invalid_opcode)), 6);
         self.set_entry(Entry::default(interrupt_message!("device not available")), 7);
-        self.set_entry(Entry::default(interrupt_message!("double fault")), 8);
+        /*self.set_entry(
+            Entry::with_ist_index(DOUBLE_FAULT_IST_INDEX, interrupt_message!("double fault")),
+            8,
+        );*/
+        self.set_entry(Entry::default(interrupt_message!("double_fault")), 8);
         self.set_entry(Entry::default(interrupt_message!("coprocessor segment overrun")), 9);
         self.set_entry(Entry::default(interrupt_message!("invalid tss")), 10);
         self.set_entry(Entry::default(interrupt_message!("segment not present")), 11);
         self.set_entry(Entry::default(interrupt_message!("stack segment fault")), 12);
         self.set_entry(Entry::default(interrupt_message!("general protection fault")), 13);
-        self.set_entry(Entry::default(handler_with_error!(page_fault)), 14); //to trigger a double
-                                                                             //fault
+        self.set_entry(Entry::default(handler_with_error!(page_fault)), 14);
         self.set_entry(Entry::default(interrupt_message!("reserved")), 15);
         self.set_entry(Entry::default(interrupt_message!("FPU error")), 16);
         self.set_entry(Entry::default(interrupt_message!("alignment check")), 17);
@@ -88,6 +91,10 @@ impl Idt {
         self.set_entry(Entry::default(interrupt_message!("reserved")), 30);
         self.set_entry(Entry::default(interrupt_message!("reserved")), 31);
         self.set_entry(Entry::default(interrupt_message!("reserved")), 31);
+
+        for i in 32..256 {
+            self.set_entry(Entry::default(interrupt_message!("other interrupt")), i);
+        }
     }
 }
 
@@ -120,8 +127,8 @@ pub fn init_idt() {
         byte_to_port(PIC1_DATA, 0x01);
         byte_to_port(PIC2_DATA, 0x01);
 
-        byte_to_port(PIC1_DATA, 0x01);
-        byte_to_port(PIC2_DATA, 0x01);
+        byte_to_port(PIC1_DATA, 0x03);
+        byte_to_port(PIC2_DATA, 0x03);
 
         IDT.load();
     }
@@ -152,7 +159,19 @@ impl Entry {
     }
 
     fn default(handler: extern "C" fn() -> !) -> Self {
-        Self::new(0x08, handler, construct_entry_options(0, false, 0, true))
+        Self::new(
+            0x08, //unsafe { super::gdt::GDT.1.kernel_code_selector },
+            handler,
+            construct_entry_options(0, false, 0, true),
+        )
+    }
+
+    fn with_ist_index(ist_index: u16, handler: extern "C" fn() -> !) -> Self {
+        Self::new(
+            unsafe { super::gdt::GDT.1.kernel_code_selector },
+            handler,
+            construct_entry_options(ist_index, false, 0, true),
+        )
     }
 
     const fn missing() -> Self {
