@@ -22,6 +22,7 @@ pub struct TablePointer {
     pub base: u64,
 }
 
+#[used]
 static mut IDT_POINTER: TablePointer = TablePointer { limit: 0, base: 0 };
 
 const IDT_SIZE: usize = 256;
@@ -30,6 +31,7 @@ pub struct Idt {
     entry_table: [Entry; IDT_SIZE],
 }
 
+#[used]
 static mut IDT: Idt = Idt::new();
 
 impl Idt {
@@ -54,7 +56,7 @@ impl Idt {
     }
 
     pub fn set_entries(&mut self) {
-        self.set_entry(Entry::default(handler!(divide_by_zero)), 0);
+        //self.set_entry(Entry::default(interrupt_message!("Divide by zero")), 0);
         self.set_entry(Entry::default(interrupt_message!("bebug")), 1);
         self.set_entry(Entry::default(interrupt_message!("non maskable interrupt")), 2);
         self.set_entry(Entry::default(handler!(breakpoint)), 3);
@@ -62,11 +64,11 @@ impl Idt {
         self.set_entry(Entry::default(interrupt_message!("bound range exceeded")), 5);
         self.set_entry(Entry::default(handler!(invalid_opcode)), 6);
         self.set_entry(Entry::default(interrupt_message!("device not available")), 7);
-        /*self.set_entry(
+        self.set_entry(
             Entry::with_ist_index(DOUBLE_FAULT_IST_INDEX, interrupt_message!("double fault")),
             8,
-        );*/
-        self.set_entry(Entry::default(interrupt_message!("double_fault")), 8);
+        );
+        //self.set_entry(Entry::default(interrupt_message!("double_fault")), 8);
         self.set_entry(Entry::default(interrupt_message!("coprocessor segment overrun")), 9);
         self.set_entry(Entry::default(interrupt_message!("invalid tss")), 10);
         self.set_entry(Entry::default(interrupt_message!("segment not present")), 11);
@@ -150,28 +152,20 @@ impl Entry {
         let pointer = handler as usize;
         Self {
             gdt_selector,
-            pointer_low: pointer as u16,
-            pointer_middle: (pointer >> 16) as u16,
-            pointer_high: (pointer >> 32) as u32,
+            pointer_low: (pointer & 0xFFFF) as u16,
+            pointer_middle: ((pointer & 0xFFFF0000) >> 16) as u16,
+            pointer_high: ((pointer & 0xFFFFFFFF00000000) >> 32) as u32,
             options,
             reserved: 0,
         }
     }
 
     fn default(handler: extern "C" fn() -> !) -> Self {
-        Self::new(
-            0x08, //unsafe { super::gdt::GDT.1.kernel_code_selector },
-            handler,
-            construct_entry_options(0, false, 0, true),
-        )
+        Self::new(0x8, handler, construct_entry_options(0, false, 0, true))
     }
 
     fn with_ist_index(ist_index: u16, handler: extern "C" fn() -> !) -> Self {
-        Self::new(
-            unsafe { super::gdt::GDT.1.kernel_code_selector },
-            handler,
-            construct_entry_options(ist_index, false, 0, true),
-        )
+        Self::new(0x8, handler, construct_entry_options(ist_index, false, 0, true))
     }
 
     const fn missing() -> Self {
@@ -186,7 +180,7 @@ impl Entry {
     }
 }
 
-fn construct_entry_options(
+const fn construct_entry_options(
     interrupt_stack_table_index: u16,
     interrupt_gate: bool,
     descriptor_privilege_level: u16,

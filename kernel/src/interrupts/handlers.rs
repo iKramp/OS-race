@@ -113,7 +113,7 @@ pub extern "C" fn divide_by_zero(stack_frame: &ExceptionStackFrame) {
 pub extern "C" fn invalid_opcode(stack_frame: &ExceptionStackFrame) {
     set_vga_text_foreground((0, 0, 255));
     println!(
-        "nEXCEPTION: INVALID OPCODE at {:#x}\n{:#?}",
+        "nEXCEPTION: INVALID OPCODE at {:#X}\n{:#?}",
         stack_frame.instruction_pointer, stack_frame
     );
     set_vga_text_foreground((255, 255, 255));
@@ -123,7 +123,7 @@ pub extern "C" fn invalid_opcode(stack_frame: &ExceptionStackFrame) {
 pub extern "C" fn breakpoint(stack_frame: &ExceptionStackFrame) {
     set_vga_text_foreground((0, 255, 255));
     println!(
-        "Breakpoint reached at {:#x}\n{:#?}",
+        "Breakpoint reached at {:#X}\n{:#?}",
         stack_frame.instruction_pointer, stack_frame
     );
     set_vga_text_foreground((255, 255, 255));
@@ -154,7 +154,7 @@ impl From<u64> for PageFaultErrorCode {
 pub extern "C" fn page_fault(stack_frame: &ExceptionStackFrame, error_code: u64) {
     set_vga_text_foreground((0, 0, 255));
     println!(
-        "\nEXCEPTION: PAGE FAULT with error code\n{:#?}\n{:#?}",
+        "\nEXCEPTION: PAGE FAULT with error code\n{:#X?}\n{:#X?}",
         PageFaultErrorCode::from(error_code),
         stack_frame
     );

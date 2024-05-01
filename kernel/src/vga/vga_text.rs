@@ -33,7 +33,7 @@ impl VgaText {
             self.line -= 1;
             unsafe { self.scroll() };
         }
-        self.offset = unsafe { VGA_BINDING.stride * self.line * CHAR_HEIGHT * 2 * VGA_BINDING.bytes_per_pixel };
+        self.offset = unsafe { VGA_BINDING.stride * self.line * CHAR_HEIGHT * VGA_BINDING.bytes_per_pixel };
     }
 
     pub unsafe fn write_character(&mut self, mut character: &u8) {
@@ -44,36 +44,21 @@ impl VgaText {
         let character = &DEFAULT_FONT[*character as usize * 8..(*character as usize + 1) * 8];
         let mut curr_off = self.offset;
         for char_line in character {
-            for _ in 0..2 {
-                for i in 0..8 {
-                    let bit = char_line & (128 >> i) != 0;
-                    let color = match bit {
-                        true => self.foreground,
-                        false => self.background,
-                    };
-                    *VGA_BINDING.buffer.add(curr_off + i * VGA_BINDING.bytes_per_pixel * 2) = color.0;
-                    *VGA_BINDING
-                        .buffer
-                        .add(curr_off + i * VGA_BINDING.bytes_per_pixel * 2 + 1) = color.1;
-                    *VGA_BINDING
-                        .buffer
-                        .add(curr_off + i * VGA_BINDING.bytes_per_pixel * 2 + 2) = color.2;
-                    *VGA_BINDING
-                        .buffer
-                        .add(curr_off + i * VGA_BINDING.bytes_per_pixel * 2 + 3) = color.0;
-                    *VGA_BINDING
-                        .buffer
-                        .add(curr_off + i * VGA_BINDING.bytes_per_pixel * 2 + 4) = color.1;
-                    *VGA_BINDING
-                        .buffer
-                        .add(curr_off + i * VGA_BINDING.bytes_per_pixel * 2 + 5) = color.2;
-                }
-                curr_off += unsafe { VGA_BINDING.stride * VGA_BINDING.bytes_per_pixel };
+            for i in 0..8 {
+                let bit = char_line & (128 >> i) != 0;
+                let color = match bit {
+                    true => self.foreground,
+                    false => self.background,
+                };
+                *VGA_BINDING.buffer.add(curr_off + i * VGA_BINDING.bytes_per_pixel) = color.0;
+                *VGA_BINDING.buffer.add(curr_off + i * VGA_BINDING.bytes_per_pixel + 1) = color.1;
+                *VGA_BINDING.buffer.add(curr_off + i * VGA_BINDING.bytes_per_pixel + 2) = color.2;
             }
+            curr_off += unsafe { VGA_BINDING.stride * VGA_BINDING.bytes_per_pixel };
         }
 
         self.char += 1;
-        self.offset += CHAR_WIDTH * unsafe { VGA_BINDING.bytes_per_pixel * 2 };
+        self.offset += CHAR_WIDTH * unsafe { VGA_BINDING.bytes_per_pixel };
         if self.char >= self.width_chars {
             self.do_newline();
         }
@@ -81,7 +66,7 @@ impl VgaText {
 
     unsafe fn scroll(&mut self) {
         let top_ptr = VGA_BINDING.buffer;
-        let diff = VGA_BINDING.bytes_per_pixel * VGA_BINDING.stride * CHAR_HEIGHT * 2;
+        let diff = VGA_BINDING.bytes_per_pixel * VGA_BINDING.stride * CHAR_HEIGHT;
         let limit = top_ptr.add(diff * (self.height_lines - 1) - 1);
 
         asm!(
@@ -109,6 +94,7 @@ impl core::fmt::Write for VgaText {
     }
 }
 
+#[used]
 static mut VGA_TEXT: VgaText = VgaText {
     background: (0, 0, 0),
     foreground: (255, 255, 255),
@@ -121,8 +107,8 @@ static mut VGA_TEXT: VgaText = VgaText {
 
 pub fn init_vga_text(width: usize, height: usize) {
     unsafe {
-        VGA_TEXT.height_lines = height / (CHAR_HEIGHT * 2);
-        VGA_TEXT.width_chars = width / (CHAR_WIDTH * 2);
+        VGA_TEXT.height_lines = height / (CHAR_HEIGHT);
+        VGA_TEXT.width_chars = width / (CHAR_WIDTH);
     }
 }
 

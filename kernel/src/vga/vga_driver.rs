@@ -8,6 +8,7 @@ pub struct VgaBinding {
     pub buffer: *mut u8,
 }
 
+#[used]
 pub static mut VGA_BINDING: VgaBinding = VgaBinding {
     width: 0,
     height: 0,
@@ -16,13 +17,7 @@ pub static mut VGA_BINDING: VgaBinding = VgaBinding {
     buffer: core::ptr::null_mut(),
 };
 
-pub fn init_vga_driver(
-    width: usize,
-    height: usize,
-    stride: usize,
-    bytes_pp: usize,
-    buffer: *mut u8,
-) {
+pub fn init_vga_driver(width: usize, height: usize, stride: usize, bytes_pp: usize, buffer: *mut u8) {
     unsafe {
         VGA_BINDING.width = width;
         VGA_BINDING.height = height;
