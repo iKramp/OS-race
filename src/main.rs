@@ -9,7 +9,7 @@ fn main() {
     let uefi = false;
 
     //chose whether to debug with GDB
-    let debug = true;
+    let debug = false;
 
     let mut cmd = std::process::Command::new("qemu-system-x86_64");
     cmd.arg("-d").arg("int").arg("-D").arg("./log.txt").arg("-no-reboot");

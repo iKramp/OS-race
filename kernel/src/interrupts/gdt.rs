@@ -2,9 +2,9 @@ use crate::println;
 
 use super::idt::TablePointer;
 
-pub const DOUBLE_FAULT_IST_INDEX: u16 = 1;
-pub const NON_MASKABLE_INTERRUPT_IST_INDEX: u16 = 2;
-pub const MACHINE_CHECK_IST_INDEX: u16 = 3;
+pub const DOUBLE_FAULT_IST: u16 = 1;
+pub const NMI_IST: u16 = 2;
+pub const MACHINE_CHECK_IST: u16 = 3;
 
 const GDT_LEN: usize = 7;
 #[used]
@@ -43,17 +43,17 @@ static mut TSS: TaskStateSegment = TaskStateSegment {
 
 fn init_tss() {
     unsafe {
-        TSS.interrupt_stack_table[DOUBLE_FAULT_IST_INDEX as usize - 1] = {
+        TSS.interrupt_stack_table[DOUBLE_FAULT_IST as usize - 1] = {
             #[used]
             static mut STACK: Ist = Ist { stack: [0; STACK_SIZE] };
             core::ptr::addr_of!(STACK) as u64 + STACK_SIZE as u64
         };
-        TSS.interrupt_stack_table[NON_MASKABLE_INTERRUPT_IST_INDEX as usize - 1] = {
+        TSS.interrupt_stack_table[NMI_IST as usize - 1] = {
             #[used]
             static mut STACK: Ist = Ist { stack: [0; STACK_SIZE] };
             core::ptr::addr_of!(STACK) as u64 + STACK_SIZE as u64
         };
-        TSS.interrupt_stack_table[MACHINE_CHECK_IST_INDEX as usize - 1] = {
+        TSS.interrupt_stack_table[MACHINE_CHECK_IST as usize - 1] = {
             #[used]
             static mut STACK: Ist = Ist { stack: [0; STACK_SIZE] };
             core::ptr::addr_of!(STACK) as u64 + STACK_SIZE as u64
@@ -120,12 +120,7 @@ struct SegmentDescriptor {
     base_high: u8,
 }
 
-const fn create_128_segment_descriptor(
-    base: u64,
-    limit: u32,
-    access_byte: u8,
-    flags: u8,
-) -> (SegmentDescriptor, SegmentDescriptor) {
+const fn create_128_segment_descriptor(base: u64, limit: u32, access_byte: u8, flags: u8) -> (SegmentDescriptor, SegmentDescriptor) {
     let low = create_segment_descriptor(base, limit, access_byte, flags);
     let high = create_segment_descriptor((base >> 48) & 0xFFFF, ((base >> 32) & 0xFFFF) as u32, 0, 0); //a bit of a hack, we're actually
                                                                                                        //doing a 32 bit base
