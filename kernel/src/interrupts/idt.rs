@@ -70,7 +70,7 @@ impl Idt {
         self.set(Entry::diverging_(interrupt_message!("segment not present")), 11);
         self.set(Entry::diverging_(interrupt_message!("stack segment fault")), 12);
         self.set(Entry::diverging_(interrupt_message!("general protection fault")), 13);
-        self.set(Entry::def_with_error(page_fault), 14);
+        self.set(Entry::with_error(page_fault), 14);
         self.set(Entry::diverging_(interrupt_message!("reserved")), 15);
         self.set(Entry::diverging_(interrupt_message!("FPU error")), 16);
         self.set(Entry::diverging_(interrupt_message!("alignment check")), 17);
@@ -176,7 +176,7 @@ impl Entry {
         Self::new_diverging(0x8, handler, construct_entry_options(0, false, 0, true))
     }
 
-    fn def_with_error(handler: extern "x86-interrupt" fn(_: ExceptionStackFrame, _: u64) -> !) -> Self {
+    fn with_error(handler: extern "x86-interrupt" fn(_: ExceptionStackFrame, _: u64) -> !) -> Self {
         let pointer = handler as usize;
         Self {
             gdt_selector: 0x8,
