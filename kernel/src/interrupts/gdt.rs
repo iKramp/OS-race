@@ -3,6 +3,9 @@ use crate::println;
 use super::idt::TablePointer;
 
 pub const DOUBLE_FAULT_IST_INDEX: u16 = 1;
+pub const NON_MASKABLE_INTERRUPT_IST_INDEX: u16 = 2;
+pub const MACHINE_CHECK_IST_INDEX: u16 = 3;
+
 const GDT_LEN: usize = 7;
 #[used]
 static mut GDT_POINTER: TablePointer = TablePointer { limit: 0, base: 0 };
@@ -18,6 +21,15 @@ struct TaskStateSegment {
     io_map_base_address: u16,
 }
 
+const STACK_SIZE: usize = 4096 * 5;
+
+//wrapped to align
+#[repr(align(16))]
+struct Ist {
+    #[allow(unused)] //used
+    stack: [u8; STACK_SIZE],
+}
+
 #[used]
 static mut TSS: TaskStateSegment = TaskStateSegment {
     padding_1: 0,
@@ -31,16 +43,21 @@ static mut TSS: TaskStateSegment = TaskStateSegment {
 
 fn init_tss() {
     unsafe {
-        TSS.interrupt_stack_table[DOUBLE_FAULT_IST_INDEX as usize] = {
-            const STACK_SIZE: usize = 4096 * 5;
+        TSS.interrupt_stack_table[DOUBLE_FAULT_IST_INDEX as usize - 1] = {
             #[used]
-            static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
-
-            let stack_start = core::ptr::addr_of!(STACK) as u64;
-            let ptr = stack_start + (STACK_SIZE as u64);
-            println!("stack_start + STACK_SIZE: {:X}", ptr);
-            ptr
-        }
+            static mut STACK: Ist = Ist { stack: [0; STACK_SIZE] };
+            core::ptr::addr_of!(STACK) as u64 + STACK_SIZE as u64
+        };
+        TSS.interrupt_stack_table[NON_MASKABLE_INTERRUPT_IST_INDEX as usize - 1] = {
+            #[used]
+            static mut STACK: Ist = Ist { stack: [0; STACK_SIZE] };
+            core::ptr::addr_of!(STACK) as u64 + STACK_SIZE as u64
+        };
+        TSS.interrupt_stack_table[MACHINE_CHECK_IST_INDEX as usize - 1] = {
+            #[used]
+            static mut STACK: Ist = Ist { stack: [0; STACK_SIZE] };
+            core::ptr::addr_of!(STACK) as u64 + STACK_SIZE as u64
+        };
     }
 }
 
@@ -139,8 +156,6 @@ pub fn init_gdt() {
 
     unsafe {
         GDT.load();
-        //println!("gdt table: {:#X?}", GDT);
-        println!("addr_of(TSS) as u64: {:X}", core::ptr::addr_of!(TSS) as u64);
         //can probably remain commented because it has the same offset as the bootloader defined cs
         set_cs();
         core::arch::asm!("mov ax, 0x28", "ltr ax", out("ax") _, options(nostack, preserves_flags, raw));

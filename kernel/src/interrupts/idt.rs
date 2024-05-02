@@ -1,4 +1,4 @@
-use super::gdt::DOUBLE_FAULT_IST_INDEX;
+use super::gdt::{DOUBLE_FAULT_IST_INDEX, MACHINE_CHECK_IST_INDEX, NON_MASKABLE_INTERRUPT_IST_INDEX};
 use super::handlers::*;
 use crate::println;
 use crate::vga::vga_text::set_vga_text_foreground;
@@ -56,9 +56,15 @@ impl Idt {
     }
 
     pub fn set_entries(&mut self) {
-        //self.set_entry(Entry::default(interrupt_message!("Divide by zero")), 0);
+        self.set_entry(Entry::default(interrupt_message!("Divide by zero")), 0);
         self.set_entry(Entry::default(interrupt_message!("bebug")), 1);
-        self.set_entry(Entry::default(interrupt_message!("non maskable interrupt")), 2);
+        self.set_entry(
+            Entry::with_ist_index(
+                NON_MASKABLE_INTERRUPT_IST_INDEX,
+                interrupt_message!("non maskable interrupt"),
+            ),
+            2,
+        );
         self.set_entry(Entry::default(handler!(breakpoint)), 3);
         self.set_entry(Entry::default(interrupt_message!("overflow")), 4);
         self.set_entry(Entry::default(interrupt_message!("bound range exceeded")), 5);
@@ -68,7 +74,6 @@ impl Idt {
             Entry::with_ist_index(DOUBLE_FAULT_IST_INDEX, interrupt_message!("double fault")),
             8,
         );
-        //self.set_entry(Entry::default(interrupt_message!("double_fault")), 8);
         self.set_entry(Entry::default(interrupt_message!("coprocessor segment overrun")), 9);
         self.set_entry(Entry::default(interrupt_message!("invalid tss")), 10);
         self.set_entry(Entry::default(interrupt_message!("segment not present")), 11);
@@ -78,7 +83,10 @@ impl Idt {
         self.set_entry(Entry::default(interrupt_message!("reserved")), 15);
         self.set_entry(Entry::default(interrupt_message!("FPU error")), 16);
         self.set_entry(Entry::default(interrupt_message!("alignment check")), 17);
-        self.set_entry(Entry::default(interrupt_message!("machine check")), 18);
+        self.set_entry(
+            Entry::with_ist_index(MACHINE_CHECK_IST_INDEX, interrupt_message!("machine check")),
+            18,
+        );
         self.set_entry(Entry::default(interrupt_message!("simd fp")), 19);
         self.set_entry(Entry::default(interrupt_message!("virtualization")), 20);
         self.set_entry(Entry::default(interrupt_message!("control")), 21);
