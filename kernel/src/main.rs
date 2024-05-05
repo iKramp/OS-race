@@ -35,7 +35,7 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
 
     vga::clear_screen();
 
-    interrupts::init_interrupts();
+    interrupts::init_interrupts(boot_info.rsdp_addr.into());
 
     print!("Hello via ");
 
@@ -43,16 +43,38 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
 
     println!("RustOS");
 
-    let a = 0;
-    println!("{a}");
+    println!(
+        "
+            .  :*. ## .*:  .            \n    
+         :  @@*@@@@@@@@@@*@@  :         \n
+        :@@@@@@@@@@  @@@@@@@@@@:        \n
+      @@@@@@#+:   =%%=   :+#@@@@@@      \n
+   :*+@@@@+.                .+@@@@+*:   \n
+   .@@@@@@@@@@@@@@@@@@@@@%#+.  +@@@@.   \n
+ .%@@@@@@@@@@@@@@@@@@@@@@@@@@=  +@@@@%. \n
+ :+@#.=@*-*@@@@@@-----=#@@@@@@ :@=.#@+: \n
+.*@@@##+. =@@@@@@------*@@@@@* .+##@@@*.\n
+:+@@@+    =@@@@@@@@@@@@@@@@%-     +@@@+:\n
+:+@@@+    =@@@@@@####%@@@@@@*    =#@@@+:\n
+.*@@@#    =@@@@@@     -@@@@@@+  =@@@@@*.\n
+ :+@@@@@@@@@@@@@@@@@-  *@@@@@@@@@@@@@+: \n
+ .%@@@@@@@@@@@@@@@@@-  .@@@@@@@@@@@@@%. \n
+   .@@@@%==++-------.    --++==%@@@@.   \n
+   :*+@@@@*+@=            =@+*@@@@+*:   \n
+      @@@@=-@%:          :%@-=@@@@      \n 
+        :@@@@@@@@%####%@@@@@@@@:        \n
+         :  @@*@@@@@@@@@@*@@  :         \n
+            .  :*. ## .*:  .            \n
+
+             "
+    );
 
     unsafe {
         //core::arch::asm!("mov dx, 0", "div dx", out("dx") _); //div by zero
         //core::arch::asm!("ud2"); //invalid opcode
         //core::arch::asm!("mov qword ptr [0x00], 42") //page fault
-        core::arch::asm!("int3");
+        //core::arch::asm!("int3");
     }
-    println!("{a}");
 
     fn rec() {
         rec();
@@ -62,14 +84,14 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
 
     #[cfg(feature = "run_tests")]
     {
-        if true {
+        if false {
             println!("Hello world");
             use crate::tests::test_runner;
             test_runner();
         }
     }
 
-    println!("This message is created after tests");
+    //println!("This message is created after tests");
 
     #[allow(clippy::empty_loop)]
     loop {}
