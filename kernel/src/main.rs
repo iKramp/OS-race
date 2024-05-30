@@ -31,19 +31,13 @@ entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
 #[no_mangle]
 fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
-    unsafe {
-        let offset: Option<u64> = boot_info.physical_memory_offset.into();
-        memory::utils::set_physical_offset(memory::utils::PhysOffset(offset.unwrap()));
-    }
-
     let binding = boot_info.framebuffer.as_mut().unwrap();
     vga::init_vga_driver(binding);
     vga::clear_screen();
 
     interrupts::init_interrupts(boot_info.rsdp_addr.into());
 
-    memory::physical_allocator::BuyddyAllocator::init(boot_info);
-    let _virtual_allocator = memory::paging::PageTree::new();
+    memory::init_memory(boot_info);
 
     vga_text::hello_message();
 
