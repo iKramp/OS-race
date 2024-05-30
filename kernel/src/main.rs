@@ -42,7 +42,8 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
 
     interrupts::init_interrupts(boot_info.rsdp_addr.into());
 
-    memory::physical_allocator::BuyddyAllocator::new(boot_info);
+    memory::physical_allocator::BuyddyAllocator::init(boot_info);
+    let _virtual_allocator = memory::paging::PageTree::new();
 
     vga_text::hello_message();
 

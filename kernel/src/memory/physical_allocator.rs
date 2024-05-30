@@ -2,6 +2,12 @@ use super::utils::*;
 use crate::println;
 use bootloader_api::{info::MemoryRegionKind, BootInfo};
 
+pub static mut BUDDY_ALLOCATOR: BuyddyAllocator = BuyddyAllocator {
+    n_pages: 0,
+    binary_tree_size: 0,
+    tree_allocator: VirtAddr(0),
+};
+
 pub struct BuyddyAllocator {
     n_pages: u64,
     binary_tree_size: u64,
@@ -9,7 +15,7 @@ pub struct BuyddyAllocator {
 }
 
 impl BuyddyAllocator {
-    pub fn new(boot_info: &'static mut BootInfo) -> Self {
+    pub fn init(boot_info: &'static mut BootInfo) {
         let memory_regions = &mut boot_info.memory_regions as &'static mut [bootloader_api::info::MemoryRegion];
         let n_pages = find_max_usable_address(memory_regions).0 >> 12;
 
@@ -49,7 +55,7 @@ impl BuyddyAllocator {
                 allocator.mark_addr(PhysAddr(addr), false);
             }
         }
-        allocator
+        unsafe { BUDDY_ALLOCATOR = allocator }
     }
 
     pub fn deallocate_page(&mut self, addr: PhysAddr) {
