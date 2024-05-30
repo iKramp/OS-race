@@ -1,5 +1,7 @@
 use core::arch::asm;
 
+use bootloader_api::info::FrameBuffer;
+
 pub struct VgaBinding {
     pub width: usize,
     pub height: usize,
@@ -17,7 +19,17 @@ pub static mut VGA_BINDING: VgaBinding = VgaBinding {
     buffer: core::ptr::null_mut(),
 };
 
-pub fn init_vga_driver(width: usize, height: usize, stride: usize, bytes_pp: usize, buffer: *mut u8) {
+pub fn init_vga_driver(binding: &mut FrameBuffer) {
+    init_vga_driver_inner(
+        binding.info().width,
+        binding.info().height,
+        binding.info().stride,
+        binding.info().bytes_per_pixel,
+        binding.buffer_mut().as_mut_ptr(),
+    );
+}
+
+fn init_vga_driver_inner(width: usize, height: usize, stride: usize, bytes_pp: usize, buffer: *mut u8) {
     unsafe {
         VGA_BINDING.width = width;
         VGA_BINDING.height = height;

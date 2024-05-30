@@ -33,9 +33,10 @@ pub fn all_tests(_item: TokenStream) -> TokenStream {
     let mut code = "[".to_owned();
 
     unsafe {
+        #[allow(static_mut_refs)]
         for test in &TESTS {
             let function_name = test.split(':').last().unwrap();
-            code = code.add(&format!("({test} as fn(), \"{function_name}\"),"));
+            code = code.add(&format!("({test} as fn() -> bool, \"{function_name}\"),"));
         }
     }
 

@@ -1,4 +1,5 @@
 mod A0_trivial;
+mod memory_utils;
 use crate::println;
 
 #[cfg(feature = "run_tests")]
@@ -22,12 +23,17 @@ pub fn test_runner() {
 
     println!("Running {} tests", tests.len());
     for (test, name) in tests {
+        //TODO add timer when time interrupts work
         set_vga_text_foreground((0, 255, 255));
         println!("testing {name} ... ");
-        test();
-
-        set_vga_text_foreground((0, 255, 0));
-        println!("[ok]");
+        let passed = test();
+        if passed {
+            set_vga_text_foreground((0, 255, 0));
+            println!("[ok]");
+        } else {
+            set_vga_text_foreground((0, 0, 255));
+            println!("[err]");
+        }
     }
     set_vga_text_foreground((255, 255, 255));
 }

@@ -4,111 +4,57 @@
 #![feature(abi_x86_interrupt)]
 #![feature(stmt_expr_attributes)]
 
-use bootloader_api::entry_point;
+use bootloader_api::{config::Mapping, entry_point, BootloaderConfig};
 use core::panic::PanicInfo;
 
 mod interrupts;
+mod memory;
 #[allow(unused_imports)]
 mod tests;
 mod vga;
+use vga::vga_text;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    vga::vga_text::set_vga_text_foreground((0, 0, 255));
+    vga_text::set_vga_text_foreground((0, 0, 255));
     println!("{}", info);
     loop {}
 }
 
-entry_point!(kernel_main);
+pub static BOOTLOADER_CONFIG: BootloaderConfig = {
+    let mut config = BootloaderConfig::new_default();
+    config.mappings.physical_memory = Some(Mapping::Dynamic);
+    config
+};
+
+entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
 #[no_mangle]
 fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
-    let binding = boot_info.framebuffer.as_mut().unwrap();
-    assert_eq!(binding.info().pixel_format, bootloader_api::info::PixelFormat::Bgr);
-    vga::init_vga_driver(
-        binding.info().width,
-        binding.info().height,
-        binding.info().stride,
-        binding.info().bytes_per_pixel,
-        binding.buffer_mut().as_mut_ptr(),
-    );
+    unsafe {
+        let offset: Option<u64> = boot_info.physical_memory_offset.into();
+        memory::utils::set_physical_offset(memory::utils::PhysOffset(offset.unwrap()));
+    }
 
+    let binding = boot_info.framebuffer.as_mut().unwrap();
+    vga::init_vga_driver(binding);
     vga::clear_screen();
 
     interrupts::init_interrupts(boot_info.rsdp_addr.into());
 
-    print!("Hello via ");
+    memory::physical_allocator::BuyddyAllocator::new(boot_info);
 
-    vga::vga_text::set_vga_text_foreground((30, 105, 210));
+    vga_text::hello_message();
 
-    println!("RustOS");
-
-    println!(
-        "
-            .  :*. ## .*:  .            \n    
-         :  @@*@@@@@@@@@@*@@  :         \n
-        :@@@@@@@@@@  @@@@@@@@@@:        \n
-      @@@@@@#+:   =%%=   :+#@@@@@@      \n
-   :*+@@@@+.                .+@@@@+*:   \n
-   .@@@@@@@@@@@@@@@@@@@@@%#+.  +@@@@.   \n
- .%@@@@@@@@@@@@@@@@@@@@@@@@@@=  +@@@@%. \n
- :+@#.=@*-*@@@@@@-----=#@@@@@@ :@=.#@+: \n
-.*@@@##+. =@@@@@@------*@@@@@* .+##@@@*.\n
-:+@@@+    =@@@@@@@@@@@@@@@@%-     +@@@+:\n
-:+@@@+    =@@@@@@####%@@@@@@*    =#@@@+:\n
-.*@@@#    =@@@@@@     -@@@@@@+  =@@@@@*.\n
- :+@@@@@@@@@@@@@@@@@-  *@@@@@@@@@@@@@+: \n
- .%@@@@@@@@@@@@@@@@@-  .@@@@@@@@@@@@@%. \n
-   .@@@@%==++-------.    --++==%@@@@.   \n
-   :*+@@@@*+@=            =@+*@@@@+*:   \n
-      @@@@=-@%:          :%@-=@@@@      \n 
-        :@@@@@@@@%####%@@@@@@@@:        \n
-         :  @@*@@@@@@@@@@*@@  :         \n
-            .  :*. ## .*:  .            \n
-
-             "
-    );
-
-    unsafe {
-        //core::arch::asm!("mov dx, 0", "div dx", out("dx") _); //div by zero
-        //core::arch::asm!("ud2"); //invalid opcode
-        //core::arch::asm!("mov qword ptr [0x00], 42") //page fault
-        //core::arch::asm!("int3");
+    let run_tests = true;
+    if run_tests {
+        println!("Running tests");
+        use crate::tests::test_runner;
+        test_runner();
     }
 
-    fn rec() {
-        rec();
-    }
-
-    //rec();
-
-    #[cfg(feature = "run_tests")]
-    {
-        if false {
-            println!("Hello world");
-            use crate::tests::test_runner;
-            test_runner();
-        }
-    }
-
-    //println!("This message is created after tests");
+    println!("This message is created after tests, looping infinitely now");
 
     #[allow(clippy::empty_loop)]
     loop {}
 }
-
-/*pub unsafe fn exit_qemu(ok: bool) {
-    if ok {
-        asm!(
-            "mov eax, 0x10",
-            "out 0xf4, eax",
-            out("eax") _
-        );
-    } else {
-        asm!(
-            "mov eax, 0x11",
-            "out 0xf4, eax",
-            out("eax") _
-        );
-    }
-}*/

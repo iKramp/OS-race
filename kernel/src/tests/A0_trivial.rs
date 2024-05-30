@@ -3,12 +3,6 @@ use kernel_test::{kernel_test, kernel_test_mod};
 kernel_test_mod!(crate::tests::A0_trivial);
 
 #[kernel_test]
-fn trivial_test_1() {
-    println!("test");
-    assert!(0 == 0);
-}
-
-#[kernel_test]
-fn trivial_test_2() {
-    assert!(1 == 0);
+fn trivial_test_1() -> bool {
+    0 == 0
 }

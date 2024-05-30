@@ -123,6 +123,10 @@ pub fn set_vga_text_colors(fg_color: (u8, u8, u8), bg_color: (u8, u8, u8)) {
     set_vga_text_foreground(fg_color);
 }
 
+pub fn reset_vga_color() {
+    set_vga_text_colors((255, 255, 255), (0, 0, 0));
+}
+
 pub fn clear_screen() {
     super::vga_driver::clear_screen();
     unsafe {
@@ -147,4 +151,39 @@ macro_rules! println {
 pub fn _print(args: core::fmt::Arguments) {
     use core::fmt::Write;
     unsafe { VGA_TEXT.write_fmt(args).unwrap() };
+}
+
+pub fn hello_message() {
+    print!("Hello via ");
+
+    set_vga_text_foreground((30, 105, 210));
+
+    println!("RustOS");
+
+    println!(
+        "
+            .  :*. ## .*:  .            \n    
+         :  @@*@@@@@@@@@@*@@  :         \n
+        :@@@@@@@@@@  @@@@@@@@@@:        \n
+      @@@@@@#+:   =%%=   :+#@@@@@@      \n
+   :*+@@@@+.                .+@@@@+*:   \n
+   .@@@@@@@@@@@@@@@@@@@@@%#+.  +@@@@.   \n
+ .%@@@@@@@@@@@@@@@@@@@@@@@@@@=  +@@@@%. \n
+ :+@#.=@*-*@@@@@@-----=#@@@@@@ :@=.#@+: \n
+.*@@@##+. =@@@@@@------*@@@@@* .+##@@@*.\n
+:+@@@+    =@@@@@@@@@@@@@@@@%-     +@@@+:\n
+:+@@@+    =@@@@@@####%@@@@@@*    =#@@@+:\n
+.*@@@#    =@@@@@@     -@@@@@@+  =@@@@@*.\n
+ :+@@@@@@@@@@@@@@@@@-  *@@@@@@@@@@@@@+: \n
+ .%@@@@@@@@@@@@@@@@@-  .@@@@@@@@@@@@@%. \n
+   .@@@@%==++-------.    --++==%@@@@.   \n
+   :*+@@@@*+@=            =@+*@@@@+*:   \n
+      @@@@=-@%:          :%@-=@@@@      \n 
+        :@@@@@@@@%####%@@@@@@@@:        \n
+         :  @@*@@@@@@@@@@*@@  :         \n
+            .  :*. ## .*:  .            \n
+
+             "
+    );
+    reset_vga_color();
 }
