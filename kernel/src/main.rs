@@ -5,7 +5,7 @@
 #![feature(stmt_expr_attributes)]
 
 use bootloader_api::{config::Mapping, entry_point, BootloaderConfig};
-use core::panic::PanicInfo;
+use std::panic::PanicInfo;
 
 mod interrupts;
 mod memory;

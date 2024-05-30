@@ -8,5 +8,5 @@ pub fn init_memory(boot_info: &'static mut bootloader_api::BootInfo) {
         utils::set_physical_offset(utils::PhysOffset(offset.unwrap()));
     }
     physical_allocator::BuyddyAllocator::init(boot_info);
-    let virtual_allocator = paging::PageTree::new();
+    let _virtual_allocator = paging::PageTree::new();
 }

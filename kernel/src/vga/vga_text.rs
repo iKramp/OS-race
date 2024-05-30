@@ -1,4 +1,4 @@
-use core::arch::asm;
+use std::arch::asm;
 
 use super::font::*;
 use super::vga_driver::VGA_BINDING;
