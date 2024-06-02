@@ -1,12 +1,21 @@
 #![no_std]
+#![feature(ptr_metadata)]
+
+pub mod heap;
+pub mod mem_utils;
+mod page_allocator;
+use heap::HEAP;
+pub use page_allocator::PageAllocator;
+pub use page_allocator::PAGE_ALLOCATOR;
+
 pub use core::alloc;
 pub use core::any;
 pub use core::arch;
 pub use core::array;
 pub use core::ascii;
 //backtrace
+pub mod boxed;
 pub use core::borrow;
-//boxed
 pub use core::cell;
 pub use core::char;
 pub use core::clone;

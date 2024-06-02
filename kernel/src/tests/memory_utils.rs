@@ -1,6 +1,6 @@
-use crate::memory::utils;
 use crate::println;
 use kernel_test::{kernel_test, kernel_test_mod};
+use std::mem_utils;
 kernel_test_mod!(crate::tests::memory_utils);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -20,8 +20,8 @@ fn virt_to_phys_addr_test() -> bool {
     };
     let ptr_to_data = core::ptr::addr_of!(data_1);
     let data_2 = unsafe {
-        utils::get_at_physical_addr::<ExampleStruct>(
-            utils::translate_virt_phys_addr(utils::VirtAddr(ptr_to_data as u64)).unwrap_or(utils::PhysAddr(0)),
+        mem_utils::get_at_physical_addr::<ExampleStruct>(
+            mem_utils::translate_virt_phys_addr(mem_utils::VirtAddr(ptr_to_data as u64)).unwrap_or(mem_utils::PhysAddr(0)),
         )
     };
     data_1 == *data_2
@@ -30,10 +30,10 @@ fn virt_to_phys_addr_test() -> bool {
 #[kernel_test]
 fn huge_page_test() -> bool {
     unsafe {
-        let start_addr = utils::PhysAddr(6554161);
-        let virtual_addr = utils::translate_phys_virt_addr(start_addr); //this gets a virtual address
-                                                                        //on the huge page
-        let physical_addr = utils::translate_virt_phys_addr(virtual_addr).unwrap_or(utils::PhysAddr(0));
+        let start_addr = mem_utils::PhysAddr(6554161);
+        let virtual_addr = mem_utils::translate_phys_virt_addr(start_addr); //this gets a virtual address
+                                                                            //on the huge page
+        let physical_addr = mem_utils::translate_virt_phys_addr(virtual_addr).unwrap_or(mem_utils::PhysAddr(0));
 
         assert_eq!(start_addr, physical_addr);
         start_addr == physical_addr

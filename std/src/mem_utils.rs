@@ -9,6 +9,7 @@ pub struct PhysAddr(pub u64);
 
 impl core::ops::Add for PhysAddr {
     type Output = PhysAddr;
+    #[inline]
     fn add(self, rhs: Self) -> Self::Output {
         Self(self.0 + rhs.0)
     }
@@ -16,6 +17,7 @@ impl core::ops::Add for PhysAddr {
 
 impl core::ops::Add<PhysOffset> for PhysAddr {
     type Output = VirtAddr;
+    #[inline]
     fn add(self, rhs: PhysOffset) -> Self::Output {
         VirtAddr(self.0 + rhs.0)
     }
@@ -26,13 +28,15 @@ pub struct VirtAddr(pub u64);
 
 impl core::ops::Add for VirtAddr {
     type Output = VirtAddr;
+    #[inline]
     fn add(self, rhs: Self) -> Self::Output {
         Self(self.0 + rhs.0)
     }
 }
 
-///SAFETY: the address must be valid and there are no other references to the
-///data
+///# Safety
+///the address must be valid and there are no other references to the data
+#[inline]
 pub unsafe fn get_at_physical_addr<T>(addr: PhysAddr) -> &'static mut T {
     #[cfg(debug_assertions)]
     assert!(MEM_INITIALIZED);
@@ -40,7 +44,9 @@ pub unsafe fn get_at_physical_addr<T>(addr: PhysAddr) -> &'static mut T {
     &mut *data
 }
 
-//SAFETY: must be a valid addr (with no other data there)
+///# Safety
+///must be a valid addr (with no other data there)
+#[inline]
 pub unsafe fn set_at_physical_addr<T>(addr: PhysAddr, data: T) {
     #[cfg(debug_assertions)]
     assert!(MEM_INITIALIZED);
@@ -48,6 +54,7 @@ pub unsafe fn set_at_physical_addr<T>(addr: PhysAddr, data: T) {
     *data_to_replace = data;
 }
 
+#[inline]
 pub fn get_physical_offset() -> PhysOffset {
     unsafe {
         #[cfg(debug_assertions)]
@@ -56,24 +63,25 @@ pub fn get_physical_offset() -> PhysOffset {
     }
 }
 
-///SAFETY: the address must be valid and there are no other references to the
-///data
+///# Safety
+///the address must be valid and there are no other references to the data
+#[inline]
 pub unsafe fn get_at_virtual_addr<T>(addr: VirtAddr) -> &'static mut T {
-    #[cfg(debug_assertions)]
-    assert!(MEM_INITIALIZED);
     let data: *mut T = addr.0 as *mut T;
     &mut *data
 }
 
-//SAFETY: must be a valid addr (with no other data there)
+///# Safety
+///must be a valid addr (with no other data there)
+#[inline]
 pub unsafe fn set_at_virtual_addr<T>(addr: VirtAddr, data: T) {
-    #[cfg(debug_assertions)]
-    assert!(MEM_INITIALIZED);
     let data_to_replace: *mut T = addr.0 as *mut T;
     *data_to_replace = data;
 }
 
-///SAFETY: the physical address offset must be correct
+///# Safety
+///the physical address offset must be correct
+#[inline]
 pub unsafe fn set_physical_offset(addr: PhysOffset) {
     MEM_INITIALIZED = true;
     PHYSICAL_OFFSET = addr;
@@ -106,6 +114,7 @@ pub unsafe fn translate_virt_phys_addr(addr: VirtAddr) -> Option<PhysAddr> {
     Some(page_addr + PhysAddr(addr.0 & final_mask))
 }
 
+#[inline]
 pub fn translate_phys_virt_addr(addr: PhysAddr) -> VirtAddr {
     unsafe {
         #[cfg(debug_assertions)]
@@ -113,4 +122,3 @@ pub fn translate_phys_virt_addr(addr: PhysAddr) -> VirtAddr {
         addr + PHYSICAL_OFFSET
     }
 }
-

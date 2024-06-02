@@ -39,7 +39,11 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
 
     memory::init_memory(boot_info);
 
+    let some_data = std::boxed::Box::new(69);
+
     vga_text::hello_message();
+
+    //let mut heap = std::heap::Heap::new();
 
     let run_tests = true;
     if run_tests {
@@ -50,6 +54,7 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
 
     println!("This message is created after tests, looping infinitely now");
 
+    println!("{:?}", some_data);
     #[allow(clippy::empty_loop)]
     loop {}
 }

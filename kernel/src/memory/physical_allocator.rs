@@ -1,4 +1,4 @@
-use super::utils::*;
+use super::mem_utils::*;
 use crate::println;
 use bootloader_api::{info::MemoryRegionKind, BootInfo};
 
@@ -47,7 +47,7 @@ impl BuyddyAllocator {
             tree_allocator: translate_phys_virt_addr(tree_allocator),
         };
         for entry in memory_regions {
-            println!("{entry:?}");
+            println!("0x{entry:x?}");
             if entry.kind != bootloader_api::info::MemoryRegionKind::Usable {
                 continue;
             }
@@ -58,14 +58,14 @@ impl BuyddyAllocator {
         unsafe { BUDDY_ALLOCATOR = allocator }
     }
 
-    pub fn deallocate_page(&mut self, addr: PhysAddr) {
+    pub fn deallocate_frame(&mut self, addr: PhysAddr) {
         self.mark_addr(addr, false)
     }
 
-    pub fn allocate_page(&mut self) -> PhysAddr {
+    pub fn allocate_frame(&mut self) -> PhysAddr {
         let index = self.find_empty_page();
         self.mark_index(index, true);
-        PhysAddr(index * 4096)
+        PhysAddr((index - self.binary_tree_size / 2) * 4096)
     }
 
     fn find_empty_page(&self) -> u64 {
@@ -74,7 +74,7 @@ impl BuyddyAllocator {
     }
 
     fn find_empty_page_recursively(&self, curr_index: u64) -> u64 {
-        if curr_index >= self.n_pages {
+        if curr_index >= self.binary_tree_size / 2 {
             //is in second half of the tree, so last level
             return curr_index;
         }
