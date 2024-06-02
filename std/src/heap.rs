@@ -25,6 +25,7 @@ struct MultiPageObjectMetadata {
 }
 
 #[repr(C)]
+#[derive(Clone)]
 struct HeapPageMetadata {
     //should ALWAYS be ObjectsInPage
     type_of_heap: TypeOfHeap,
@@ -39,16 +40,16 @@ impl HeapPageMetadata {
     pub fn populate(&mut self, page_addr: VirtAddr) {
         unsafe {
             let size_of_object = u64::pow(2, self.size_order_of_objects as u32);
-            let addr_of_first = page_addr + VirtAddr(4096 - size_of_object * (self.max_allocations as u64 + 1));
+            let addr_of_first = page_addr + VirtAddr(4096 - size_of_object * self.max_allocations as u64);
             for i in (addr_of_first.0..(page_addr.0 + 4096)).step_by(size_of_object as usize) {
                 let empty_block = get_at_virtual_addr::<EmptyBlock>(VirtAddr(i));
                 empty_block.ptr_to_prev = VirtAddr(i - size_of_object);
-                empty_block.ptr_to_next = VirtAddr(1 + size_of_object);
+                empty_block.ptr_to_next = VirtAddr(i + size_of_object);
             }
-            get_at_virtual_addr::<EmptyBlock>(addr_of_first).ptr_to_prev =
-                addr_of_first + VirtAddr(size_of_object * self.max_allocations as u64);
-            get_at_virtual_addr::<EmptyBlock>(addr_of_first + VirtAddr(size_of_object * self.max_allocations as u64))
-                .ptr_to_next = addr_of_first;
+            get_at_virtual_addr::<EmptyBlock>(addr_of_first).ptr_to_prev = page_addr + VirtAddr(4096 - size_of_object);
+            get_at_virtual_addr::<EmptyBlock>(page_addr + VirtAddr(4096 - size_of_object)).ptr_to_next = addr_of_first;
+            self.ptr_to_first = addr_of_first;
+            self.ptr_to_last = page_addr + VirtAddr(4096 - size_of_object);
         }
     }
 }
@@ -85,20 +86,33 @@ impl HeapAllocationData {
                     max_allocations: ((4096 - crate::mem::size_of::<HeapPageMetadata>()) as u64
                         / (u64::pow(2, self.size_order_of_objects as u32))) as u8,
                     ptr_to_first: VirtAddr(0),
-                    ptr_to_last: VirtAddr(0),
+                    ptr_to_last: VirtAddr(6),
                 };
                 metadata.populate(new_page);
+                set_at_virtual_addr(new_page, metadata.clone());
                 self.free_objects = metadata.max_allocations as u64;
                 self.ptr_to_first = metadata.ptr_to_first;
             }
+
             let allocated = self.ptr_to_first;
-            let empty_block = get_at_virtual_addr::<EmptyBlock>(allocated);
+
+            let page_metadata = get_at_virtual_addr::<HeapPageMetadata>(VirtAddr(self.ptr_to_first.0 & !0xFFF));
+            page_metadata.number_of_allocations += 1;
             self.free_objects -= 1;
+
+            if page_metadata.number_of_allocations < page_metadata.max_allocations {
+                let empty_block = get_at_virtual_addr::<EmptyBlock>(allocated);
+                let after = empty_block.ptr_to_next;
+                page_metadata.ptr_to_first = after;
+            }
+
             if self.free_objects > 0 {
+                let empty_block = get_at_virtual_addr::<EmptyBlock>(allocated);
                 let before = empty_block.ptr_to_prev;
                 let after = empty_block.ptr_to_next;
                 let before_block = get_at_virtual_addr::<EmptyBlock>(before);
                 let after_block = get_at_virtual_addr::<EmptyBlock>(after);
+                self.ptr_to_first = after;
                 before_block.ptr_to_next = after;
                 after_block.ptr_to_prev = before;
             }
@@ -162,7 +176,7 @@ impl Heap {
     }
 
     pub fn deallocate(&mut self, addr: VirtAddr) {
-        let page_addr = VirtAddr(addr.0 & !0b1111_1111_1111);
+        let page_addr = VirtAddr(addr.0 & !0xFFF);
         unsafe {
             let heap_type = get_at_virtual_addr::<TypeOfHeap>(page_addr);
             if *heap_type == TypeOfHeap::ObjectOverPages {

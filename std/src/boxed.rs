@@ -14,10 +14,17 @@ impl<T> Box<T> {
             }
         }
     }
+
+    pub fn leak(mut self) {
+        unsafe { self.data = &*core::ptr::null() }
+    }
 }
 
 impl<T> Drop for Box<T> {
+    #[inline]
     fn drop(&mut self) {
-        unsafe { crate::HEAP.deallocate(crate::mem_utils::VirtAddr(self.data as *const _ as u64)) }
+        if self.data as *const T as u64 != 0 {
+            unsafe { crate::HEAP.deallocate(crate::mem_utils::VirtAddr(self.data as *const _ as u64)) }
+        }
     }
 }

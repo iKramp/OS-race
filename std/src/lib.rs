@@ -57,7 +57,7 @@ pub use core::primitive;
 //
 //process
 pub use core::ptr;
-//rc
+pub mod rc;
 pub use core::result;
 pub use core::slice;
 pub use core::str;
@@ -72,7 +72,7 @@ pub use core::time;
 //u64  depracation planned
 //u128 depracation planned
 //usize depracation planned
-//vec
+pub mod vec;
 //assert_matches experimental
 //async_iter     experimental
 //intrinsics     experimental

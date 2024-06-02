@@ -39,11 +39,18 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
 
     memory::init_memory(boot_info);
 
-    let some_data = std::boxed::Box::new(69);
+    loop {
+        let rc2;
+        {
+            let rc1 = std::rc::Rc::new(69);
+            rc2 = rc1.clone();
+            println!("{:?}", rc2);
+        }
 
+        println!("{:?}", rc2);
+        //std::boxed::Box::new(true).leak()
+    }
     vga_text::hello_message();
-
-    //let mut heap = std::heap::Heap::new();
 
     let run_tests = true;
     if run_tests {
@@ -54,7 +61,6 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
 
     println!("This message is created after tests, looping infinitely now");
 
-    println!("{:?}", some_data);
     #[allow(clippy::empty_loop)]
     loop {}
 }

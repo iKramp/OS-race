@@ -5,12 +5,14 @@ use bootloader_api::{info::MemoryRegionKind, BootInfo};
 pub static mut BUDDY_ALLOCATOR: BuyddyAllocator = BuyddyAllocator {
     n_pages: 0,
     binary_tree_size: 0,
+    allocated_pages: 0,
     tree_allocator: VirtAddr(0),
 };
 
 pub struct BuyddyAllocator {
     n_pages: u64,
     binary_tree_size: u64,
+    allocated_pages: u64,
     tree_allocator: VirtAddr,
 }
 
@@ -29,10 +31,12 @@ impl BuyddyAllocator {
         println!("{entry_to_shrink:?}");
 
         let tree_allocator = PhysAddr(memory_regions[entry_to_shrink].start);
+        let mut allocated_pages = 0;
         for i in 0..space_needed_bytes {
             //set all bits to 1 to set everything as used
             unsafe {
                 set_at_physical_addr(tree_allocator + PhysAddr(i), 0xFF_u8);
+                allocated_pages += 4;
             }
         }
         let mut size_to_shrink = space_needed_bytes & !0xFFF;
@@ -41,9 +45,10 @@ impl BuyddyAllocator {
         }
         //we essentially round up to a whole page
         memory_regions[entry_to_shrink].start += size_to_shrink;
-        let allocator = Self {
+        let mut allocator = Self {
             n_pages,
             binary_tree_size: binary_tree_size_elements,
+            allocated_pages,
             tree_allocator: translate_phys_virt_addr(tree_allocator),
         };
         for entry in memory_regions {
@@ -53,16 +58,22 @@ impl BuyddyAllocator {
             }
             for addr in (entry.start..entry.end).step_by(4096) {
                 allocator.mark_addr(PhysAddr(addr), false);
+                allocator.allocated_pages -= 1;
             }
         }
         unsafe { BUDDY_ALLOCATOR = allocator }
     }
 
     pub fn deallocate_frame(&mut self, addr: PhysAddr) {
-        self.mark_addr(addr, false)
+        self.mark_addr(addr, false);
+        self.allocated_pages -= 1;
     }
 
     pub fn allocate_frame(&mut self) -> PhysAddr {
+        if self.allocated_pages == self.binary_tree_size / 2 {
+            panic!("no more frames to sllocate");
+        }
+        self.allocated_pages += 1;
         let index = self.find_empty_page();
         self.mark_index(index, true);
         PhysAddr((index - self.binary_tree_size / 2) * 4096)
