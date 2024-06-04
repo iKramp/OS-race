@@ -4,8 +4,12 @@ mod gdt;
 mod handlers;
 mod idt;
 
-pub fn init_interrupts(rsdp_addr: Option<u64>) {
-    acpi::enable_interrupt_controller(rsdp_addr);
+pub fn init_interrupts() {
+    acpi::init_PIC();
     gdt::init_gdt();
     idt::init_idt();
+}
+
+pub fn init_apic(rsdp_addr: Option<u64>) {
+    acpi::enable_apic(rsdp_addr);
 }

@@ -1,6 +1,8 @@
 use crate::println;
 use core::arch::asm;
+use std::mem_utils::PhysAddr;
 
+#[derive(Debug)]
 enum Rsdp {
     V1(&'static Rsdp_v1),
     V2(&'static Rsdp_v2),
@@ -8,44 +10,89 @@ enum Rsdp {
 
 impl Rsdp {
     fn validate(&self) -> bool {
-        let self_ptr = self as *const _ as *const u8;
         match self {
-            Self::V1(_) => {
-                let mut sum: u16 = 0; //to avoid overflow panic. using u8 would be ok in release
-                                      //build, but in debug rust checks for overflow at runtime
-                for i in 0..20 {
-                    sum += unsafe { *self_ptr.offset(i) as u16 };
+            Self::V1(data) => {
+                let mut sum = 0_u16;
+                for i in 0..8 {
+                    sum += data.signature[i] as u16;
                 }
-                sum & 0xFF == 0
+                for i in 0..6 {
+                    sum += data.oemid[i] as u16;
+                }
+                sum += data.checksum as u16;
+                sum += data.revision as u16;
+                for i in 0..4 {
+                    sum += ((data.rsdt_address >> (i * 8)) & 0xFF) as u16
+                }
+
+                (sum & 0xFF) == 0
             }
-            Self::V2(_) => {
-                let mut sum: u16 = 0;
-                for i in 0..34 {
-                    sum += unsafe { *self_ptr.offset(i) as u16 };
+            Self::V2(data) => {
+                let mut sum = 0_u16;
+                for i in 0..8 {
+                    sum += data.signature[i] as u16;
                 }
-                sum & 0xFF == 0
+                for i in 0..6 {
+                    sum += data.oemid[i] as u16;
+                }
+                sum += data.checksum as u16;
+                sum += data.revision as u16;
+
+                for i in 0..4 {
+                    sum += ((data.rsdt_address >> (i * 8)) & 0xFF) as u16
+                }
+
+                for i in 0..4 {
+                    sum += ((data.length >> (i * 8)) & 0xFF) as u16
+                }
+
+                for i in 0..8 {
+                    sum += ((data.xsdt_address >> (i * 8)) & 0xFF) as u16
+                }
+
+                sum += data.extended_checksum as u16;
+                sum += data.reserved[0] as u16;
+                sum += data.reserved[1] as u16;
+                sum += data.reserved[2] as u16;
+
+                (sum & 0xFF) == 0
             }
         }
     }
 
-    fn from_ptr(ptr: *const u8) -> Self {
-        let revision = unsafe { *ptr.offset(15) };
+    fn from_ptr(address: PhysAddr) -> Self {
+        let revision = unsafe { *std::mem_utils::get_at_physical_addr::<u8>(address + PhysAddr(15)) };
         if revision == 0 {
-            Self::V1(unsafe { &*(ptr as *const _) })
+            Self::V1(unsafe { std::mem_utils::get_at_physical_addr::<Rsdp_v1>(address) })
         } else {
-            Self::V2(unsafe { &*(ptr as *const _) })
+            Self::V2(unsafe { std::mem_utils::get_at_physical_addr::<Rsdp_v2>(address) })
         }
     }
 
-    fn get_address(&self) -> u64 {
+    fn address(&self) -> u64 {
         match self {
             Self::V1(data) => data.rsdt_address as u64,
             Self::V2(data) => data.xsdt_address,
         }
     }
+
+    fn signature(&self) -> [char; 8] {
+        match self {
+            Self::V1(data) => data.signature.map(|a| a as char),
+            Self::V2(data) => data.signature.map(|a| a as char),
+        }
+    }
+
+    fn oem_id(&self) -> [char; 6] {
+        match self {
+            Self::V1(data) => data.oemid.map(|a| a as char),
+            Self::V2(data) => data.oemid.map(|a| a as char),
+        }
+    }
 }
 
 #[repr(C, packed)]
+#[derive(Debug)]
 struct Rsdp_v1 {
     signature: [u8; 8],
     checksum: u8,
@@ -55,6 +102,7 @@ struct Rsdp_v1 {
 }
 
 #[repr(C, packed)]
+#[derive(Debug)]
 struct Rsdp_v2 {
     signature: [u8; 8],
     checksum: u8,
@@ -69,24 +117,20 @@ struct Rsdp_v2 {
 }
 
 //first do memory allocation and mapping, then i can map rsdp memory and do this
-pub fn enable_interrupt_controller(rsdp_addr: Option<u64>) {
-    /*let Some(rsdp_addr) = rsdp_addr else {
-        init_PIC(false);
+pub fn enable_apic(rsdp_addr: Option<u64>) {
+    let Some(rsdp_addr) = rsdp_addr else {
         return;
     };
-    let rsdp_table = Rsdp::from_ptr(rsdp_addr as *const u8);
+    let rsdp_table = Rsdp::from_ptr(PhysAddr(rsdp_addr));
+    println!("{:#?}", rsdp_table);
     if !rsdp_table.validate() {
-        init_PIC(false);
         return;
-    } else {
-        init_PIC(true);
-    }*/
-
-    init_PIC(false);
+    }
+    todo!("mask interrupts with 0xff and init apic");
 }
 
 #[allow(non_snake_case)]
-fn init_PIC(disable: bool) {
+pub fn init_PIC() {
     const PIC1: u16 = 0x20;
     const PIC2: u16 = 0xA0; /* IO base address for slave PIC */
     const PIC1_COMMAND: u16 = PIC1;
@@ -106,10 +150,8 @@ fn init_PIC(disable: bool) {
     byte_to_port(PIC1_DATA, 0x01);
     byte_to_port(PIC2_DATA, 0x01);
 
-    let mask = if disable { 0xff } else { 0x03 };
-
-    byte_to_port(PIC1_DATA, mask);
-    byte_to_port(PIC2_DATA, mask);
+    byte_to_port(PIC1_DATA, 0x03); //change to 0x00 to handle keyboard and timer
+    byte_to_port(PIC2_DATA, 0x03);
 }
 
 fn byte_to_port(port: u16, byte: u8) {

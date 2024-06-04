@@ -35,22 +35,13 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
     vga::init_vga_driver(binding);
     vga::clear_screen();
 
-    interrupts::init_interrupts(boot_info.rsdp_addr.into());
+    interrupts::init_interrupts();
 
     memory::init_memory(boot_info);
 
-    loop {
-        let rc2;
-        {
-            let rc1 = std::rc::Rc::new(69);
-            rc2 = rc1.clone();
-            println!("{:?}", rc2);
-        }
+    interrupts::init_apic(boot_info.rsdp_addr.into());
 
-        println!("{:?}", rc2);
-        //std::boxed::Box::new(true).leak()
-    }
-    vga_text::hello_message();
+    //vga_text::hello_message();
 
     let run_tests = true;
     if run_tests {
