@@ -1,11 +1,9 @@
-use crate::println;
-use core::arch::asm;
 use std::mem_utils::PhysAddr;
 
 #[derive(Debug)]
-enum Rsdp {
-    V1(&'static Rsdp_v1),
-    V2(&'static Rsdp_v2),
+pub enum Rsdp {
+    V1(&'static RsdpV1),
+    V2(&'static RsdpV2),
 }
 
 impl Rsdp {
@@ -60,30 +58,30 @@ impl Rsdp {
         }
     }
 
-    fn from_ptr(address: PhysAddr) -> Self {
+    pub fn from_ptr(address: PhysAddr) -> Self {
         let revision = unsafe { *std::mem_utils::get_at_physical_addr::<u8>(address + PhysAddr(15)) };
         if revision == 0 {
-            Self::V1(unsafe { std::mem_utils::get_at_physical_addr::<Rsdp_v1>(address) })
+            Self::V1(unsafe { std::mem_utils::get_at_physical_addr::<RsdpV1>(address) })
         } else {
-            Self::V2(unsafe { std::mem_utils::get_at_physical_addr::<Rsdp_v2>(address) })
+            Self::V2(unsafe { std::mem_utils::get_at_physical_addr::<RsdpV2>(address) })
         }
     }
 
-    fn address(&self) -> u64 {
+    pub fn address(&self) -> PhysAddr {
         match self {
-            Self::V1(data) => data.rsdt_address as u64,
-            Self::V2(data) => data.xsdt_address,
+            Self::V1(data) => PhysAddr(data.rsdt_address as u64),
+            Self::V2(data) => PhysAddr(data.xsdt_address),
         }
     }
 
-    fn signature(&self) -> [char; 8] {
+    pub fn signature(&self) -> [char; 8] {
         match self {
             Self::V1(data) => data.signature.map(|a| a as char),
             Self::V2(data) => data.signature.map(|a| a as char),
         }
     }
 
-    fn oem_id(&self) -> [char; 6] {
+    pub fn oem_id(&self) -> [char; 6] {
         match self {
             Self::V1(data) => data.oemid.map(|a| a as char),
             Self::V2(data) => data.oemid.map(|a| a as char),
@@ -93,7 +91,7 @@ impl Rsdp {
 
 #[repr(C, packed)]
 #[derive(Debug)]
-struct Rsdp_v1 {
+pub struct RsdpV1 {
     signature: [u8; 8],
     checksum: u8,
     oemid: [u8; 6],
@@ -103,7 +101,7 @@ struct Rsdp_v1 {
 
 #[repr(C, packed)]
 #[derive(Debug)]
-struct Rsdp_v2 {
+pub struct RsdpV2 {
     signature: [u8; 8],
     checksum: u8,
     oemid: [u8; 6],
@@ -117,45 +115,10 @@ struct Rsdp_v2 {
 }
 
 //first do memory allocation and mapping, then i can map rsdp memory and do this
-pub fn enable_apic(rsdp_addr: Option<u64>) {
-    let Some(rsdp_addr) = rsdp_addr else {
-        return;
-    };
-    let rsdp_table = Rsdp::from_ptr(PhysAddr(rsdp_addr));
-    println!("{:#?}", rsdp_table);
+pub fn get_rsdp_table(rsdp_addr: Option<u64>) -> Option<Rsdp> {
+    let rsdp_table = Rsdp::from_ptr(PhysAddr(rsdp_addr?));
     if !rsdp_table.validate() {
-        return;
+        return None;
     }
-    todo!("mask interrupts with 0xff and init apic");
-}
-
-#[allow(non_snake_case)]
-pub fn init_PIC() {
-    const PIC1: u16 = 0x20;
-    const PIC2: u16 = 0xA0; /* IO base address for slave PIC */
-    const PIC1_COMMAND: u16 = PIC1;
-    const PIC1_DATA: u16 = PIC1 + 1;
-    const PIC2_COMMAND: u16 = PIC2;
-    const PIC2_DATA: u16 = PIC2 + 1;
-
-    byte_to_port(PIC1_COMMAND, 0x11);
-    byte_to_port(PIC2_COMMAND, 0x11);
-
-    byte_to_port(PIC1_DATA, 0x20);
-    byte_to_port(PIC2_DATA, 0x28);
-
-    byte_to_port(PIC1_DATA, 0x04);
-    byte_to_port(PIC2_DATA, 0x02);
-
-    byte_to_port(PIC1_DATA, 0x01);
-    byte_to_port(PIC2_DATA, 0x01);
-
-    byte_to_port(PIC1_DATA, 0x03); //change to 0x00 to handle keyboard and timer
-    byte_to_port(PIC2_DATA, 0x03);
-}
-
-fn byte_to_port(port: u16, byte: u8) {
-    unsafe {
-        asm!("out dx, al", in("dx") port, in("al") byte);
-    }
+    Some(rsdp_table)
 }

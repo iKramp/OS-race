@@ -7,6 +7,7 @@
 use bootloader_api::{config::Mapping, entry_point, BootloaderConfig};
 use std::panic::PanicInfo;
 
+mod acpi;
 mod interrupts;
 mod memory;
 #[allow(unused_imports)]
@@ -39,7 +40,7 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
 
     memory::init_memory(boot_info);
 
-    interrupts::init_apic(boot_info.rsdp_addr.into());
+    acpi::init_acpi(boot_info.rsdp_addr.into());
 
     //vga_text::hello_message();
 
