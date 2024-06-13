@@ -6,7 +6,7 @@ fn main() {
     println!("{}\n{}", uefi_path, bios_path);
 
     // choose whether to start the UEFI or BIOS image
-    let uefi = false;
+    let uefi = true;
 
     //chose whether to debug with GDB
     let debug = false;

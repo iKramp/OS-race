@@ -109,6 +109,7 @@ pub fn init_vga_text(width: usize, height: usize) {
     unsafe {
         VGA_TEXT.height_lines = height / (CHAR_HEIGHT);
         VGA_TEXT.width_chars = width / (CHAR_WIDTH);
+        std::set_Print(|text| VGA_TEXT.write_text(text));
     }
 }
 

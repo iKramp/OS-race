@@ -8,9 +8,9 @@ use std::{
 #[repr(C)]
 pub struct Madt {
     header: super::sdt::AcpiSdtHeader,
-    local_apic_address: u32,
-    flags: u32, //unused, indicates if dual setup pic is present but we assume it is and mask it out
-                //anyway
+    pub local_apic_address: u32,
+    pub flags: u32, //unused, indicates if dual setup pic is present but we assume it is and mask it out
+                    //anyway
 }
 
 impl Madt {
@@ -28,14 +28,15 @@ impl Madt {
                     2 => entries.push(MadtEntryType::InterruptSourceOverride(get_at_virtual_addr::<
                         InterruptSourceOverride,
                     >(ptr))),
-                    3 => entries.push(MadtEntryType::NMISource(get_at_virtual_addr::<NMISource>(ptr))),
+                    3 => {
+                        entries.push(MadtEntryType::NMISource(get_at_virtual_addr::<NMISource>(ptr)));
+                        crate::println!("nmi source has length of {}", entry_header.length)
+                    }
                     4 => entries.push(MadtEntryType::LocalApicNMI(get_at_virtual_addr::<LocalApicNMI>(ptr))),
                     5 => entries.push(MadtEntryType::LocalApicAddressOverride(get_at_virtual_addr::<
                         LocalApicAddressOverride,
                     >(ptr))),
-                    9 => entries.push(MadtEntryType::ProcessorLocalX2APIC(
-                        get_at_virtual_addr::<ProcessorLocalX2APIC>(ptr),
-                    )),
+                    9 => crate::println!("x2apic not supported because idk how to parse the dsdt/ssdt"),
                     _ => entries.push(MadtEntryType::Other),
                 }
                 ptr.0 += entry_header.length as u64;
@@ -52,7 +53,6 @@ pub enum MadtEntryType {
     NMISource(&'static NMISource),
     LocalApicNMI(&'static LocalApicNMI),
     LocalApicAddressOverride(&'static LocalApicAddressOverride),
-    ProcessorLocalX2APIC(&'static ProcessorLocalX2APIC),
 
     Other,
 }
@@ -62,6 +62,7 @@ pub struct MadtEntryHeader {
     length: u8,
 }
 
+#[derive(Clone, Copy)]
 pub struct ProcessorLocalApicFlags(u32);
 
 impl ProcessorLocalApicFlags {
@@ -75,17 +76,17 @@ impl ProcessorLocalApicFlags {
 
 pub struct ProcessorLocalApic {
     header: MadtEntryHeader,
-    acpi_processor_uid: u8,
-    apic_id: u8,
-    flags: ProcessorLocalApicFlags,
+    pub acpi_processor_uid: u8,
+    pub apic_id: u8,
+    pub flags: ProcessorLocalApicFlags,
 }
 
 pub struct IoApic {
     header: MadtEntryHeader,
-    io_apic_id: u8,
-    reserved: u8,
-    io_apic_address: u32,
-    global_system_interrupt_base: u32,
+    pub io_apic_id: u8,
+    pub reserved: u8,
+    pub io_apic_address: u32,
+    pub global_system_interrupt_base: u32,
 }
 
 pub enum IntSoOverPolarity {
@@ -127,35 +128,27 @@ impl MpsIntiFlags {
 
 pub struct InterruptSourceOverride {
     header: MadtEntryHeader,
-    bus: u8,
-    source: u8,
-    global_system_interrupt: u32,
-    flags: MpsIntiFlags,
+    pub bus: u8,
+    pub source: u8,
+    pub global_system_interrupt: u32,
+    pub flags: MpsIntiFlags,
 }
 
 pub struct NMISource {
     header: MadtEntryHeader,
-    flags: MpsIntiFlags,
-    global_system_interrupt: u32,
+    pub flags: MpsIntiFlags,
+    pub global_system_interrupt: u32,
 }
 
 pub struct LocalApicNMI {
     header: MadtEntryHeader,
-    acpi_processor_uid: u8,
-    flags: MpsIntiFlags,
-    local_apic_lint: u8,
+    pub acpi_processor_uid: u8,
+    pub flags: MpsIntiFlags,
+    pub local_apic_lint: u8,
 }
 
 pub struct LocalApicAddressOverride {
     header: MadtEntryHeader,
-    reserved: u16,
-    local_apic_address: u64,
-}
-
-pub struct ProcessorLocalX2APIC {
-    header: MadtEntryHeader,
-    reserved: u16,
-    x2apic_id: u32,
-    flags: ProcessorLocalApicFlags,
-    acpi_processor_uid: u32,
+    pub reserved: u16,
+    pub local_apic_address: u64,
 }

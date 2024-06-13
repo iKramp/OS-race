@@ -14,6 +14,7 @@ pub trait RootSystemDescriptorTable: std::fmt::Debug {
 
     fn length(&self) -> u32;
     fn get_table(&self, signature: [u8; 4]) -> Option<PhysAddr>;
+    fn get_tables(&self) -> std::vec::Vec<PhysAddr>;
     fn print_tables(&self);
     fn print_signature(&self);
 }
@@ -21,6 +22,11 @@ pub trait RootSystemDescriptorTable: std::fmt::Debug {
 pub fn get_rsdt(rsdp: &super::rsdp::Rsdp) -> &'static dyn RootSystemDescriptorTable {
     unsafe {
         let address = rsdp.address();
+
+        match rsdp {
+            super::rsdp::Rsdp::V1(_) => crate::println!("V1"),
+            super::rsdp::Rsdp::V2(_) => crate::println!("V2"),
+        }
         match rsdp {
             super::rsdp::Rsdp::V1(_) => get_at_physical_addr::<Rsdt>(address),
             super::rsdp::Rsdp::V2(_) => get_at_physical_addr::<Xsdt>(address),
@@ -53,6 +59,21 @@ impl RootSystemDescriptorTable for Rsdt {
             None
         }
     }
+
+    fn get_tables(&self) -> std::vec::Vec<PhysAddr> {
+        let mut tables = std::vec::Vec::new();
+        unsafe {
+            let start_table_ptr = VirtAddr((self as *const Self) as u64 + 36);
+            let num_entries = (self.length() - 36) / 4;
+            for entry_index in 0..num_entries {
+                let table_entry_ptr = start_table_ptr + VirtAddr(entry_index as u64 * 4);
+                let table_ptr = PhysAddr(*get_at_virtual_addr::<u32>(table_entry_ptr) as u64);
+                tables.push(table_ptr);
+            }
+            tables
+        }
+    }
+
     fn print_tables(&self) {
         unsafe {
             let start_table_ptr = VirtAddr((self as *const Self) as u64 + 36);
@@ -94,6 +115,19 @@ impl RootSystemDescriptorTable for Xsdt {
             }
             None
         }
+    }
+    fn get_tables(&self) -> std::vec::Vec<PhysAddr> {
+        let mut tables = std::vec::Vec::new();
+        unsafe {
+            let start_table_ptr = VirtAddr((self as *const Self) as u64 + 36);
+            let num_entries = (self.length() - 36) / 8;
+            for entry_index in 0..num_entries {
+                let table_entry_ptr = start_table_ptr + VirtAddr(entry_index as u64 * 8);
+                let table_ptr = PhysAddr(*get_at_virtual_addr::<u64>(table_entry_ptr));
+                tables.push(table_ptr);
+            }
+        }
+        tables
     }
     fn print_tables(&self) {
         unsafe {

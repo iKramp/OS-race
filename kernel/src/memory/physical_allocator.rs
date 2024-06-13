@@ -1,5 +1,4 @@
 use super::mem_utils::*;
-use crate::println;
 use bootloader_api::{info::MemoryRegionKind, BootInfo};
 
 pub static mut BUDDY_ALLOCATOR: BuyddyAllocator = BuyddyAllocator {
@@ -27,9 +26,6 @@ impl BuyddyAllocator {
         let space_needed_bytes = (binary_tree_size_elements + 7) / 8;
         let entry_to_shrink = find_mem_region_to_shrink(memory_regions, space_needed_bytes);
 
-        println!("{binary_tree_size_elements:?}");
-        println!("{entry_to_shrink:?}");
-
         let tree_allocator = PhysAddr(memory_regions[entry_to_shrink].start);
         let mut allocated_pages = 0;
         for i in 0..space_needed_bytes {
@@ -52,11 +48,15 @@ impl BuyddyAllocator {
             tree_allocator: translate_phys_virt_addr(tree_allocator),
         };
         for entry in memory_regions {
-            println!("0x{entry:x?}");
             if entry.kind != bootloader_api::info::MemoryRegionKind::Usable {
                 continue;
             }
-            for addr in (entry.start..entry.end).step_by(4096) {
+            let start = if entry.start & 0xFFF == 0 {
+                entry.start
+            } else {
+                (entry.start & !0xFFF) + 0x1000
+            };
+            for addr in (start..(entry.end & !0xFFF)).step_by(4096) {
                 allocator.mark_addr(PhysAddr(addr), false);
                 allocator.allocated_pages -= 1;
             }
@@ -106,7 +106,7 @@ impl BuyddyAllocator {
         #[cfg(debug_assertions)]
         assert!(
             addr.0 & 0xFFF == 0,
-            "error in mark_addr at addr {} and allocated {}",
+            "error in mark_addr at addr {} and allocated {}: address is not page aligned",
             addr.0,
             allocated
         );

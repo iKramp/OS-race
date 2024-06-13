@@ -1,3 +1,5 @@
+use std::mem_utils::PhysAddr;
+
 #[repr(C, packed)]
 pub struct Fadt {
     header: super::sdt::AcpiSdtHeader,

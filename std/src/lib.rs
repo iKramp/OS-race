@@ -1,6 +1,11 @@
 #![no_std]
 #![feature(ptr_metadata)]
 
+mod print;
+
+pub use print::set_Print;
+use print::write_text;
+
 pub mod heap;
 pub mod mem_utils;
 mod page_allocator;
@@ -73,6 +78,7 @@ pub use core::time;
 //u128 depracation planned
 //usize depracation planned
 pub mod vec;
+pub use vec::Vec;
 //assert_matches experimental
 //async_iter     experimental
 //intrinsics     experimental

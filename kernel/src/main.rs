@@ -36,13 +36,15 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
     vga::init_vga_driver(binding);
     vga::clear_screen();
 
+    println!("starting RustOs...");
+
     interrupts::init_interrupts();
 
     memory::init_memory(boot_info);
 
     acpi::init_acpi(boot_info.rsdp_addr.into());
 
-    //vga_text::hello_message();
+    vga_text::hello_message();
 
     let run_tests = true;
     if run_tests {

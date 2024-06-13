@@ -164,7 +164,9 @@ impl Heap {
     }
 
     pub fn allocate(&mut self, size: u64) -> VirtAddr {
-        if size > 1024 {
+        if size == 0 {
+            VirtAddr(self as *const Heap as u64)
+        } else if size > 1024 {
             //allocate whole page/pages
             let _n_of_pages = (size + 4095 + crate::mem::size_of::<MultiPageObjectMetadata>() as u64) / 4096;
             todo!("alloc pages");
@@ -180,7 +182,7 @@ impl Heap {
         unsafe {
             let heap_type = get_at_virtual_addr::<TypeOfHeap>(page_addr);
             if *heap_type == TypeOfHeap::ObjectOverPages {
-                let metadata = get_at_virtual_addr::<MultiPageObjectMetadata>(page_addr);
+                let _metadata = get_at_virtual_addr::<MultiPageObjectMetadata>(page_addr);
                 todo!("dealloc pages");
             } else {
                 let metadata = get_at_virtual_addr::<HeapPageMetadata>(page_addr);

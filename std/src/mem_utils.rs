@@ -1,10 +1,10 @@
 static mut PHYSICAL_OFFSET: PhysOffset = PhysOffset(0);
 static mut MEM_INITIALIZED: bool = false;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct PhysOffset(pub u64);
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct PhysAddr(pub u64);
 
 impl core::ops::Add for PhysAddr {
@@ -23,7 +23,7 @@ impl core::ops::Add<PhysOffset> for PhysAddr {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct VirtAddr(pub u64);
 
 impl core::ops::Add for VirtAddr {
