@@ -78,7 +78,7 @@ impl HeapAllocationData {
     pub fn allocate(&mut self) -> VirtAddr {
         unsafe {
             if self.free_objects == 0 {
-                let new_page = crate::PAGE_ALLOCATOR.allocate();
+                let new_page = crate::PAGE_ALLOCATOR.allocate(None);
                 let mut metadata = HeapPageMetadata {
                     type_of_heap: TypeOfHeap::ObjectsInPage,
                     size_order_of_objects: self.size_order_of_objects,

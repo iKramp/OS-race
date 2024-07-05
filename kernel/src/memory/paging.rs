@@ -1,9 +1,8 @@
 use super::mem_utils::*;
 use super::physical_allocator::BUDDY_ALLOCATOR;
-use crate::println;
 
 #[derive(Debug, Clone, Copy)]
-struct PageTableEntry(u64);
+pub struct PageTableEntry(u64);
 
 impl PageTableEntry {
     //creates default entry:
@@ -179,9 +178,9 @@ impl PageTable {
         usize::MAX
     }
 
-    pub unsafe fn allocate(&mut self) -> VirtAddr {
+    pub unsafe fn allocate(&mut self, physical_address: Option<PhysAddr>) -> VirtAddr {
         let mut address = 0;
-        self.allocate_4_to_2(4, &mut address);
+        self.allocate_4_to_2(4, &mut address, physical_address);
         if address & (1 << 47) != 0 {
             address += 0xFFFF << 48; //sign extension
         }
@@ -189,7 +188,7 @@ impl PageTable {
     }
 
     //returns if that page table has less available spaces
-    pub unsafe fn allocate_4_to_2(&mut self, level: u64, address: &mut u64) -> bool {
+    pub unsafe fn allocate_4_to_2(&mut self, level: u64, address: &mut u64, physical_address: Option<PhysAddr>) -> bool {
         let index_of_available = self.get_available_entry();
 
         #[cfg(debug_assertions)]
@@ -212,10 +211,10 @@ impl PageTable {
 
         let lower_page_table = get_at_physical_addr::<PageTable>(entry.address());
         let lower_less_available = if level == 2 {
-            lower_page_table.allocate_level_1(address);
+            lower_page_table.allocate_level_1(address, physical_address);
             true
         } else {
-            lower_page_table.allocate_4_to_2(level - 1, address)
+            lower_page_table.allocate_4_to_2(level - 1, address, physical_address)
         };
         if lower_less_available {
             entry.decrease_available();
@@ -223,7 +222,7 @@ impl PageTable {
         entry.num_of_available_pages() == 0
     }
 
-    pub unsafe fn allocate_level_1(&mut self, address: &mut u64) {
+    pub unsafe fn allocate_level_1(&mut self, address: &mut u64, physical_address: Option<PhysAddr>) {
         let index_of_available = self.get_available_entry_level_1();
         #[cfg(debug_assertions)]
         if index_of_available == usize::MAX {
@@ -232,8 +231,13 @@ impl PageTable {
         *address += (index_of_available as u64) << 12;
         let entry = &mut self.entries[index_of_available];
 
-        let page_addr = BUDDY_ALLOCATOR.allocate_frame();
-        *entry = PageTableEntry::new(page_addr);
+        let frame_addr = if let Some(address) = physical_address {
+            BUDDY_ALLOCATOR.mark_addr(address, true);
+            address
+        } else {
+            BUDDY_ALLOCATOR.allocate_frame()
+        };
+        *entry = PageTableEntry::new(frame_addr);
     }
 
     //returns if there was no space but now there is
@@ -276,6 +280,22 @@ impl PageTable {
         }
         sum
     }
+
+    fn get_page_table_entry_mut(&mut self, addr: VirtAddr, level: u64) -> &mut PageTableEntry {
+        unsafe {
+            let entry = (addr.0 >> (12 + 9 * (level - 1))) & 0x1FF;
+            let entry = &mut self.entries[entry as usize];
+            if !entry.present() {
+                panic!("tried to access a non existing frame");
+            }
+            if level == 1 {
+                entry
+            } else {
+                let lower_table = get_at_physical_addr::<PageTable>(entry.address());
+                lower_table.get_page_table_entry_mut(addr, level - 1)
+            }
+        }
+    }
 }
 
 fn dealloc_huge_page(entry: &PageTableEntry, level: u64) {
@@ -308,13 +328,20 @@ impl PageTree {
         }
         Self { level_4_table }
     }
+
+    pub fn get_page_table_entry_mut(&mut self, addr: std::mem_utils::VirtAddr) -> &mut PageTableEntry {
+        unsafe {
+            let level_4_table = get_at_physical_addr::<PageTable>(self.level_4_table);
+            level_4_table.get_page_table_entry_mut(VirtAddr(addr.0 & !0xFFF), 4)
+        }
+    }
 }
 
 impl std::PageAllocator for PageTree {
-    fn allocate(&mut self) -> std::mem_utils::VirtAddr {
+    fn allocate(&mut self, physical_address: Option<PhysAddr>) -> std::mem_utils::VirtAddr {
         unsafe {
             let level_4_table = get_at_physical_addr::<PageTable>(self.level_4_table);
-            level_4_table.allocate()
+            level_4_table.allocate(physical_address)
         }
     }
 
@@ -325,7 +352,7 @@ impl std::PageAllocator for PageTree {
         }
     }
 
-    fn allocate_contigious(&mut self, num: u64) -> std::mem_utils::VirtAddr {
+    fn allocate_contigious(&mut self, _num: u64) -> std::mem_utils::VirtAddr {
         todo!()
     }
 }

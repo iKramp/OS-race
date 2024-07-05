@@ -6,7 +6,7 @@ fn main() {
     println!("{}\n{}", uefi_path, bios_path);
 
     // choose whether to start the UEFI or BIOS image
-    let uefi = true;
+    let uefi = false;
 
     //chose whether to debug with GDB
     let debug = false;
@@ -17,6 +17,8 @@ fn main() {
         cmd.arg("-s");
         cmd.arg("-S");
     }
+    //cmd.arg("-cpu").arg("EPYC");
+    cmd.arg("-smp").arg("4");
 
     #[cfg(test)]
     {

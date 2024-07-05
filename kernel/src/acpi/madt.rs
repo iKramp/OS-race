@@ -5,7 +5,9 @@ use std::{
     vec::Vec,
 };
 
-#[repr(C)]
+use crate::println;
+
+#[repr(C, packed)]
 pub struct Madt {
     header: super::sdt::AcpiSdtHeader,
     pub local_apic_address: u32,
@@ -46,6 +48,7 @@ impl Madt {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub enum MadtEntryType {
     ProcessorLocalAPIC(&'static ProcessorLocalApic),
     IoApic(&'static IoApic),
@@ -57,12 +60,15 @@ pub enum MadtEntryType {
     Other,
 }
 
+#[repr(C, packed)]
+#[derive(Clone, Copy, Debug)]
 pub struct MadtEntryHeader {
     entry_type: u8,
     length: u8,
 }
 
-#[derive(Clone, Copy)]
+#[repr(C, packed)]
+#[derive(Clone, Copy, Debug)]
 pub struct ProcessorLocalApicFlags(u32);
 
 impl ProcessorLocalApicFlags {
@@ -74,6 +80,8 @@ impl ProcessorLocalApicFlags {
     }
 }
 
+#[repr(C, packed)]
+#[derive(Clone, Copy, Debug)]
 pub struct ProcessorLocalApic {
     header: MadtEntryHeader,
     pub acpi_processor_uid: u8,
@@ -81,6 +89,8 @@ pub struct ProcessorLocalApic {
     pub flags: ProcessorLocalApicFlags,
 }
 
+#[repr(C, packed)]
+#[derive(Clone, Copy, Debug)]
 pub struct IoApic {
     header: MadtEntryHeader,
     pub io_apic_id: u8,
@@ -101,6 +111,8 @@ pub enum IntSoOverTriggerMode {
     Reserved,
     LevelTriggered,
 }
+#[repr(C, packed)]
+#[derive(Clone, Copy, Debug)]
 pub struct MpsIntiFlags {
     flags: u16,
 }
@@ -126,6 +138,8 @@ impl MpsIntiFlags {
     }
 }
 
+#[repr(C, packed)]
+#[derive(Clone, Copy, Debug)]
 pub struct InterruptSourceOverride {
     header: MadtEntryHeader,
     pub bus: u8,
@@ -134,12 +148,16 @@ pub struct InterruptSourceOverride {
     pub flags: MpsIntiFlags,
 }
 
+#[repr(C, packed)]
+#[derive(Clone, Copy, Debug)]
 pub struct NMISource {
     header: MadtEntryHeader,
     pub flags: MpsIntiFlags,
     pub global_system_interrupt: u32,
 }
 
+#[repr(C, packed)]
+#[derive(Clone, Copy, Debug)]
 pub struct LocalApicNMI {
     header: MadtEntryHeader,
     pub acpi_processor_uid: u8,
@@ -147,6 +165,8 @@ pub struct LocalApicNMI {
     pub local_apic_lint: u8,
 }
 
+#[repr(C, packed)]
+#[derive(Clone, Copy, Debug)]
 pub struct LocalApicAddressOverride {
     header: MadtEntryHeader,
     pub reserved: u16,

@@ -64,6 +64,16 @@ impl BuyddyAllocator {
         unsafe { BUDDY_ALLOCATOR = allocator }
     }
 
+    pub fn is_frame_allocated(&self, addr: PhysAddr) -> bool {
+        #[cfg(debug_assertions)]
+        assert!(
+            addr.0 & 0xFFF == 0,
+            "error in is_frame_allocated at addr {}: address is not page aligned",
+            addr.0,
+        );
+        self.get_at_index((addr.0 >> 12) + (self.binary_tree_size / 2))
+    }
+
     pub fn deallocate_frame(&mut self, addr: PhysAddr) {
         self.mark_addr(addr, false);
         self.allocated_pages -= 1;
@@ -74,17 +84,17 @@ impl BuyddyAllocator {
             panic!("no more frames to sllocate");
         }
         self.allocated_pages += 1;
-        let index = self.find_empty_page();
+        let index = self.find_empty_frame();
         self.mark_index(index, true);
         PhysAddr((index - self.binary_tree_size / 2) * 4096)
     }
 
-    fn find_empty_page(&self) -> u64 {
+    fn find_empty_frame(&self) -> u64 {
         assert!(!self.get_at_index(1), "root node of physical memory allocator is filled");
-        self.find_empty_page_recursively(1)
+        self.find_empty_frame_recursively(1)
     }
 
-    fn find_empty_page_recursively(&self, curr_index: u64) -> u64 {
+    fn find_empty_frame_recursively(&self, curr_index: u64) -> u64 {
         if curr_index >= self.binary_tree_size / 2 {
             //is in second half of the tree, so last level
             return curr_index;
@@ -96,13 +106,13 @@ impl BuyddyAllocator {
             curr_index
         );
         if !self.get_at_index(curr_index * 2) {
-            self.find_empty_page_recursively(curr_index * 2)
+            self.find_empty_frame_recursively(curr_index * 2)
         } else {
-            self.find_empty_page_recursively(curr_index * 2 + 1)
+            self.find_empty_frame_recursively(curr_index * 2 + 1)
         }
     }
 
-    fn mark_addr(&self, addr: PhysAddr, allocated: bool) {
+    pub fn mark_addr(&self, addr: PhysAddr, allocated: bool) {
         #[cfg(debug_assertions)]
         assert!(
             addr.0 & 0xFFF == 0,

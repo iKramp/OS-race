@@ -36,6 +36,12 @@ impl VgaText {
         self.offset = unsafe { VGA_BINDING.stride * self.line * CHAR_HEIGHT * VGA_BINDING.bytes_per_pixel };
     }
 
+    fn up_line(&mut self) {
+        if self.line > 0 {
+            self.line -= 1;
+        }
+    }
+
     pub unsafe fn write_character(&mut self, mut character: &u8) {
         if !(0x20..0x7f).contains(character) {
             character = &0xfe

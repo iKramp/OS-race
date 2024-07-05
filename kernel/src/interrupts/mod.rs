@@ -1,9 +1,9 @@
 mod gdt;
 use crate::println;
-use core::arch::asm;
 #[macro_use]
 mod handlers;
 mod idt;
+use crate::utils::byte_to_port;
 
 pub fn init_interrupts() {
     println!("initializing PIC");
@@ -37,12 +37,21 @@ pub fn init_pic() {
     byte_to_port(PIC1_DATA, 0x01);
     byte_to_port(PIC2_DATA, 0x01);
 
-    byte_to_port(PIC1_DATA, 0x03); //change to 0x00 to handle keyboard and timer
-    byte_to_port(PIC2_DATA, 0x03);
+    init_timer();
+
+    byte_to_port(PIC1_DATA, 0x00); //change to 0x00 to handle keyboard
+    byte_to_port(PIC2_DATA, 0x00);
 }
 
-fn byte_to_port(port: u16, byte: u8) {
-    unsafe {
-        asm!("out dx, al", in("dx") port, in("al") byte);
-    }
+pub static mut LEGACY_PIC_TIMER_TICKS: u64 = 0;
+pub static mut TIMER_TICKS: u64 = 0;
+pub const PIC_TIMER_FREQUENCY: u32 = 59659;
+pub const PIC_TIMER_ORIGINAL_FREQ: u32 = 1193180;
+
+fn init_timer() {
+    const divisor: u16 = (PIC_TIMER_ORIGINAL_FREQ / (PIC_TIMER_FREQUENCY)) as u16;
+
+    byte_to_port(0x43, 0x36);
+    byte_to_port(0x40, (divisor & 0xFF) as u8);
+    byte_to_port(0x40, ((divisor >> 8) & 0xFF) as u8);
 }

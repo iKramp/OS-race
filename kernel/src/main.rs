@@ -8,10 +8,12 @@ use bootloader_api::{config::Mapping, entry_point, BootloaderConfig};
 use std::panic::PanicInfo;
 
 mod acpi;
+mod cpuid;
 mod interrupts;
 mod memory;
 #[allow(unused_imports)]
 mod tests;
+mod utils;
 mod vga;
 use vga::vga_text;
 

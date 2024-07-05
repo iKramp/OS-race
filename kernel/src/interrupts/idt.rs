@@ -88,11 +88,13 @@ impl Idt {
         self.set(Entry::diverging_(interrupt_message!("reserved")), 29);
         self.set(Entry::diverging_(interrupt_message!("reserved")), 30);
         self.set(Entry::diverging_(interrupt_message!("reserved")), 31);
-        self.set(Entry::diverging_(interrupt_message!("reserved")), 31);
 
-        for i in 32..256 {
+        self.set(Entry::converging(legacy_timer_tick), 32);
+
+        for i in 33..256 {
             self.set(Entry::diverging_(interrupt_message!("other interrupt")), i);
         }
+        self.set(Entry::converging(timer_tick), 100);
     }
 }
 

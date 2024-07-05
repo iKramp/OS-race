@@ -1,9 +1,13 @@
+use crate::println;
+
+mod apic;
 mod fadt;
 mod madt;
 mod platform_info;
 mod rsdp;
 mod rsdt;
 mod sdt;
+pub use apic::{LapicRegisters, LAPIC_REGISTERS};
 
 pub fn init_acpi(rsdp_address: std::option::Option<u64>) {
     let Some(rsdp) = rsdp::get_rsdp_table(rsdp_address) else {
@@ -21,7 +25,7 @@ pub fn init_acpi(rsdp_address: std::option::Option<u64>) {
             match &header.signature {
                 b"FACP" => fadt = Some(std::mem_utils::get_at_physical_addr::<fadt::Fadt>(*table)),
                 b"APIC" => madt = Some(std::mem_utils::get_at_physical_addr::<madt::Madt>(*table)),
-                _ => {}
+                _ => {} //any other tables except SSDT, those are parsed after DSDT
             }
         }
     }
@@ -30,7 +34,7 @@ pub fn init_acpi(rsdp_address: std::option::Option<u64>) {
     let madt = madt.expect("madt should be present");
 
     let entries = madt.get_madt_entries();
-    let _platform_info = platform_info::PlatformInfo::new(&entries, std::mem_utils::PhysAddr(madt.local_apic_address as u64));
+    let platform_info = platform_info::PlatformInfo::new(&entries, std::mem_utils::PhysAddr(madt.local_apic_address as u64));
     //override madt apic address if it exists in entries
 
     //after loading dsdt
@@ -40,7 +44,10 @@ pub fn init_acpi(rsdp_address: std::option::Option<u64>) {
             let header = std::mem_utils::get_at_physical_addr::<sdt::AcpiSdtHeader>(*table);
             if &header.signature == b"SSDT" {
                 //parse secondary tables
+                //actually don't this shit is difficult af
             }
         }
     }
+
+    apic::enable_apic(&platform_info);
 }

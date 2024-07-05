@@ -1,5 +1,6 @@
-use crate::println;
+use crate::utils::byte_to_port;
 use crate::vga::vga_text::set_vga_text_foreground;
+use crate::{print, println};
 #[allow(unused_imports)] //they are used in macros
 use core::arch::asm;
 
@@ -20,7 +21,11 @@ pub extern "x86-interrupt" fn invalid_opcode(stack_frame: ExceptionStackFrame) -
         stack_frame.instruction_pointer, stack_frame
     );
     set_vga_text_foreground((255, 255, 255));
-    loop {}
+    unsafe {
+        loop {
+            asm!("hlt");
+        }
+    }
 }
 
 pub extern "x86-interrupt" fn breakpoint(stack_frame: ExceptionStackFrame) {
@@ -62,12 +67,30 @@ pub extern "x86-interrupt" fn page_fault(stack_frame: ExceptionStackFrame, error
         stack_frame
     );
     set_vga_text_foreground((255, 255, 255));
-    loop {}
+    unsafe {
+        loop {
+            asm!("hlt");
+        }
+    }
 }
 
 pub extern "x86-interrupt" fn other_interrupt(_stack_frame: ExceptionStackFrame) {
     set_vga_text_foreground((0, 0, 255));
     println!("some interrupt");
     set_vga_text_foreground((255, 255, 255));
-    loop {}
+}
+
+pub extern "x86-interrupt" fn timer_tick(_stack_frame: ExceptionStackFrame) {
+    unsafe {
+        let lapic_registers = std::mem_utils::get_at_virtual_addr::<crate::acpi::LapicRegisters>(crate::acpi::LAPIC_REGISTERS);
+        lapic_registers.end_of_interrupt.bytes = 1;
+        super::TIMER_TICKS += 1;
+    }
+}
+
+pub extern "x86-interrupt" fn legacy_timer_tick(_stack_frame: ExceptionStackFrame) {
+    byte_to_port(0x20, 0x20);
+    unsafe {
+        super::LEGACY_PIC_TIMER_TICKS += 1;
+    }
 }

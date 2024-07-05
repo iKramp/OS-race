@@ -1,4 +1,4 @@
-#[repr(C)]
+#[repr(C, packed)]
 #[derive(Debug)]
 pub struct AcpiSdtHeader {
     pub signature: [u8; 4],
