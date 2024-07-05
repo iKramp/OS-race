@@ -76,13 +76,6 @@ pub fn disable_pic() {
 
     byte_to_port(PIC1_DATA, mask); //mask interrupts
     byte_to_port(PIC2_DATA, mask);
-    if USE_LEGACY_TIMER {
-        return;
-    }
-
-    //https://web.archive.org/web/20121002210153/http://download.intel.com/design/archives/processors/pro/docs/24201606.pdf
-    byte_to_port(0x22, 0x70); //write to imcr
-    byte_to_port(0x23, 0x01);
 }
 
 #[repr(C, packed)]
