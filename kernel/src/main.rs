@@ -46,9 +46,9 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
 
     acpi::init_acpi(boot_info.rsdp_addr.into());
 
-    vga_text::hello_message();
+    //vga_text::hello_message();
 
-    let run_tests = true;
+    let run_tests = false;
     if run_tests {
         println!("Running tests");
         use crate::tests::test_runner;
@@ -58,5 +58,11 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
     println!("This message is created after tests, looping infinitely now");
 
     #[allow(clippy::empty_loop)]
-    loop {}
+    let mut last_seconds = crate::interrupts::time_since_boot().as_secs();
+    loop {
+        if last_seconds != crate::interrupts::time_since_boot().as_secs() {
+            last_seconds = crate::interrupts::time_since_boot().as_secs();
+            println!("{}", last_seconds);
+        }
+    }
 }

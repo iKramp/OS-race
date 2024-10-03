@@ -1,12 +1,12 @@
-use crate::println;
-
 mod apic;
 mod fadt;
+mod ioapic;
 mod madt;
 mod platform_info;
 mod rsdp;
 mod rsdt;
 mod sdt;
+
 pub use apic::{LapicRegisters, LAPIC_REGISTERS};
 
 pub fn init_acpi(rsdp_address: std::option::Option<u64>) {
@@ -36,18 +36,19 @@ pub fn init_acpi(rsdp_address: std::option::Option<u64>) {
     let entries = madt.get_madt_entries();
     let platform_info = platform_info::PlatformInfo::new(&entries, std::mem_utils::PhysAddr(madt.local_apic_address as u64));
     //override madt apic address if it exists in entries
+    apic::enable_apic(&platform_info);
+    //ioapic::init_ioapic(&platform_info);
 
     //after loading dsdt
-
-    for table in &rsdt.get_tables() {
-        unsafe {
-            let header = std::mem_utils::get_at_physical_addr::<sdt::AcpiSdtHeader>(*table);
-            if &header.signature == b"SSDT" {
-                //parse secondary tables
-                //actually don't this shit is difficult af
+    /*
+        for table in &rsdt.get_tables() {
+            unsafe {
+                let header = std::mem_utils::get_at_physical_addr::<sdt::AcpiSdtHeader>(*table);
+                if &header.signature == b"SSDT" {
+                    //parse secondary tables
+                    //actually don't this shit is difficult af
+                }
             }
         }
-    }
-
-    apic::enable_apic(&platform_info);
+    */
 }

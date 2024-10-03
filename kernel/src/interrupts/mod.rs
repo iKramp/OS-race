@@ -1,8 +1,8 @@
 mod gdt;
 use crate::println;
 #[macro_use]
-mod handlers;
-mod idt;
+pub mod handlers;
+pub mod idt;
 use crate::utils::byte_to_port;
 
 pub fn init_interrupts() {
@@ -48,10 +48,14 @@ pub static mut TIMER_TICKS: u64 = 0;
 pub const PIC_TIMER_FREQUENCY: u32 = 59659;
 pub const PIC_TIMER_ORIGINAL_FREQ: u32 = 1193180;
 
+pub fn time_since_boot() -> std::time::Duration {
+    std::time::Duration::from_nanos(unsafe { TIMER_TICKS } * 1_000_000_000 / PIC_TIMER_FREQUENCY as u64)
+}
+
 fn init_timer() {
-    const divisor: u16 = (PIC_TIMER_ORIGINAL_FREQ / (PIC_TIMER_FREQUENCY)) as u16;
+    const DIVISOR: u16 = (PIC_TIMER_ORIGINAL_FREQ / (PIC_TIMER_FREQUENCY)) as u16;
 
     byte_to_port(0x43, 0x36);
-    byte_to_port(0x40, (divisor & 0xFF) as u8);
-    byte_to_port(0x40, ((divisor >> 8) & 0xFF) as u8);
+    byte_to_port(0x40, (DIVISOR & 0xFF) as u8);
+    byte_to_port(0x40, ((DIVISOR >> 8) & 0xFF) as u8);
 }

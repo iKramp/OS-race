@@ -69,6 +69,14 @@ impl<T> Vec<T> {
     pub fn at_unchecked(&self, index: usize) -> &T {
         unsafe { &*self.data.add(index) }
     }
+
+    pub fn first(&self) -> Option<&T> {
+        self.at(0)
+    }
+
+    pub fn last(&self) -> Option<&T> {
+        self.at(self.size - 1)
+    }
 }
 
 impl<T> core::default::Default for Vec<T> {

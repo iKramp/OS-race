@@ -1,7 +1,7 @@
 pub mod paging;
 pub mod physical_allocator;
 use crate::println;
-use std::mem_utils;
+use std::mem_utils::{self, VirtAddr};
 
 pub static mut PAGE_TREE_ALLOCATOR: paging::PageTree = paging::PageTree {
     level_4_table: std::mem_utils::PhysAddr(0),
@@ -20,7 +20,18 @@ pub fn init_memory(boot_info: &mut bootloader_api::BootInfo) {
         crate::vga_text::set_vga_text_foreground((0, 255, 0));
         println!("memory initialized");
         crate::vga_text::reset_vga_color();
-        std::PAGE_ALLOCATOR = #[allow(static_mut_refs)]
-        &mut PAGE_TREE_ALLOCATOR;
+        #[allow(static_mut_refs)]
+        {
+            std::PAGE_ALLOCATOR = &mut PAGE_TREE_ALLOCATOR;
+        }
+        let page_table_entry =
+            PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(VirtAddr(crate::vga::vga_driver::VGA_BINDING.buffer as u64));
+        page_table_entry.set_disable_cahce(true);
+        page_table_entry.set_write_through_cahcing(true);
+        core::arch::asm!(
+            "mov rax, cr3",
+            "mov cr3, rax",
+            out("rax") _
+        ); //clear the TLB
     }
 }

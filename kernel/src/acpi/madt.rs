@@ -68,7 +68,7 @@ pub struct MadtEntryHeader {
 }
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct ProcessorLocalApicFlags(u32);
 
 impl ProcessorLocalApicFlags {
@@ -114,7 +114,7 @@ pub enum IntSoOverTriggerMode {
 #[repr(C, packed)]
 #[derive(Clone, Copy, Debug)]
 pub struct MpsIntiFlags {
-    flags: u16,
+    pub flags: u16,
 }
 impl MpsIntiFlags {
     pub fn polarity(&self) -> IntSoOverPolarity {

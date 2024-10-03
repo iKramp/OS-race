@@ -32,7 +32,7 @@ pub struct Idt {
 }
 
 #[used]
-static mut IDT: Idt = Idt::new();
+pub static mut IDT: Idt = Idt::new();
 
 impl Idt {
     pub const fn new() -> Self {
@@ -41,7 +41,7 @@ impl Idt {
         }
     }
 
-    fn set(&mut self, entry: Entry, index: usize) {
+    pub fn set(&mut self, entry: Entry, index: usize) {
         self.entry_table[index] = entry;
     }
 
@@ -89,12 +89,15 @@ impl Idt {
         self.set(Entry::diverging_(interrupt_message!("reserved")), 30);
         self.set(Entry::diverging_(interrupt_message!("reserved")), 31);
 
-        self.set(Entry::converging(legacy_timer_tick), 32);
-
-        for i in 33..256 {
-            self.set(Entry::diverging_(interrupt_message!("other interrupt")), i);
+        for i in 32..256 {
+            self.set(Entry::converging(other_legacy_interrupt), i);
         }
-        self.set(Entry::converging(timer_tick), 100);
+
+        self.set(Entry::converging(legacy_timer_tick_testing), 32);
+        self.set(Entry::converging(legacy_keyboard_interrupt), 33);
+
+        self.set(Entry::converging(apic_timer_tick), 100);
+        self.set(Entry::converging(spurious_interrupt), 255);
     }
 }
 
@@ -117,7 +120,7 @@ pub struct Entry {
 }
 
 impl Entry {
-    fn new_diverging(
+    pub fn new_diverging(
         gdt_selector: u16,
         handler: extern "x86-interrupt" fn(stack_frame: ExceptionStackFrame) -> !,
         options: u16,
@@ -133,7 +136,7 @@ impl Entry {
         }
     }
 
-    fn new_converging(gdt_selector: u16, handler: extern "x86-interrupt" fn(_: ExceptionStackFrame), options: u16) -> Self {
+    pub fn new_converging(gdt_selector: u16, handler: extern "x86-interrupt" fn(_: ExceptionStackFrame), options: u16) -> Self {
         let pointer = handler as usize;
         Self {
             gdt_selector,
@@ -145,11 +148,11 @@ impl Entry {
         }
     }
 
-    fn diverging_(handler: extern "x86-interrupt" fn(_: ExceptionStackFrame) -> !) -> Self {
+    pub fn diverging_(handler: extern "x86-interrupt" fn(_: ExceptionStackFrame) -> !) -> Self {
         Self::new_diverging(0x8, handler, construct_entry_options(0, false, 0, true))
     }
 
-    fn with_error(handler: extern "x86-interrupt" fn(_: ExceptionStackFrame, _: u64) -> !) -> Self {
+    pub fn with_error(handler: extern "x86-interrupt" fn(_: ExceptionStackFrame, _: u64) -> !) -> Self {
         let pointer = handler as usize;
         Self {
             gdt_selector: 0x8,
@@ -161,11 +164,11 @@ impl Entry {
         }
     }
 
-    fn converging(handler: extern "x86-interrupt" fn(_: ExceptionStackFrame)) -> Self {
+    pub fn converging(handler: extern "x86-interrupt" fn(_: ExceptionStackFrame)) -> Self {
         Self::new_converging(0x8, handler, construct_entry_options(0, false, 0, true))
     }
 
-    fn ist_index_(ist_index: u16, handler: extern "x86-interrupt" fn(stack_frame: ExceptionStackFrame) -> !) -> Self {
+    pub fn ist_index_(ist_index: u16, handler: extern "x86-interrupt" fn(stack_frame: ExceptionStackFrame) -> !) -> Self {
         Self::new_diverging(0x8, handler, construct_entry_options(ist_index, false, 0, true))
     }
 

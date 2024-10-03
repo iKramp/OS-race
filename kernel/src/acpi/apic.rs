@@ -1,6 +1,13 @@
-use std::{mem_utils::VirtAddr, PageAllocator};
+#![allow(clippy::unusual_byte_groupings)]
+
+use std::{
+    mem_utils::{PhysAddr, VirtAddr},
+    PageAllocator,
+};
 
 use crate::{
+    interrupts::handlers::*,
+    interrupts::idt::{Entry, IDT},
     interrupts::{LEGACY_PIC_TIMER_TICKS, PIC_TIMER_FREQUENCY, TIMER_TICKS},
     println,
     utils::byte_to_port,
@@ -10,8 +17,63 @@ pub static mut LAPIC_REGISTERS: VirtAddr = VirtAddr(0);
 const USE_LEGACY_TIMER: bool = false;
 
 pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo) {
+    disable_pic_keep_timer();
+    let lapic_registers = get_lapic_registers(platform_info.apic.lapic_address);
+
     unsafe {
-        LAPIC_REGISTERS = crate::memory::PAGE_TREE_ALLOCATOR.allocate(Some(platform_info.apic.lapic_address));
+        IDT.set(Entry::converging(other_apic_interrupt), 64);
+        IDT.set(Entry::converging(other_apic_interrupt), 65);
+        IDT.set(Entry::converging(other_apic_interrupt), 66);
+        IDT.set(Entry::converging(apic_error), 67);
+        IDT.set(Entry::converging(other_apic_interrupt), 68);
+        IDT.set(Entry::converging(other_apic_interrupt), 69);
+    }
+
+    lapic_registers.lvt_corrected_machine_check_interrupt.bytes = 0b00000000_00000000_0_000_0_0_000_01000000_u32;
+    lapic_registers.lvt_lint0.bytes = 0b00000000_00000000_0_000_0_0_000_01000001_u32;
+    lapic_registers.lvt_lint1.bytes = 0b00000000_00000000_0_000_0_0_000_01000010_u32;
+    lapic_registers.lvt_error.bytes = 0b00000000_00000000_0_000_0_0_000_01000011_u32;
+    lapic_registers.lvt_performance_monitoring_counters.bytes = 0b00000000_00000000_0_000_0_0_000_01000100_u32;
+    lapic_registers.lvt_thermal_sensor.bytes = 0b00000000_00000000_0_000_0_0_000_01000101_u32;
+
+    let mut nmi_source = 0b00000000_00000000_0_000_0_0_100_00000000_u32;
+    let lapic_nmi = platform_info.get_nmi_structure(0);
+    println!("NMI: {:#x?}", lapic_nmi);
+
+    if let crate::acpi::madt::IntSoOverTriggerMode::LevelTriggered = lapic_nmi.flags.trigger_mode() {
+        nmi_source |= 1 << 15;
+    }
+    if let crate::acpi::madt::IntSoOverPolarity::ActiveLow = lapic_nmi.flags.polarity() {
+        nmi_source |= 1 << 13;
+    }
+    if lapic_nmi.lint == 0 {
+        lapic_registers.lvt_lint0.bytes = nmi_source;
+    } else {
+        lapic_registers.lvt_lint1.bytes = nmi_source;
+    }
+
+    //fully enable apic:
+    lapic_registers.spurious_interrupt.bytes = 0b0000000000000000000_0_00_0_1_11111111_u32;
+    lapic_registers.task_priority.bytes = 0;
+    
+    activate_timer(lapic_registers);
+
+    unsafe {
+        for i in 38..255 {
+            IDT.set(Entry::converging(other_apic_interrupt), i);
+        }
+
+        IDT.set(Entry::converging(apic_keyboard_interrupt), 32 + 1);
+        IDT.set(Entry::converging(ps2_mouse_interrupt), 32 + 12);
+        IDT.set(Entry::converging(fpu_interrupt), 32 + 13);
+        IDT.set(Entry::converging(primary_ata_hard_disk), 32 + 14);
+    }
+    disable_pic_completely();
+}
+
+fn get_lapic_registers(lapic_address: PhysAddr) -> &'static mut LapicRegisters {
+    unsafe {
+        LAPIC_REGISTERS = crate::memory::PAGE_TREE_ALLOCATOR.allocate(Some(lapic_address));
         let apic_registers_page_entry = crate::memory::PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(LAPIC_REGISTERS);
         apic_registers_page_entry.set_write_through_cahcing(true);
         apic_registers_page_entry.set_disable_cahce(true);
@@ -20,11 +82,7 @@ pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo) {
             "mov cr3, rax",
             out("rax") _
         ); //clear the TLB
-        let lapic_registers = std::mem_utils::get_at_virtual_addr::<LapicRegisters>(LAPIC_REGISTERS);
-
-        //init APIC
-
-        activate_timer(lapic_registers);
+        std::mem_utils::get_at_virtual_addr::<LapicRegisters>(LAPIC_REGISTERS)
     }
 }
 
@@ -45,14 +103,22 @@ fn activate_timer(lapic_registers: &mut LapicRegisters) {
 
     let ticks;
     unsafe {
+        println!("start legacy pic {LEGACY_PIC_TIMER_TICKS}");
         let start_legacy_timer = LEGACY_PIC_TIMER_TICKS;
         while TIMER_TICKS == 0 {}
         ticks = LEGACY_PIC_TIMER_TICKS - start_legacy_timer;
+        println!("end legacy pic {LEGACY_PIC_TIMER_TICKS}");
     }
-    disable_pic();
+    println!("ticks: {ticks}");
+
     if USE_LEGACY_TIMER {
         timer_conf |= 1 << 16; //mask
+        unsafe { IDT.set(Entry::converging(legacy_timer_tick), 32) };
+    } else {
+        disable_pic_completely();
+        unsafe { IDT.set(Entry::converging(apic_timer_tick), 32) };
     }
+
     timer_conf |= 0b01 << 17; // set to periodic
     timer_conf &= !0xFF_u32;
     timer_conf |= 32; //set correct interrupt vector
@@ -65,17 +131,40 @@ fn activate_timer(lapic_registers: &mut LapicRegisters) {
         PIC_TIMER_FREQUENCY
     );
 
-    //INFO: I GIVE UP IT'S IMPOSSIBLE TO MAKE A RELIABLE TIMER IN A VM, I'LL JUST USE THE LEGACY PIT
+    // INFO: I GIVE UP IT'S IMPOSSIBLE TO MAKE A RELIABLE TIMER IN A VM, I'LL JUST USE THE LEGACY PIT
 }
 
-pub fn disable_pic() {
+pub fn disable_pic_keep_timer() {
     const PIC1_DATA: u16 = 0x21;
     const PIC2_DATA: u16 = 0xA1;
 
-    let mask = if USE_LEGACY_TIMER { 0xFE } else { 0xFF };
+    byte_to_port(PIC1_DATA, 0xFE); //mask interrupts, keep timer
+    byte_to_port(PIC2_DATA, 0xFE);
 
-    byte_to_port(PIC1_DATA, mask); //mask interrupts
-    byte_to_port(PIC2_DATA, mask);
+    byte_to_port(PIC1_DATA - 1, 0x20); //trigger EOI
+    byte_to_port(PIC2_DATA - 1, 0x20);
+
+    //disconnect_imcr();
+}
+
+pub fn disable_pic_completely() {
+    const PIC1_DATA: u16 = 0x21;
+    const PIC2_DATA: u16 = 0xA1;
+
+    byte_to_port(PIC1_DATA, 0xFF); //mask interrupts
+    byte_to_port(PIC2_DATA, 0xFF);
+
+    byte_to_port(PIC1_DATA - 1, 0x20); //trigger EOI
+    byte_to_port(PIC2_DATA - 1, 0x20);
+
+    disconnect_imcr();
+}
+
+fn disconnect_imcr() {
+    const IMCR: u16 = 0x22;
+
+    byte_to_port(IMCR, 0x70);
+    byte_to_port(IMCR + 1, 0x01);
 }
 
 #[repr(C, packed)]
@@ -99,7 +188,7 @@ pub struct LapicRegisters {
     in_service: EightDWordStructure,
     trigger_mode: EightDWordStructure,
     interrupt_request: EightDWordStructure,
-    error_status: LapicRegisterValueStructure,
+    pub error_status: LapicRegisterValueStructure,
     reserved_6: LapicRegisterValueStructure,
     reserved_7: LapicRegisterValueStructure,
     reserved_8: LapicRegisterValueStructure,

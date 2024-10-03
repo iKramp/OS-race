@@ -1,11 +1,13 @@
-use super::madt::MadtEntryType;
+use super::madt::{MadtEntryType, MpsIntiFlags};
 use crate::println;
 use std::mem_utils::PhysAddr;
+
+static mut BOOT_FOUND: bool = false;
 
 #[derive(Default, Debug)]
 pub struct PlatformInfo {
     pub apic: Apic,
-    pub boot_processor: Option<Processor>,
+    pub boot_processor: Processor,
     pub application_processors: std::Vec<Processor>,
 }
 
@@ -16,23 +18,21 @@ impl PlatformInfo {
         for entry in madt_entries {
             match entry {
                 MadtEntryType::ProcessorLocalAPIC(data) => {
-                    println!("local apic");
-                    if info.boot_processor.is_some() {
+                    if unsafe { BOOT_FOUND } {
                         info.application_processors.push(Processor {
                             processor_id: data.acpi_processor_uid,
                             apic_id: data.apic_id,
                             flags: data.flags,
                         })
                     } else {
-                        info.boot_processor = Some(Processor {
+                        info.boot_processor = Processor {
                             processor_id: data.acpi_processor_uid,
                             apic_id: data.apic_id,
                             flags: data.flags,
-                        })
+                        }
                     }
                 }
                 MadtEntryType::IoApic(data) => {
-                    println!("IO Apic");
                     info.apic.io_apics.push(IOApic {
                         id: data.io_apic_id,
                         address: data.io_apic_address,
@@ -40,7 +40,6 @@ impl PlatformInfo {
                     });
                 }
                 MadtEntryType::LocalApicAddressOverride(data) => {
-                    println!("local apic address override");
                     info.apic.lapic_address = PhysAddr(data.local_apic_address);
                 }
                 MadtEntryType::NMISource(_data) => {
@@ -49,7 +48,6 @@ impl PlatformInfo {
                     //definitions
                 }
                 MadtEntryType::LocalApicNMI(data) => {
-                    println!("local apic nmi");
                     let target = if data.acpi_processor_uid == 0xff {
                         NMILineTarget::All
                     } else {
@@ -62,7 +60,6 @@ impl PlatformInfo {
                     });
                 }
                 MadtEntryType::InterruptSourceOverride(data) => {
-                    println!("interrupt source override");
                     if data.bus != 0 {
                         panic!("bus isn't 0 which is not supported");
                     }
@@ -75,8 +72,21 @@ impl PlatformInfo {
                 _ => {}
             }
         }
-        println!("apic address is {:#x?}", info.apic.lapic_address);
+        //println!("apic address is {:#x?}", info.apic.lapic_address);
         info
+    }
+
+    pub fn get_nmi_structure(&self, processor_id: u8) -> NMILine {
+        for line in &self.apic.local_apic_nmi_lines {
+            if line.target == NMILineTarget::All || line.target == NMILineTarget::Id(processor_id) {
+                return *line;
+            }
+        }
+        NMILine {
+            target: NMILineTarget::Id(processor_id),
+            flags: MpsIntiFlags { flags: 0 },
+            lint: 1,
+        }
     }
 }
 
@@ -89,7 +99,7 @@ pub struct Apic {
     pub nmi_source: std::Vec<()>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Processor {
     pub processor_id: u8,
     pub apic_id: u8,
@@ -98,16 +108,16 @@ pub struct Processor {
 
 #[derive(Debug)]
 pub struct IOApic {
-    id: u8,
-    address: u32,
-    global_system_interrupt_base: u32,
+    pub id: u8,
+    pub address: u32,
+    pub global_system_interrupt_base: u32,
 }
 
 #[derive(Debug)]
 pub struct InterruptSourceOverride {
-    source: u8,
-    global_system_interrupt: u32,
-    flags: super::madt::MpsIntiFlags,
+    pub source: u8,
+    pub global_system_interrupt: u32,
+    pub flags: super::madt::MpsIntiFlags,
 }
 
 pub struct LocalAPICNMI {
@@ -116,14 +126,14 @@ pub struct LocalAPICNMI {
     local_apic_lint: u8,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NMILineTarget {
     All,
     Id(u8),
 }
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct NMILine {
-    target: NMILineTarget,
-    flags: super::madt::MpsIntiFlags,
-    lint: u8,
+    pub target: NMILineTarget,
+    pub flags: super::madt::MpsIntiFlags,
+    pub lint: u8,
 }
