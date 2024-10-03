@@ -1,6 +1,6 @@
+use crate::println;
 use crate::utils::{byte_form_port, byte_to_port};
 use crate::vga::vga_text::set_vga_text_foreground;
-use crate::{print, println};
 #[allow(unused_imports)] //they are used in macros
 use core::arch::asm;
 
@@ -82,7 +82,7 @@ pub extern "x86-interrupt" fn other_legacy_interrupt(_stack_frame: ExceptionStac
 pub fn apic_eoi() {
     unsafe {
         let lapic_registers = std::mem_utils::get_at_virtual_addr::<crate::acpi::LapicRegisters>(crate::acpi::LAPIC_REGISTERS);
-        lapic_registers.end_of_interrupt.bytes = 1;
+        lapic_registers.end_of_interrupt.bytes = 0;
     }
 }
 
@@ -137,8 +137,9 @@ pub extern "x86-interrupt" fn legacy_keyboard_interrupt(_stack_frame: ExceptionS
 }
 
 pub extern "x86-interrupt" fn apic_keyboard_interrupt(_stack_frame: ExceptionStackFrame) {
-    println!("a");
     apic_eoi();
+    let code = byte_form_port(0x60);
+    println!("{code}");
 }
 
 pub extern "x86-interrupt" fn ps2_mouse_interrupt(_stack_frame: ExceptionStackFrame) {

@@ -55,7 +55,7 @@ pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo) {
     //fully enable apic:
     lapic_registers.spurious_interrupt.bytes = 0b0000000000000000000_0_00_0_1_11111111_u32;
     lapic_registers.task_priority.bytes = 0;
-    
+
     activate_timer(lapic_registers);
 
     unsafe {

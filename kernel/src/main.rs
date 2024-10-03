@@ -55,10 +55,6 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
         test_runner();
     }
 
-    unsafe {
-        core::arch::asm!("hlt");
-    }
-
     println!("This message is created after tests, looping infinitely now");
 
     #[allow(clippy::empty_loop)]
@@ -66,7 +62,6 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
     loop {
         if last_seconds != crate::interrupts::time_since_boot().as_secs() {
             last_seconds = crate::interrupts::time_since_boot().as_secs();
-            println!("{}", last_seconds);
         }
     }
 }
