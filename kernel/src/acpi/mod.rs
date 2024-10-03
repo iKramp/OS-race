@@ -37,7 +37,7 @@ pub fn init_acpi(rsdp_address: std::option::Option<u64>) {
     let platform_info = platform_info::PlatformInfo::new(&entries, std::mem_utils::PhysAddr(madt.local_apic_address as u64));
     //override madt apic address if it exists in entries
     apic::enable_apic(&platform_info);
-    //ioapic::init_ioapic(&platform_info);
+    ioapic::init_ioapic(&platform_info);
 
     //after loading dsdt
     /*

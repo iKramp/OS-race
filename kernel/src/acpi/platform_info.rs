@@ -25,6 +25,8 @@ impl PlatformInfo {
                             flags: data.flags,
                         })
                     } else {
+                        println!("processor local apic: {:#x?}", data);
+                        unsafe {BOOT_FOUND = true;}
                         info.boot_processor = Processor {
                             processor_id: data.acpi_processor_uid,
                             apic_id: data.apic_id,

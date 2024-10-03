@@ -7,6 +7,7 @@ use super::platform_info::PlatformInfo;
 use crate::println;
 
 pub fn init_ioapic(platform_info: &PlatformInfo) {
+    println!("{:#x?}", platform_info.apic.io_apics);
     unsafe {
         for io_apic_info in &platform_info.apic.io_apics {
             let io_apic_address = crate::memory::PAGE_TREE_ALLOCATOR.allocate(Some(PhysAddr(io_apic_info.address.into())));
@@ -19,24 +20,27 @@ pub fn init_ioapic(platform_info: &PlatformInfo) {
                 out("rax") _
             ); //clear the TLB
             let io_apic = get_at_virtual_addr::<IoApicRegisters>(io_apic_address);
-            println!("got io apic");
+            let (_, entries ) = io_apic.get_version_and_entries();
+            //println!("got io apic: {:#x?}", io_apic);
+            //println!("io apic version: {:#x?}", (version, entries));
+            //println!("io apic id: {:#x?}", io_apic.get_id());
 
-            for i in 0..16 {
+            for gsi in 0..entries - 1 {
                 let mut trigger_mode = 0;
                 let mut polarity = 0;
-                let mut gsi = i as u8;
+                let mut vector = gsi;
                 for interrupt_override in &platform_info.apic.interrupt_source_overrides {
-                    if interrupt_override.source != i as u8 {
+                    if interrupt_override.global_system_interrupt as u8 != gsi {
                         continue;
                     }
-                    println!("{:#x?}", interrupt_override);
+                    //println!("{:#x?}", interrupt_override);
                     if let crate::acpi::madt::IntSoOverTriggerMode::LevelTriggered = interrupt_override.flags.trigger_mode() {
                         trigger_mode = 1;
                     }
                     if let crate::acpi::madt::IntSoOverPolarity::ActiveLow = interrupt_override.flags.polarity() {
                         polarity = 1;
                     }
-                    gsi = interrupt_override.global_system_interrupt as u8;
+                    vector = interrupt_override.source;
                 }
 
                 let table_entry = RedTblEntry::new(
@@ -47,9 +51,9 @@ pub fn init_ioapic(platform_info: &PlatformInfo) {
                     polarity,
                     0,
                     0,
-                    i as u8 + 32,
+                    vector + 32,
                 );
-                println!("setting entry {:b}", table_entry.0);
+                //println!("setting entry {:b}", table_entry.0);
                 io_apic.set_redir_table(gsi, table_entry)
             }
         }
@@ -75,14 +79,17 @@ struct IoApicRegisters {
 }
 
 impl IoApicRegisters {
-    pub fn get_version(&mut self) -> u32 {
+    pub fn get_version_and_entries(&mut self) -> (u8, u8) {
         self.index = 1;
-        self.data
+        let ver_entries = self.data;
+        let version = ver_entries & 0xFF;
+        let entries = (ver_entries >> 16) & 0xFF;
+        (version as u8, entries as u8)
     }
 
-    pub fn get_id(&mut self) -> u32 {
+    pub fn get_id(&mut self) -> u8 {
         self.index = 0;
-        self.data
+        (self.data >> 24) as u8 & 0xF
     }
 
     pub fn get_redir_table(&mut self, index: u8) -> RedTblEntry {
@@ -107,6 +114,7 @@ impl IoApicRegisters {
 struct RedTblEntry(pub u64);
 
 impl RedTblEntry {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         destination: u8,
         mask: u8,

@@ -55,6 +55,10 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
         test_runner();
     }
 
+    unsafe {
+        core::arch::asm!("hlt");
+    }
+
     println!("This message is created after tests, looping infinitely now");
 
     #[allow(clippy::empty_loop)]
