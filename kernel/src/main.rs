@@ -15,6 +15,7 @@ mod memory;
 mod tests;
 mod utils;
 mod vga;
+mod snake;
 use vga::vga_text;
 
 #[panic_handler]
@@ -46,7 +47,7 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
 
     acpi::init_acpi(boot_info.rsdp_addr.into());
 
-    //vga_text::hello_message();
+    vga_text::hello_message();
 
     let run_tests = false;
     if run_tests {
@@ -55,13 +56,16 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
         test_runner();
     }
 
-    println!("This message is created after tests, looping infinitely now");
+    println!("Starting snake");
+
+    let mut state = snake::init();
 
     #[allow(clippy::empty_loop)]
     let mut last_seconds = crate::interrupts::time_since_boot().as_secs();
     loop {
         if last_seconds != crate::interrupts::time_since_boot().as_secs() {
             last_seconds = crate::interrupts::time_since_boot().as_secs();
+            snake::tick(&mut state);
         }
     }
 }

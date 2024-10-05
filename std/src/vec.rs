@@ -1,3 +1,5 @@
+use core::{ops::Deref, slice::SliceIndex};
+
 pub struct Vec<T: 'static> {
     size: usize,
     capacity: usize,
@@ -77,6 +79,19 @@ impl<T> Vec<T> {
     pub fn last(&self) -> Option<&T> {
         self.at(self.size - 1)
     }
+
+    pub fn insert(&mut self, index: usize, data: T) {
+        unsafe {
+            if self.size == self.capacity {
+                self.double_capacity();
+            }
+            for i in (index..self.size * core::mem::size_of::<T>()).rev() {
+                *(self.data.add(i + 1) as *mut u8) = *(self.data.add(i) as *mut u8);
+            }
+            *(self.data.add(index)) = data;
+            self.size += 1;
+        }
+    }
 }
 
 impl<T> core::default::Default for Vec<T> {
@@ -125,8 +140,35 @@ impl<T> AsRef<[T]> for Vec<T> {
     }
 }
 
+impl<T> Deref for Vec<T> {
+    type Target = [T];
+    fn deref(&self) -> &[T] {
+        self.into()
+    }
+}
+
 impl<T: crate::fmt::Debug> crate::fmt::Debug for Vec<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.as_ref().fmt(f)
+    }
+}
+
+impl<T> Drop for Vec<T> {
+    fn drop(&mut self) {
+        unsafe {
+           crate::HEAP.deallocate(crate::mem_utils::VirtAddr(self.data as *const _ as u64));
+        }
+    }
+}
+
+impl<T, I> crate::ops::Index<I> for Vec<T>
+where
+    I: SliceIndex<[T]>,
+{
+    type Output = I::Output;
+
+    #[inline]
+    fn index(&self, index: I) -> &Self::Output {
+        core::ops::Index::index(&**self, index)
     }
 }

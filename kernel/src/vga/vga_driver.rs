@@ -61,3 +61,15 @@ pub fn clear_screen() {
         *max_offset.offset(-1) = 0;
     }
 }
+
+pub fn draw_pixel(x: usize, y: usize, color: (u8, u8, u8)) {
+    unsafe {
+        let offset = (y * VGA_BINDING.stride + x * VGA_BINDING.bytes_per_pixel) as isize;
+        *VGA_BINDING.buffer.offset(offset) = color.0;
+        /*asm!(
+            "mov qword ptr [{vga_ptr}], {color}",
+            vga_ptr = in(reg) VGA_BINDING.buffer.offset(offset),
+            color = in(reg) color,
+        );*/
+    }
+}

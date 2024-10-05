@@ -1,3 +1,5 @@
+use crate::println;
+
 use crate::mem_utils;
 use mem_utils::*;
 
@@ -11,13 +13,14 @@ use mem_utils::*;
 //1024
 //above that we allocate whole pages
 
-#[derive(Eq, PartialEq, Clone, Copy)]
+#[derive(Eq, PartialEq, Clone, Copy, Debug)]
 enum TypeOfHeap {
     ObjectsInPage,
     ObjectOverPages,
 }
 
 #[repr(C)]
+#[derive(Clone, Copy, Debug)]
 struct MultiPageObjectMetadata {
     //should ALWAYS be ObjectOverPages
     type_of_heap: TypeOfHeap,
@@ -25,7 +28,7 @@ struct MultiPageObjectMetadata {
 }
 
 #[repr(C)]
-#[derive(Clone)]
+#[derive(Clone, Copy, Debug)]
 struct HeapPageMetadata {
     //should ALWAYS be ObjectsInPage
     type_of_heap: TypeOfHeap,
@@ -59,7 +62,7 @@ struct EmptyBlock {
     ptr_to_next: VirtAddr,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct HeapAllocationData {
     size_order_of_objects: u8,
     free_objects: u64,
@@ -89,7 +92,7 @@ impl HeapAllocationData {
                     ptr_to_last: VirtAddr(6),
                 };
                 metadata.populate(new_page);
-                set_at_virtual_addr(new_page, metadata.clone());
+                set_at_virtual_addr(new_page, metadata);
                 self.free_objects = metadata.max_allocations as u64;
                 self.ptr_to_first = metadata.ptr_to_first;
             }
@@ -182,10 +185,15 @@ impl Heap {
         unsafe {
             let heap_type = get_at_virtual_addr::<TypeOfHeap>(page_addr);
             if *heap_type == TypeOfHeap::ObjectOverPages {
-                let _metadata = get_at_virtual_addr::<MultiPageObjectMetadata>(page_addr);
+                let metadata = get_at_virtual_addr::<MultiPageObjectMetadata>(page_addr);
+                println!("metadata: {metadata:#x?}");
                 todo!("dealloc pages");
             } else {
                 let metadata = get_at_virtual_addr::<HeapPageMetadata>(page_addr);
+                if metadata.size_order_of_objects < 4 {
+                    println!("object has size order: {}", metadata.size_order_of_objects);
+                    return;
+                }
                 let index = metadata.size_order_of_objects - 4;
                 self.allocation_data[index as usize].deallocate(addr);
             }

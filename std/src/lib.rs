@@ -3,8 +3,7 @@
 
 mod print;
 
-pub use print::set_Print;
-use print::write_text;
+pub use print::set_print;
 
 pub mod heap;
 pub mod mem_utils;
