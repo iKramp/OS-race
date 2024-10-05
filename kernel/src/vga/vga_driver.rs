@@ -1,7 +1,11 @@
+#![allow(clippy::identity_op)]
+
 use core::arch::asm;
+use crate::println;
 
 use bootloader_api::info::FrameBuffer;
 
+#[derive(Debug)]
 pub struct VgaBinding {
     pub width: usize,
     pub height: usize,
@@ -64,12 +68,17 @@ pub fn clear_screen() {
 
 pub fn draw_pixel(x: usize, y: usize, color: (u8, u8, u8)) {
     unsafe {
-        let offset = (y * VGA_BINDING.stride + x * VGA_BINDING.bytes_per_pixel) as isize;
-        *VGA_BINDING.buffer.offset(offset) = color.0;
-        /*asm!(
-            "mov qword ptr [{vga_ptr}], {color}",
-            vga_ptr = in(reg) VGA_BINDING.buffer.offset(offset),
-            color = in(reg) color,
-        );*/
+        let offset = ((y * VGA_BINDING.stride + x) * VGA_BINDING.bytes_per_pixel) as isize;
+        *VGA_BINDING.buffer.offset(offset + 0) = color.0;
+        *VGA_BINDING.buffer.offset(offset + 1) = color.1;
+        *VGA_BINDING.buffer.offset(offset + 2) = color.2;
+    }
+}
+
+pub fn draw_rectangle(x: usize, y: usize, width: usize, height: usize, color: (u8, u8, u8)) {
+    for i in 0..width {
+        for j in 0..height {
+            draw_pixel(x + i, y + j, color);
+        }
     }
 }

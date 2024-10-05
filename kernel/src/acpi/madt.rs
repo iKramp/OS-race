@@ -27,9 +27,9 @@ impl Madt {
                         entries.push(MadtEntryType::ProcessorLocalAPIC(get_at_virtual_addr::<ProcessorLocalApic>(
                             ptr,
                         )));
-                        println!("processor local apic: {:#x?}", get_at_virtual_addr::<ProcessorLocalApic>(
-                            ptr,
-                        ))
+                        //println!("processor local apic: {:#x?}", get_at_virtual_addr::<ProcessorLocalApic>(
+                        //    ptr,
+                        //))
                     },
                     1 => entries.push(MadtEntryType::IoApic(get_at_virtual_addr::<IoApic>(ptr))),
                     2 => entries.push(MadtEntryType::InterruptSourceOverride(get_at_virtual_addr::<

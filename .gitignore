@@ -14,4 +14,5 @@ Cargo.lock
 *.pdb
 
 log.txt
+kernel.map
 log.txt.bak

@@ -53,7 +53,7 @@ pub use core::num;
 pub use core::ops;
 pub use core::option;
 //os
-pub use core::panic;
+pub mod panic;
 //path
 pub use core::pin;
 pub use core::prelude;

@@ -17,7 +17,7 @@ pub struct ExceptionStackFrame {
 pub extern "x86-interrupt" fn invalid_opcode(stack_frame: ExceptionStackFrame) -> ! {
     set_vga_text_foreground((0, 0, 255));
     println!(
-        "EXCEPTION: INVALID OPCODE at {:#X}\n{:#?}",
+        "EXCEPTION: INVALID OPCODE at {:#X}\n{:#X?}",
         stack_frame.instruction_pointer, stack_frame
     );
     set_vga_text_foreground((255, 255, 255));
@@ -31,7 +31,7 @@ pub extern "x86-interrupt" fn invalid_opcode(stack_frame: ExceptionStackFrame) -
 pub extern "x86-interrupt" fn breakpoint(stack_frame: ExceptionStackFrame) {
     set_vga_text_foreground((0, 255, 255));
     println!(
-        "Breakpoint reached at {:#X}\n{:#?}",
+        "Breakpoint reached at {:#X}\n{:#X?}",
         stack_frame.instruction_pointer, stack_frame
     );
     set_vga_text_foreground((255, 255, 255));
@@ -132,14 +132,16 @@ pub extern "x86-interrupt" fn spurious_interrupt(_stack_frame: ExceptionStackFra
 
 pub extern "x86-interrupt" fn legacy_keyboard_interrupt(_stack_frame: ExceptionStackFrame) {
     let code = byte_form_port(0x60);
-    println!("{code}");
+    //println!("{code}");
+    crate::keyboard::handle_key(code);
     legacy_eoi();
 }
 
 pub extern "x86-interrupt" fn apic_keyboard_interrupt(_stack_frame: ExceptionStackFrame) {
     apic_eoi();
     let code = byte_form_port(0x60);
-    println!("{code}");
+    crate::keyboard::handle_key(code);
+    //println!("{code}");
 }
 
 pub extern "x86-interrupt" fn ps2_mouse_interrupt(_stack_frame: ExceptionStackFrame) {

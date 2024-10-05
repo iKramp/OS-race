@@ -1,9 +1,11 @@
 use std::arch::asm;
+use crate::println;
 
 use super::font::*;
 use super::vga_driver::VGA_BINDING;
 
-struct VgaText {
+#[derive(Debug)]
+pub struct VgaText {
     pub foreground: (u8, u8, u8),
     pub background: (u8, u8, u8),
     height_lines: usize,
@@ -101,7 +103,7 @@ impl core::fmt::Write for VgaText {
 }
 
 #[used]
-static mut VGA_TEXT: VgaText = VgaText {
+pub static mut VGA_TEXT: VgaText = VgaText {
     background: (0, 0, 0),
     foreground: (255, 255, 255),
     height_lines: 0,

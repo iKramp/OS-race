@@ -41,6 +41,8 @@ pub fn init_pic() {
 
     byte_to_port(PIC1_DATA, 0x00); //change to 0x00 to handle keyboard
     byte_to_port(PIC2_DATA, 0x00);
+
+    std::panic::print_stack_trace();
 }
 
 pub static mut LEGACY_PIC_TIMER_TICKS: u64 = 0;

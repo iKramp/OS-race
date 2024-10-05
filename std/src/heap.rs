@@ -187,6 +187,8 @@ impl Heap {
             if *heap_type == TypeOfHeap::ObjectOverPages {
                 let metadata = get_at_virtual_addr::<MultiPageObjectMetadata>(page_addr);
                 println!("metadata: {metadata:#x?}");
+                core::arch::asm!("int3");
+                crate::panic::print_stack_trace();
                 todo!("dealloc pages");
             } else {
                 let metadata = get_at_virtual_addr::<HeapPageMetadata>(page_addr);

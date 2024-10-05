@@ -11,17 +11,19 @@ mod acpi;
 mod cpuid;
 mod interrupts;
 mod memory;
+mod snake;
 #[allow(unused_imports)]
 mod tests;
 mod utils;
 mod vga;
-mod snake;
+mod keyboard;
 use vga::vga_text;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     vga_text::set_vga_text_foreground((0, 0, 255));
     println!("{}", info);
+    std::panic::print_stack_trace();
     loop {}
 }
 
@@ -49,6 +51,13 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
 
     vga_text::hello_message();
 
+    let last_time = crate::interrupts::time_since_boot();
+    loop {
+        if last_time + std::time::Duration::from_secs(2) < crate::interrupts::time_since_boot() {
+            break
+        }
+    }
+
     let run_tests = false;
     if run_tests {
         println!("Running tests");
@@ -61,10 +70,10 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
     let mut state = snake::init();
 
     #[allow(clippy::empty_loop)]
-    let mut last_seconds = crate::interrupts::time_since_boot().as_secs();
+    let mut last_time = crate::interrupts::time_since_boot();
     loop {
-        if last_seconds != crate::interrupts::time_since_boot().as_secs() {
-            last_seconds = crate::interrupts::time_since_boot().as_secs();
+        if last_time + std::time::Duration::from_millis(200) < crate::interrupts::time_since_boot() {
+            last_time = crate::interrupts::time_since_boot();
             snake::tick(&mut state);
         }
     }

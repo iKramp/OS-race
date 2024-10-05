@@ -1,4 +1,6 @@
-use core::{ops::Deref, slice::SliceIndex};
+use core::{ops::{Deref, DerefMut}, slice::SliceIndex};
+
+use crate::println;
 
 pub struct Vec<T: 'static> {
     size: usize,
@@ -147,6 +149,12 @@ impl<T> Deref for Vec<T> {
     }
 }
 
+impl<T> DerefMut for Vec<T> {
+    fn deref_mut(&mut self) -> &mut [T] {
+        self.into()
+    }
+}
+
 impl<T: crate::fmt::Debug> crate::fmt::Debug for Vec<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.as_ref().fmt(f)
@@ -170,5 +178,15 @@ where
     #[inline]
     fn index(&self, index: I) -> &Self::Output {
         core::ops::Index::index(&**self, index)
+    }
+}
+
+impl<T, I> crate::ops::IndexMut<I> for Vec<T>
+where
+    I: SliceIndex<[T]>,
+{
+    #[inline]
+    fn index_mut(&mut self, index: I) -> &mut Self::Output {
+        core::ops::IndexMut::index_mut(&mut **self, index)
     }
 }

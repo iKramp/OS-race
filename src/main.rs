@@ -1,4 +1,12 @@
 fn main() {
+    //demangle the kernel.map file
+    //let _ = std::process::Command::new("rustfilt")
+    //    .arg("-i")
+    //    .arg("/home/nejc/programming/OS-race/kernel.map")
+    //    .arg("-o")
+    //    .arg("/home/nejc/programming/Os-race/kernel.map");
+
+
     // read env variables that were set in build script
     let uefi_path = env!("UEFI_PATH");
     let bios_path = env!("BIOS_PATH");
@@ -9,7 +17,7 @@ fn main() {
     let uefi = false;
 
     //chose whether to debug with GDB
-    let debug = false;
+    let debug = true;
 
     let mut cmd = std::process::Command::new("qemu-system-x86_64");
     cmd.arg("-d").arg("int").arg("-D").arg("./log.txt").arg("-no-reboot");

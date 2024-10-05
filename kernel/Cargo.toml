@@ -17,6 +17,10 @@ std = { path = "../std", features = ["test_includes"] }
 
 [profile.dev]
 workspace = true
+opt-level = 0
+force-frame-pointers = true
 
 [profile.release]
 workspace = true
+opt-level = 0
+force-frame-pointers = true
