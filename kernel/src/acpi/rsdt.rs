@@ -14,7 +14,7 @@ pub trait RootSystemDescriptorTable: std::fmt::Debug {
 
     fn length(&self) -> u32;
     fn get_table(&self, signature: [u8; 4]) -> Option<PhysAddr>;
-    fn get_tables(&self) -> std::vec::Vec<PhysAddr>;
+    fn get_tables(&self) -> std::Vec<PhysAddr>;
     fn print_tables(&self);
     fn print_signature(&self);
 }
@@ -60,8 +60,8 @@ impl RootSystemDescriptorTable for Rsdt {
         }
     }
 
-    fn get_tables(&self) -> std::vec::Vec<PhysAddr> {
-        let mut tables = std::vec::Vec::new();
+    fn get_tables(&self) -> std::Vec<PhysAddr> {
+        let mut tables = std::Vec::new();
         unsafe {
             let start_table_ptr = VirtAddr((self as *const Self) as u64 + 36);
             let num_entries = (self.length() - 36) / 4;
@@ -116,8 +116,8 @@ impl RootSystemDescriptorTable for Xsdt {
             None
         }
     }
-    fn get_tables(&self) -> std::vec::Vec<PhysAddr> {
-        let mut tables = std::vec::Vec::new();
+    fn get_tables(&self) -> std::Vec<PhysAddr> {
+        let mut tables = std::Vec::new();
         unsafe {
             let start_table_ptr = VirtAddr((self as *const Self) as u64 + 36);
             let num_entries = (self.length() - 36) / 8;

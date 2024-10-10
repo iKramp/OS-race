@@ -1,4 +1,4 @@
-use crate::vga::vga_driver;
+use crate::{println, vga::vga_driver};
 use std::Vec;
 
 const PIXELS_PER_SQUARE: i32 = 10;
@@ -20,9 +20,9 @@ pub fn init() -> State {
             food: (10, 10),
             direction: (1, 0),
         };
-        state.snake.push((40, 12));
-        state.snake.push((41, 12));
         state.snake.push((42, 12));
+        state.snake.push((41, 12));
+        state.snake.push((40, 12));
 
         crate::vga::clear_screen();
 
@@ -81,14 +81,14 @@ fn move_snake(state: &mut State) {
 }
 
 fn delete_last_snake_part(state: &mut State) {
-    state.snake.pop();
     vga_driver::draw_rectangle(
-        (state.snake.last().unwrap().0 * PIXELS_PER_SQUARE) as usize,
-        (state.snake.last().unwrap().1 * PIXELS_PER_SQUARE) as usize,
+        (state.snake[state.snake.len() - 1].0 * PIXELS_PER_SQUARE) as usize,
+        (state.snake[state.snake.len() - 1].1 * PIXELS_PER_SQUARE) as usize,
         PIXELS_PER_SQUARE as usize,
         PIXELS_PER_SQUARE as usize,
-        (0, 0, 0),
+        (255, 0, 0),
     );
+    state.snake.pop();
 }
 
 fn move_food(state: &mut State) {

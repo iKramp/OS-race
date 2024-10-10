@@ -1,4 +1,5 @@
 mod A0_trivial;
+mod A1_vec;
 mod memory_utils;
 use crate::println;
 

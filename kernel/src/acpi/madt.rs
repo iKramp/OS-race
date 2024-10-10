@@ -2,7 +2,7 @@
 
 use std::{
     mem_utils::{get_at_virtual_addr, VirtAddr},
-    vec::Vec,
+    Vec,
 };
 
 use crate::println;

@@ -1,6 +1,10 @@
-use core::{ops::{Deref, DerefMut}, slice::SliceIndex};
+use core::{
+    borrow::Borrow, ops::{Deref, DerefMut}, slice::SliceIndex
+};
 
-use crate::println;
+use crate::{boxed::Box, println};
+
+use super::spec_from_elem::SpecFromElem;
 
 pub struct Vec<T: 'static> {
     size: usize,
@@ -35,7 +39,8 @@ impl<T> Vec<T> {
             let new_data = crate::HEAP
                 .allocate(new_capacity as u64 * crate::mem::size_of::<T>() as u64)
                 .0 as *mut T;
-            for i in 0..(self.size * crate::mem::size_of::<T>()) {
+            let size = core::mem::size_of::<T>();
+            for i in 0..(self.size * size) {
                 crate::mem_utils::set_at_virtual_addr::<u8>(
                     crate::mem_utils::VirtAddr(new_data as u64 + i as u64),
                     *crate::mem_utils::get_at_virtual_addr::<u8>(crate::mem_utils::VirtAddr(self.data as u64 + i as u64)),
@@ -87,13 +92,33 @@ impl<T> Vec<T> {
             if self.size == self.capacity {
                 self.double_capacity();
             }
-            for i in (index..self.size * core::mem::size_of::<T>()).rev() {
-                *(self.data.add(i + 1) as *mut u8) = *(self.data.add(i) as *mut u8);
+            let elem_size = core::mem::size_of::<T>();
+            for i in (index..self.size).rev() {
+                for j in 0..elem_size {
+                    *(self.data as *mut u8).add((i + 1) * elem_size + j) = *(self.data as *mut u8).add(i * elem_size + j);
+                }
             }
             *(self.data.add(index)) = data;
             self.size += 1;
         }
     }
+
+    pub fn remove(&mut self, index: usize) {
+        if index >= self.size {
+            panic!("Index out of bounds");
+        }
+        unsafe {
+            let elem_size = core::mem::size_of::<T>();
+            for i in index * elem_size..(self.size - 1) * elem_size {
+                *(self.data as *mut u8).add(i) = *(self.data as *mut u8).add(i + elem_size);
+            }
+            self.size -= 1;
+        }
+    }
+}
+
+pub fn from_elem<T: Clone>(elem: T, n: usize) -> Vec<T> {
+    <T as SpecFromElem>::from_elem(elem, n)
 }
 
 impl<T> core::default::Default for Vec<T> {
@@ -136,6 +161,28 @@ impl<T> core::convert::From<&mut Vec<T>> for &mut [T] {
     }
 }
 
+impl<T> core::convert::From<Box<[T]>> for Vec<T> {
+    fn from(value: Box<[T]>) -> Self {
+        let size = value.len();
+        Vec {
+            size,
+            capacity: size,
+            data: Box::leak(value) as *mut _ as *mut T,
+        }
+    
+    }
+}
+
+impl<T, const N: usize> From<Box<[T; N]>> for Vec<T> {
+    fn from(boxed_array: Box<[T; N]>) -> Self {
+        Vec {
+            size: N,
+            capacity: N,
+            data: Box::leak(boxed_array) as *mut _ as *mut T,
+        }
+    }
+}
+
 impl<T> AsRef<[T]> for Vec<T> {
     fn as_ref(&self) -> &[T] {
         self.into()
@@ -164,7 +211,7 @@ impl<T: crate::fmt::Debug> crate::fmt::Debug for Vec<T> {
 impl<T> Drop for Vec<T> {
     fn drop(&mut self) {
         unsafe {
-           crate::HEAP.deallocate(crate::mem_utils::VirtAddr(self.data as *const _ as u64));
+            crate::HEAP.deallocate(crate::mem_utils::VirtAddr(self.data as *const _ as u64));
         }
     }
 }
@@ -189,4 +236,32 @@ where
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
         core::ops::IndexMut::index_mut(&mut **self, index)
     }
+}
+
+impl<T> Eq for Vec<T> where T: Eq {}
+
+impl<T> PartialEq for Vec<T>
+where
+    T: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.as_ref().eq(other.as_ref())
+    }
+}
+
+#[macro_export]
+macro_rules! vec {
+    () => (
+        $crate::Vec::new()
+    );
+    ($elem:expr; $n:expr) => (
+        $crate::vec::from_elem($elem, $n)
+    );
+    ($($x:expr),+ $(,)?) => (
+        $crate::Vec::from(
+            // This rustc_box is not required, but it produces a dramatic improvement in compile
+            // time when constructing arrays with many elements.
+            $crate::boxed::Box::new([$($x),+])
+        )
+    );
 }

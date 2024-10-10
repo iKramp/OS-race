@@ -1,5 +1,7 @@
+#![allow(incomplete_features)]
 #![no_std]
 #![feature(ptr_metadata)]
+#![feature(specialization)]
 
 mod print;
 
@@ -19,6 +21,7 @@ pub use core::array;
 pub use core::ascii;
 //backtrace
 pub mod boxed;
+pub use boxed::*;
 pub use core::borrow;
 pub use core::cell;
 pub use core::char;
@@ -76,8 +79,8 @@ pub use core::time;
 //u64  depracation planned
 //u128 depracation planned
 //usize depracation planned
-pub mod vec;
-pub use vec::Vec;
+mod vec;
+pub use vec::vec_struct::*;
 //assert_matches experimental
 //async_iter     experimental
 //intrinsics     experimental

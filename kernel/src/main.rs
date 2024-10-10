@@ -41,6 +41,8 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
     vga::init_vga_driver(binding);
     vga::clear_screen();
 
+    std::panic::test_print_1();
+
     println!("starting RustOs...");
 
     interrupts::init_interrupts();
@@ -53,7 +55,7 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
 
     let last_time = crate::interrupts::time_since_boot();
     loop {
-        if last_time + std::time::Duration::from_secs(2) < crate::interrupts::time_since_boot() {
+        if last_time + std::time::Duration::from_millis(500) < crate::interrupts::time_since_boot() {
             break
         }
     }

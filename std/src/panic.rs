@@ -1,5 +1,4 @@
 pub use core::panic::*;
-
 use crate::println;
 
 //function that prints the stack trace (function addresses)
@@ -9,6 +8,8 @@ pub fn print_stack_trace() {
     unsafe {
         core::arch::asm!("mov {}, rbp", out(reg) rbp); // Get the base pointer
     }
+
+    println!("rb[ is {:#x}", rbp);
 
     // Walk the stack frame
     let mut count = 0;
@@ -46,4 +47,24 @@ pub fn print_stack_trace() {
         count += 1;
     }
     println!("End of stack trace");
+}
+
+#[inline(never)]
+pub fn test_print_1() {
+    test_print_2();
+}
+
+#[inline(never)]
+pub fn test_print_2() {
+    test_print_3();
+}
+
+#[inline(never)]
+pub fn test_print_3() {
+    test_print_4();
+}
+
+#[inline(never)]
+pub fn test_print_4() {
+    print_stack_trace();
 }

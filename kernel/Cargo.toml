@@ -16,6 +16,7 @@ kernel_test = { path = "../kernel_test"}
 std = { path = "../std", features = ["test_includes"] }
 
 [profile.dev]
+panic = "unwind"
 workspace = true
 opt-level = 0
 force-frame-pointers = true
