@@ -5,7 +5,7 @@
 
 mod print;
 
-pub use print::set_print;
+pub use print::{set_print, test_fn};
 
 pub mod heap;
 pub mod mem_utils;

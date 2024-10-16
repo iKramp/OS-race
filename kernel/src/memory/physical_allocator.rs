@@ -1,5 +1,4 @@
 use super::mem_utils::*;
-use bootloader_api::{info::MemoryRegionKind, BootInfo};
 
 pub static mut BUDDY_ALLOCATOR: BuyddyAllocator = BuyddyAllocator {
     n_pages: 0,
@@ -16,8 +15,8 @@ pub struct BuyddyAllocator {
 }
 
 impl BuyddyAllocator {
-    pub fn init(boot_info: &'static mut BootInfo) {
-        let memory_regions = &mut boot_info.memory_regions as &'static mut [bootloader_api::info::MemoryRegion];
+    pub fn init(/*boot_info: &'static mut BootInfo*/) {
+        /*let memory_regions = &mut boot_info.memory_regions as &'static mut [bootloader_api::info::MemoryRegion];
         let n_pages = find_max_usable_address(memory_regions).0 >> 12;
 
         let binary_tree_size_elements = get_binary_tree_size(n_pages);
@@ -61,7 +60,7 @@ impl BuyddyAllocator {
                 allocator.allocated_pages -= 1;
             }
         }
-        unsafe { BUDDY_ALLOCATOR = allocator }
+        unsafe { BUDDY_ALLOCATOR = allocator }*/
     }
 
     pub fn is_frame_allocated(&self, addr: PhysAddr) -> bool {
@@ -174,7 +173,7 @@ impl BuyddyAllocator {
         }
     }
 }
-
+/*
 fn find_mem_region_to_shrink(memory_regions: &[bootloader_api::info::MemoryRegion], space_needed_bytes: u64) -> usize {
     let mut entry_to_shrink: Option<usize> = None;
     for region in memory_regions.iter().enumerate() {
@@ -200,7 +199,7 @@ fn find_max_usable_address(memory_regions: &[bootloader_api::info::MemoryRegion]
     }
     PhysAddr(highest)
 }
-
+*/
 fn get_binary_tree_size(mut n_pages: u64) -> u64 {
     let mut first_bit = 0;
     for i in 0..64 {

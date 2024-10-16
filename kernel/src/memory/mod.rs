@@ -7,9 +7,9 @@ pub static mut PAGE_TREE_ALLOCATOR: paging::PageTree = paging::PageTree {
     level_4_table: std::mem_utils::PhysAddr(0),
 };
 
-pub fn init_memory(boot_info: &mut bootloader_api::BootInfo) {
+pub fn init_memory(/*boot_info: &mut bootloader_api::BootInfo*/) {
     println!("initializing memory");
-    unsafe {
+    /*unsafe {
         let offset: Option<u64> = boot_info.physical_memory_offset.into();
         mem_utils::set_physical_offset(mem_utils::PhysOffset(offset.unwrap()));
         let boot_info_ptr = boot_info as *mut bootloader_api::BootInfo;
@@ -33,5 +33,5 @@ pub fn init_memory(boot_info: &mut bootloader_api::BootInfo) {
             "mov cr3, rax",
             out("rax") _
         ); //clear the TLB
-    }
+    }*/
 }

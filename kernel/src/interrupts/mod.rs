@@ -6,12 +6,12 @@ pub mod idt;
 use crate::utils::byte_to_port;
 
 pub fn init_interrupts() {
-    println!("initializing PIC");
-    init_pic();
     println!("initializing GDT");
     gdt::init_gdt();
     println!("initializing IDT");
     idt::init_idt();
+    println!("initializing PIC");
+    init_pic();
     crate::vga_text::set_vga_text_foreground((0, 255, 0));
     println!("interrupts initialized");
     crate::vga_text::reset_vga_color();

@@ -7,17 +7,10 @@ fn main() {
     //    .arg("/home/nejc/programming/Os-race/kernel.map");
 
 
-    // read env variables that were set in build script
-    let uefi_path = env!("UEFI_PATH");
-    let bios_path = env!("BIOS_PATH");
-
-    println!("{}\n{}", uefi_path, bios_path);
-
-    // choose whether to start the UEFI or BIOS image
-    let uefi = false;
 
     //chose whether to debug with GDB
     let debug = true;
+    let uefi = false;
 
     let mut cmd = std::process::Command::new("qemu-system-x86_64");
     cmd.arg("-d").arg("int").arg("-D").arg("./log.txt").arg("-no-reboot");
@@ -26,20 +19,34 @@ fn main() {
         cmd.arg("-S");
     }
     //cmd.arg("-cpu").arg("EPYC");
-    cmd.arg("-smp").arg("4");
+    cmd.arg("-smp").arg("1");
 
     #[cfg(test)]
     {
         cmd.arg("-device").arg("isa-debug-exit,iobase=0xf4,iosize=0x04");
     }
 
+
     if uefi {
         cmd.arg("-bios").arg(ovmf_prebuilt::ovmf_pure_efi());
-        cmd.arg("-drive").arg(format!("format=raw,file={uefi_path}"));
+        cmd.arg("-drive").arg("format=raw,file=kernel_build_files/image.iso");
     } else {
-        cmd.arg("-drive").arg(format!("format=raw,file={bios_path}"));
+        cmd.arg("-drive").arg("format=raw,file=kernel_build_files/image.iso");
     }
+    //cmd.arg("-cdrom").arg("kernel_build_files/kernel.iso");
     let mut child = cmd.spawn().unwrap();
+
+    if debug {
+        //let _ = std::process::Command::new("gdb")
+        //    .arg("-x").arg("./gdb_commands.txt")
+        //    .spawn().unwrap();
+        let _ = std::process::Command::new("kitty")
+            .arg("gdb")
+            .arg("-x").arg("~/programming/OS-race/gdb_commands.txt")
+            .spawn().unwrap();
+            
+    }
+
     child.wait().unwrap();
 }
 

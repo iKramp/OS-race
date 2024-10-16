@@ -51,6 +51,7 @@ impl Idt {
                 base: self as *const _ as u64,
                 limit: (core::mem::size_of::<Self>() - 1) as u16,
             };
+            println!("IDT pointer: {:x}", &IDT_POINTER as *const _ as u64);
             asm!("lidt [{}]", "sti", in(reg) core::ptr::addr_of!(IDT_POINTER));
         }
     }
@@ -69,7 +70,7 @@ impl Idt {
         self.set(Entry::diverging_(interrupt_message!("invalid tss")), 10);
         self.set(Entry::diverging_(interrupt_message!("segment not present")), 11);
         self.set(Entry::diverging_(interrupt_message!("stack segment fault")), 12);
-        self.set(Entry::diverging_(interrupt_message!("general protection fault")), 13);
+        self.set(Entry::diverging_(general_protection_fault), 13);
         self.set(Entry::with_error(page_fault), 14);
         self.set(Entry::diverging_(interrupt_message!("reserved")), 15);
         self.set(Entry::diverging_(interrupt_message!("FPU error")), 16);

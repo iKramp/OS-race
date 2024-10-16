@@ -12,7 +12,6 @@ pub struct VgaText {
     width_chars: usize,
     line: usize,
     char: usize,
-    offset: usize,
 }
 
 impl VgaText {
@@ -35,7 +34,6 @@ impl VgaText {
             self.line -= 1;
             unsafe { self.scroll() };
         }
-        self.offset = unsafe { VGA_BINDING.stride * self.line * CHAR_HEIGHT * VGA_BINDING.bytes_per_pixel };
     }
 
     fn up_line(&mut self) {
@@ -50,7 +48,7 @@ impl VgaText {
         }
 
         let character = &DEFAULT_FONT[*character as usize * 8..(*character as usize + 1) * 8];
-        let mut curr_off = self.offset;
+        let mut curr_row = self.line * CHAR_HEIGHT;
         for char_line in character {
             for i in 0..8 {
                 let bit = char_line & (128 >> i) != 0;
@@ -58,15 +56,16 @@ impl VgaText {
                     true => self.foreground,
                     false => self.background,
                 };
-                *VGA_BINDING.buffer.add(curr_off + i * VGA_BINDING.bytes_per_pixel) = color.0;
-                *VGA_BINDING.buffer.add(curr_off + i * VGA_BINDING.bytes_per_pixel + 1) = color.1;
-                *VGA_BINDING.buffer.add(curr_off + i * VGA_BINDING.bytes_per_pixel + 2) = color.2;
+                crate::vga::vga_driver::draw_pixel(
+                    self.char * CHAR_WIDTH + i,
+                    curr_row,
+                    color,
+                );
             }
-            curr_off += unsafe { VGA_BINDING.stride * VGA_BINDING.bytes_per_pixel };
+            curr_row += 1;
         }
 
         self.char += 1;
-        self.offset += CHAR_WIDTH * unsafe { VGA_BINDING.bytes_per_pixel };
         if self.char >= self.width_chars {
             self.do_newline();
         }
@@ -74,7 +73,7 @@ impl VgaText {
 
     unsafe fn scroll(&mut self) {
         let top_ptr = VGA_BINDING.buffer;
-        let diff = VGA_BINDING.bytes_per_pixel * VGA_BINDING.stride * CHAR_HEIGHT;
+        let diff = VGA_BINDING.bits_per_pixel * VGA_BINDING.stride * CHAR_HEIGHT;
         let limit = top_ptr.add(diff * (self.height_lines - 1) - 1);
 
         asm!(
@@ -110,14 +109,13 @@ pub static mut VGA_TEXT: VgaText = VgaText {
     width_chars: 0,
     line: 0,
     char: 0,
-    offset: 0,
 };
 
 pub fn init_vga_text(width: usize, height: usize) {
     unsafe {
         VGA_TEXT.height_lines = height / (CHAR_HEIGHT);
         VGA_TEXT.width_chars = width / (CHAR_WIDTH);
-        std::set_print(&mut VGA_TEXT);
+        std::set_print(core::ptr::addr_of_mut!(VGA_TEXT));
     }
 }
 
@@ -141,7 +139,6 @@ pub fn clear_screen() {
     unsafe {
         VGA_TEXT.line = 0;
         VGA_TEXT.char = 0;
-        VGA_TEXT.offset = 0;
     }
 }
 

@@ -2,8 +2,10 @@ use core::fmt::{Arguments, Write};
 
 static mut PRINT: Option<&mut dyn Write> = None;
 
-pub fn set_print(printer: &'static mut dyn Write) {
-    unsafe { PRINT = Some(printer) }
+///# Safety 
+///printer must be a valid pointer
+pub unsafe fn set_print(printer: *mut dyn Write) {
+    PRINT = Some(&mut *printer)
 }
 
 #[macro_export]
@@ -26,4 +28,10 @@ pub fn _print(args: core::fmt::Arguments) {
             panic!("trying to println!() without printer");
         }
     }
+}
+
+pub fn test_fn() {
+    let a = 0;
+    let b = 1;
+    let c = a + b;
 }

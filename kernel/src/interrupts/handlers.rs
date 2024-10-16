@@ -74,6 +74,18 @@ pub extern "x86-interrupt" fn page_fault(stack_frame: ExceptionStackFrame, error
     }
 }
 
+//gpf
+pub extern "x86-interrupt" fn general_protection_fault(stack_frame: ExceptionStackFrame) -> ! {
+    set_vga_text_foreground((0, 0, 255));
+    println!("EXCEPTION: GPF\n{:#X?}", stack_frame);
+    set_vga_text_foreground((255, 255, 255));
+    unsafe {
+        loop {
+            asm!("hlt");
+        }
+    }
+}
+
 pub extern "x86-interrupt" fn other_legacy_interrupt(_stack_frame: ExceptionStackFrame) {
     legacy_eoi();
 }
