@@ -1,4 +1,4 @@
-use std::mem_utils::PhysAddr;
+use std::mem_utils::{PhysAddr, VirtAddr};
 
 #[derive(Debug)]
 pub enum Rsdp {
@@ -58,12 +58,12 @@ impl Rsdp {
         }
     }
 
-    pub fn from_ptr(address: PhysAddr) -> Self {
-        let revision = unsafe { *std::mem_utils::get_at_physical_addr::<u8>(address + PhysAddr(15)) };
+    pub fn from_ptr(address: VirtAddr) -> Self {
+        let revision = unsafe { *std::mem_utils::get_at_virtual_addr::<u8>(address + VirtAddr(15)) };
         if revision == 0 {
-            Self::V1(unsafe { std::mem_utils::get_at_physical_addr::<RsdpV1>(address) })
+            Self::V1(unsafe { std::mem_utils::get_at_virtual_addr::<RsdpV1>(address) })
         } else {
-            Self::V2(unsafe { std::mem_utils::get_at_physical_addr::<RsdpV2>(address) })
+            Self::V2(unsafe { std::mem_utils::get_at_virtual_addr::<RsdpV2>(address) })
         }
     }
 
@@ -115,8 +115,8 @@ pub struct RsdpV2 {
 }
 
 //first do memory allocation and mapping, then i can map rsdp memory and do this
-pub fn get_rsdp_table(rsdp_addr: Option<u64>) -> Option<Rsdp> {
-    let rsdp_table = Rsdp::from_ptr(PhysAddr(rsdp_addr?));
+pub fn get_rsdp_table(rsdp_addr: u64) -> Option<Rsdp> {
+    let rsdp_table = Rsdp::from_ptr(VirtAddr(rsdp_addr));
     if !rsdp_table.validate() {
         return None;
     }

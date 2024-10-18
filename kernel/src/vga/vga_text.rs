@@ -73,7 +73,7 @@ impl VgaText {
 
     unsafe fn scroll(&mut self) {
         let top_ptr = VGA_BINDING.buffer;
-        let diff = VGA_BINDING.bits_per_pixel * VGA_BINDING.stride * CHAR_HEIGHT;
+        let diff = VGA_BINDING.stride * CHAR_HEIGHT;
         let limit = top_ptr.add(diff * (self.height_lines - 1) - 1);
 
         asm!(

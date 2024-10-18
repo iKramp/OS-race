@@ -6,7 +6,18 @@ edition = "2021"
 [lib]
 crate-type = ["rlib"]
 
+[build]
+rustflags = ["-g"]
+
 [dependencies]
 
 [features]
 test_includes = []
+
+[profile.dev]
+debug = true
+force-frame-pointers = true
+
+[profile.release]
+debug = true
+force-frame-pointers = true

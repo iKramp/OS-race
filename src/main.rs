@@ -37,9 +37,6 @@ fn main() {
     let mut child = cmd.spawn().unwrap();
 
     if debug {
-        //let _ = std::process::Command::new("gdb")
-        //    .arg("-x").arg("./gdb_commands.txt")
-        //    .spawn().unwrap();
         let _ = std::process::Command::new("kitty")
             .arg("gdb")
             .arg("-x").arg("~/programming/OS-race/gdb_commands.txt")

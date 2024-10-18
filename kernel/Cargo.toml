@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2018"
 build = "build.rs"
 
+[build]
+rustflags = ["-g", "-C", "force-frame-pointers=yes"]
+
 [[bin]]
 name = "kernel"
 path = "src/main.rs"
@@ -20,8 +23,15 @@ panic = "unwind"
 workspace = true
 opt-level = 0
 force-frame-pointers = true
+force-unwind-tables = true
+link-dead-code = true
+lto = false
 
 [profile.release]
+panic = "unwind"
 workspace = true
 opt-level = 0
 force-frame-pointers = true
+force-unwind-tables = true
+link-dead-code = true
+lto = false

@@ -72,10 +72,10 @@ struct GlobalDescriptorTable {
 static mut GDT: GlobalDescriptorTable = GlobalDescriptorTable {
     table: [
         create_segment_descriptor(0, 0, 0, 0),
-        create_segment_descriptor(0, 0xFFFFF, 0x9B, 0xA),
-        create_segment_descriptor(0, 0xFFFFF, 0x93, 0xC),
+        create_segment_descriptor(0, 0xFFFFF, 0x9A, 0xA),
+        create_segment_descriptor(0, 0xFFFFF, 0x92, 0xC),
         create_segment_descriptor(0, 0xFFFFF, 0xFB, 0xA),
-        create_segment_descriptor(0, 0xFFFFF, 0xF3, 0xC),
+        create_segment_descriptor(0, 0xFFFFF, 0xF2, 0xC),
         create_segment_descriptor(0, 0x0, 0x0, 0x0),
         create_segment_descriptor(0, 0x0, 0x0, 0x0),
     ],
@@ -160,21 +160,20 @@ pub fn init_gdt() {
 fn set_cs() {
     unsafe {
         core::arch::asm!(
-            "mov ax, 0x10",
+            "push 0x08", //code segment
+            "lea rax, [rip + 2f]", //load the address of the label
+            "push rax", //push the address of the label
+            "retfq", //return far quick
+
+            "2:", //label
+            "mov ax, 0x10", //data segment
             "mov ds, ax",
             "mov es, ax",
             "mov fs, ax",
             "mov gs, ax",
-            "mov ss, ax",/*
-            "push 0x08",
-            "lea {tmp}, [rip + 2f]",
-            "push {tmp}",
-            "iretq",
-            "2:",*/
-            //code_seg = in(reg) u64::from(code_seg),
-            out("ax") _,//u64::from(data_seg),
-            //tmp = lateout(reg) _,
-            options(preserves_flags),
-        );
+            "mov ss, ax",
+            out("rax") _,
+            options(nostack, preserves_flags, raw)
+        )
     }
 }

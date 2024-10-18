@@ -1,3 +1,5 @@
+use crate::{limine, println};
+
 use super::mem_utils::*;
 
 pub static mut BUDDY_ALLOCATOR: BuyddyAllocator = BuyddyAllocator {
@@ -15,17 +17,17 @@ pub struct BuyddyAllocator {
 }
 
 impl BuyddyAllocator {
-    pub fn init(/*boot_info: &'static mut BootInfo*/) {
-        /*let memory_regions = &mut boot_info.memory_regions as &'static mut [bootloader_api::info::MemoryRegion];
+    pub fn init() {
+        let memory_regions = unsafe { &mut *(*crate::LIMINE_BOOTLOADER_REQUESTS.memory_map_request.info).memory_map };
+        let memory_regions = unsafe { core::slice::from_raw_parts_mut(memory_regions, (*crate::LIMINE_BOOTLOADER_REQUESTS.memory_map_request.info).memory_map_count as usize) };
         let n_pages = find_max_usable_address(memory_regions).0 >> 12;
 
         let binary_tree_size_elements = get_binary_tree_size(n_pages);
-
         // div by 8 for 8 bits in a byte  (also rounded up), times 2 for binary tree
         let space_needed_bytes = (binary_tree_size_elements + 7) / 8;
         let entry_to_shrink = find_mem_region_to_shrink(memory_regions, space_needed_bytes);
 
-        let tree_allocator = PhysAddr(memory_regions[entry_to_shrink].start);
+        let tree_allocator = PhysAddr(memory_regions[entry_to_shrink].base);
         let mut allocated_pages = 0;
         for i in 0..space_needed_bytes {
             //set all bits to 1 to set everything as used
@@ -39,7 +41,7 @@ impl BuyddyAllocator {
             size_to_shrink += 0x1000;
         }
         //we essentially round up to a whole page
-        memory_regions[entry_to_shrink].start += size_to_shrink;
+        memory_regions[entry_to_shrink].base += size_to_shrink;
         let mut allocator = Self {
             n_pages,
             binary_tree_size: binary_tree_size_elements,
@@ -47,20 +49,20 @@ impl BuyddyAllocator {
             tree_allocator: translate_phys_virt_addr(tree_allocator),
         };
         for entry in memory_regions {
-            if entry.kind != bootloader_api::info::MemoryRegionKind::Usable {
+            if !is_memory_region_usable(entry) {
                 continue;
             }
-            let start = if entry.start & 0xFFF == 0 {
-                entry.start
+            let start = if entry.base & 0xFFF == 0 {
+                entry.base
             } else {
-                (entry.start & !0xFFF) + 0x1000
+                (entry.base & !0xFFF) + 0x1000
             };
-            for addr in (start..(entry.end & !0xFFF)).step_by(4096) {
+            for addr in (start..((start + entry.length) & !0xFFF)).step_by(4096) {
                 allocator.mark_addr(PhysAddr(addr), false);
                 allocator.allocated_pages -= 1;
             }
         }
-        unsafe { BUDDY_ALLOCATOR = allocator }*/
+        unsafe { BUDDY_ALLOCATOR = allocator }
     }
 
     pub fn is_frame_allocated(&self, addr: PhysAddr) -> bool {
@@ -173,14 +175,14 @@ impl BuyddyAllocator {
         }
     }
 }
-/*
-fn find_mem_region_to_shrink(memory_regions: &[bootloader_api::info::MemoryRegion], space_needed_bytes: u64) -> usize {
+
+fn find_mem_region_to_shrink(memory_regions: &[&mut limine::MemoryMapEntry], space_needed_bytes: u64) -> usize {
     let mut entry_to_shrink: Option<usize> = None;
     for region in memory_regions.iter().enumerate() {
-        if region.1.kind != bootloader_api::info::MemoryRegionKind::Usable {
+        if !is_memory_region_usable(region.1) {
             continue;
         }
-        let empty_space = region.1.end - region.1.start;
+        let empty_space = region.1.length;
         if empty_space >= space_needed_bytes {
             entry_to_shrink = Some(region.0);
             break;
@@ -190,16 +192,20 @@ fn find_mem_region_to_shrink(memory_regions: &[bootloader_api::info::MemoryRegio
     entry_to_shrink.unwrap()
 }
 
-fn find_max_usable_address(memory_regions: &[bootloader_api::info::MemoryRegion]) -> PhysAddr {
+fn find_max_usable_address(memory_regions: &[&mut limine::MemoryMapEntry]) -> PhysAddr {
     let mut highest = 0;
     for region in memory_regions {
-        if region.kind == MemoryRegionKind::Usable {
-            highest = region.end;
+        if is_memory_region_usable(region) {
+            highest = region.base + region.length;
         }
     }
     PhysAddr(highest)
 }
-*/
+
+fn is_memory_region_usable(entry: &limine::MemoryMapEntry) -> bool {
+    entry.entry_type == limine::LIMINE_MEMMAP_USABLE// || entry.entry_type == limine::LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE //if we want to use bootloader reclaimable move bootloader structures to our own memory
+}
+
 fn get_binary_tree_size(mut n_pages: u64) -> u64 {
     let mut first_bit = 0;
     for i in 0..64 {

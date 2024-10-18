@@ -75,9 +75,9 @@ pub extern "x86-interrupt" fn page_fault(stack_frame: ExceptionStackFrame, error
 }
 
 //gpf
-pub extern "x86-interrupt" fn general_protection_fault(stack_frame: ExceptionStackFrame) -> ! {
+pub extern "x86-interrupt" fn general_protection_fault(stack_frame: ExceptionStackFrame, error_code: u64) -> ! {
     set_vga_text_foreground((0, 0, 255));
-    println!("EXCEPTION: GPF\n{:#X?}", stack_frame);
+    println!("EXCEPTION: GPF\n{:#X?}\n{:#x?}", stack_frame, error_code);
     set_vga_text_foreground((255, 255, 255));
     unsafe {
         loop {

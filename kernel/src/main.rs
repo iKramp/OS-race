@@ -20,6 +20,8 @@ mod vga;
 use limine::LIMINE_BOOTLOADER_REQUESTS;
 use vga::vga_text;
 
+use crate::limine::FramebufferMode;
+
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     vga_text::set_vga_text_foreground((0, 0, 255));
@@ -32,13 +34,6 @@ pub struct BootInfo {}
 
 #[no_mangle]
 extern "C" fn _start() -> ! {
-    if unsafe { LIMINE_BOOTLOADER_REQUESTS.bootloader_info_request.info.is_null() } {
-        panic!("Frame buffer info is null");
-    }
-    if unsafe { LIMINE_BOOTLOADER_REQUESTS.frame_buffer_request.info.is_null() } {
-        panic!("Frame buffer info is null");
-    }
-
     let framebuffer_info = unsafe { &*LIMINE_BOOTLOADER_REQUESTS.frame_buffer_request.info };
 
     if framebuffer_info.framebuffer_count == 0 {
@@ -48,13 +43,12 @@ extern "C" fn _start() -> ! {
     let framebuffer_slice = unsafe { core::slice::from_raw_parts(framebuffer_info.framebuffers as *const *const limine::FramebufferInfo, framebuffer_info.framebuffer_count as usize) };
     let main_framebuffer = unsafe { &*framebuffer_slice[0] };
 
-    let modes;
-
-    if framebuffer_info.revision >= 1 {
-        modes = unsafe { core::slice::from_raw_parts(main_framebuffer.modes as *const *const limine::FramebufferMode, main_framebuffer.mode_count as usize) };
+    let _modes = if framebuffer_info.revision >= 1 {
+        unsafe { core::slice::from_raw_parts(main_framebuffer.modes as *const *const limine::FramebufferMode, main_framebuffer.mode_count as usize) }
     } else {
-        modes = &[];
-    }
+        #[allow(clippy::invalid_null_ptr_usage)]
+        unsafe { core::slice::from_raw_parts(core::ptr::null::<*const limine::FramebufferMode>(), 0)}
+    };
 
     let my_vga_binding = vga::vga_driver::FrameBuffer {
         width:  main_framebuffer.width as usize,
@@ -73,15 +67,19 @@ extern "C" fn _start() -> ! {
     vga::init_vga_driver(&my_vga_binding);
     vga::clear_screen();
 
-    //std::panic::test_print_1();
-
     println!("starting RustOs...");
+
+    let boot_info = unsafe { &*LIMINE_BOOTLOADER_REQUESTS.bootloader_info_request.info }; 
+    let name = utils::ptr_to_str(boot_info.name);
+    println!("Booted with bootloader: {:?}", name);
+    let version = utils::ptr_to_str(boot_info.version);
+    println!("Version: {}", version);
 
     interrupts::init_interrupts();
 
-    //memory::init_memory();
+    memory::init_memory();
 
-    //acpi::init_acpi(None);
+    acpi::init_acpi();
 
     //vga_text::hello_message();
 

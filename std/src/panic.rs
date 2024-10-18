@@ -9,13 +9,22 @@ pub fn print_stack_trace() {
         core::arch::asm!("mov {}, rbp", out(reg) rbp); // Get the base pointer
     }
 
-    println!("rb[ is {:#x}", rbp);
+    if rbp == 0 {
+        println!("Enable rustflags -C force-frame-pointers to get a stack trace you idiot`");
+        println!("Enable rustflags -C force-frame-pointers to get a stack trace you idiot`");
+        println!("Enable rustflags -C force-frame-pointers to get a stack trace you idiot`");
+        println!("Enable rustflags -C force-frame-pointers to get a stack trace you idiot`");
+        return;
+    }
+    println!("rbp is {:#x}", rbp);
 
     // Walk the stack frame
-    let mut count = 0;
 
-    while rbp != 0 && count < 10 {
+    loop {
         let old_rbp: usize = unsafe { *(rbp as *const usize) };
+        if old_rbp == 0 {
+            break;
+        }
         let return_address = unsafe { *((rbp + 8) as *const usize) };
         let call_instruction_address = return_address.wrapping_sub(5);
 
@@ -44,27 +53,6 @@ pub fn print_stack_trace() {
 
         rbp = old_rbp;
 
-        count += 1;
     }
     println!("End of stack trace");
-}
-
-#[inline(never)]
-pub fn test_print_1() {
-    test_print_2();
-}
-
-#[inline(never)]
-pub fn test_print_2() {
-    test_print_3();
-}
-
-#[inline(never)]
-pub fn test_print_3() {
-    test_print_4();
-}
-
-#[inline(never)]
-pub fn test_print_4() {
-    print_stack_trace();
 }

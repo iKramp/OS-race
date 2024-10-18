@@ -2,6 +2,9 @@
 name = "os-race"
 version = "0.1.0"
 
+[build]
+rustflags = ["-g"]
+
 [workspace]
 name = "os-race"
 version = "0.1.0"
@@ -23,7 +26,9 @@ kernel = { path = "kernel", artifact = "bin", target = "x86_64-unknown-none", fe
 ovmf-prebuilt = "0.1.0-alpha.1"
 
 [profile.dev]
-panic = "abort"
+panic = "unwind"
+force-frame-pointers = true
 
 [profile.release]
-panic = "abort"
+panic = "unwind"
+force-frame-pointers = true

@@ -2,19 +2,20 @@ pub mod paging;
 pub mod physical_allocator;
 use crate::println;
 use std::mem_utils::{self, VirtAddr};
+use crate::LIMINE_BOOTLOADER_REQUESTS;
 
 pub static mut PAGE_TREE_ALLOCATOR: paging::PageTree = paging::PageTree {
     level_4_table: std::mem_utils::PhysAddr(0),
 };
 
-pub fn init_memory(/*boot_info: &mut bootloader_api::BootInfo*/) {
+pub fn init_memory() {
     println!("initializing memory");
-    /*unsafe {
-        let offset: Option<u64> = boot_info.physical_memory_offset.into();
-        mem_utils::set_physical_offset(mem_utils::PhysOffset(offset.unwrap()));
-        let boot_info_ptr = boot_info as *mut bootloader_api::BootInfo;
+    unsafe {
+        let offset: u64 = (*LIMINE_BOOTLOADER_REQUESTS.higher_half_direct_map_request.info).offset;
+        mem_utils::set_physical_offset(mem_utils::PhysOffset(offset));
+        println!("offset: {:#x?}", offset);
         println!("initializing physical allocator");
-        physical_allocator::BuyddyAllocator::init(&mut *boot_info_ptr);
+        physical_allocator::BuyddyAllocator::init();
         println!("initializing pager");
         PAGE_TREE_ALLOCATOR = paging::PageTree::new();
         crate::vga_text::set_vga_text_foreground((0, 255, 0));
@@ -33,5 +34,5 @@ pub fn init_memory(/*boot_info: &mut bootloader_api::BootInfo*/) {
             "mov cr3, rax",
             out("rax") _
         ); //clear the TLB
-    }*/
+    }
 }

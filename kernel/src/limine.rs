@@ -3,6 +3,15 @@ use std::mem_utils::{PhysAddr, VirtAddr};
 
 static LIMINE_BASE_REVISION: [u64; 3] = [0xf9562b2d5c95a6c8, 0x6a7b384944536bdc, 2];
 
+pub static LIMINE_MEMMAP_USABLE: u64 = 0;
+pub static LIMINE_MEMMAP_RESERVED: u64 = 1;
+pub static LIMINE_MEMMAP_ACPI_RECLAIMABLE: u64 = 2;
+pub static LIMINE_MEMMAP_ACPI_NVS: u64 = 3;
+pub static LIMINE_MEMMAP_BAD_MEMORY: u64 = 4;
+pub static LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE: u64 = 5;
+pub static LIMINE_MEMMAP_KERNEL_AND_MODULES: u64 = 6;
+pub static LIMINE_MEMMAP_FRAMEBUFFER: u64 = 7;
+
 pub static mut LIMINE_BOOTLOADER_REQUESTS: BootloaderRequests = BootloaderRequests {
     _request_start_marker: [0xf6b8f4b39de7d1ae, 0xfab91a6940fcb9cf, 0x785c6ed015d3e316, 0x181e920a7852b9d9],
     bootloader_info_request: BootloaderInfoRequest {
@@ -15,17 +24,42 @@ pub static mut LIMINE_BOOTLOADER_REQUESTS: BootloaderRequests = BootloaderReques
         revision: 0,
         info: core::ptr::null(),
     },
-    //higher_half_direct_map_request: todo!(),
+    higher_half_direct_map_request: {
+        HigherHalfDirectMapRequest {
+            magic: [0xc7b1dd30df4c8b88, 0x0a82e883a194f07b, 0x48dcf1cb8ad2b852, 0x63984e959a98244b],
+            revision: 0,
+            info: core::ptr::null(),
+        }
+    },
     frame_buffer_request: FrameBufferRequest {
         magic: [0xc7b1dd30df4c8b88, 0x0a82e883a194f07b, 0x9d5827dcd881dd75, 0xa3148604f6fab11b],
         revision: 0,
         info: core::ptr::null(),
     },
-    //paging_mode_request: todo!(),
+    paging_mode_request: PagingModeRequest {
+        magic: [0xc7b1dd30df4c8b88, 0x0a82e883a194f07b, 0x95c1a0edab0944cb, 0xa4e5cb3842f7488a],
+        revision: 0,
+        info: core::ptr::null(),
+        mode: 0,
+        min_mode: 0,
+        max_mode: 0,
+    },
     //smp_request: todo!(),
-    //memory_map_request: todo!(),
-    //rsdp_request: todo!(),
-    //kernel_address_request: todo!(),
+    memory_map_request: MemoryMapRequest {
+        magic: [0xc7b1dd30df4c8b88, 0x0a82e883a194f07b, 0x67cf3d9d378a806f, 0xe304acdfc50c3c62],
+        revision: 0,
+        info: core::ptr::null(),
+    },
+    rsdp_request: RsdpRequest {
+        magic: [0xc7b1dd30df4c8b88, 0x0a82e883a194f07b, 0xc5e77b6b397e7b43, 0x27637845accdcf3c],
+        revision: 0,
+        info: core::ptr::null(),
+    },
+    kernel_address_request: KernelAddressRequest {
+        magic: [0xc7b1dd30df4c8b88, 0x0a82e883a194f07b, 0x71ba76863cc55f63, 0xb2644a48c516a487],
+        revision: 0,
+        info: core::ptr::null(),
+    },
     _request_end_marker: [0xadc0e0531bb10d03, 0x9572709f31764c62],
 };
 
@@ -35,13 +69,13 @@ pub struct BootloaderRequests {
 
     pub bootloader_info_request: BootloaderInfoRequest,
     pub firmware_type_request: FirmwareTypeRequest,
-    //higher_half_direct_map_request: HigherHalfDirectMapRequest,
+    pub higher_half_direct_map_request: HigherHalfDirectMapRequest,
     pub frame_buffer_request: FrameBufferRequest,
-    //paging_mode_request: PagingModeRequest,
-    //smp_request: SMPRequest,
-    //memory_map_request: MemoryMapRequest,
-    //rsdp_request: RsdpRequest,
-    //kernel_address_request: KernelAddressRequest,
+    pub paging_mode_request: PagingModeRequest,
+    //pub smp_request: SMPRequest,
+    pub memory_map_request: MemoryMapRequest,
+    pub rsdp_request: RsdpRequest,
+    pub kernel_address_request: KernelAddressRequest,
     
     _request_end_marker: [u64; 2],
 }
@@ -54,14 +88,15 @@ pub struct BootloaderInfoRequest {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct BootloaderInfo {
     revision: u64,
-    name: &'static [u8],
-    version: &'static [u8],
+    pub name: *const u8,
+    pub version: *const u8,
 }
 
 #[repr(C)]
-struct FirmwareTypeRequest {
+pub struct FirmwareTypeRequest {
     magic: [u64; 4],
     revision: u64,
     info: *const FirmwareType,
@@ -74,16 +109,16 @@ struct FirmwareType {
 }
 
 #[repr(C)]
-struct HigherHalfDirectMapRequest {
+pub struct HigherHalfDirectMapRequest {
     magic: [u64; 4],
     revision: u64,
-    info: *const HigherHalfDirectMap,
+    pub info: *const HigherHalfDirectMap,
 }
 
 #[repr(C)]
-struct HigherHalfDirectMap {
+pub struct HigherHalfDirectMap {
     revision: u64,
-    offset: u64,
+    pub offset: u64,
 }
 
 #[repr(C)]
@@ -97,7 +132,7 @@ pub struct FrameBufferRequest {
 pub struct FrameBuffer {
     pub revision: u64,
     pub framebuffer_count: u64,
-    pub framebuffers: *const [*const FramebufferInfo],
+    pub framebuffers: *const [&'static FramebufferInfo],
 }
 
 #[repr(C)]
@@ -178,51 +213,42 @@ struct CPUInfo {
 
 
 #[repr(C)]
-struct MemoryMapRequest {
+pub struct MemoryMapRequest {
     magic: [u64; 4],
     revision: u64,
-    info: *const MemoryMap,
+    pub info: *const MemoryMap,
 }
 
 #[repr(C)]
-struct MemoryMap {
+pub struct MemoryMap {
     revision: u64,
-    memory_map_count: u64,
-    memory_map: *const [&'static MemoryMapEntry],
+    pub memory_map_count: u64,
+    pub memory_map: *mut &'static mut MemoryMapEntry,
 }
 
 #[repr(C)]
-struct MemoryMapEntry {
-    base: u64,
-    length: u64,
-    entry_type: u64,
+#[derive(Debug)]
+pub struct MemoryMapEntry {
+    pub base: u64,
+    pub length: u64,
+    pub entry_type: u64,
 }
-/*
-#define LIMINE_MEMMAP_USABLE                 0
-#define LIMINE_MEMMAP_RESERVED               1
-#define LIMINE_MEMMAP_ACPI_RECLAIMABLE       2
-#define LIMINE_MEMMAP_ACPI_NVS               3
-#define LIMINE_MEMMAP_BAD_MEMORY             4
-#define LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE 5
-#define LIMINE_MEMMAP_KERNEL_AND_MODULES     6
-#define LIMINE_MEMMAP_FRAMEBUFFER            7
-*/
 
 #[repr(C)]
-struct RsdpRequest {
+pub struct RsdpRequest {
     magic: [u64; 4],
     revision: u64,
-    info: *const Rsdp,
+    pub info: *const Rsdp,
 }
 
 #[repr(C)]
-struct Rsdp {
+pub struct Rsdp {
     revision: u64,
-    rsdp: *const (),
+    pub rsdp: *const (),
 }
 
 #[repr(C)]
-struct KernelAddressRequest {
+pub struct KernelAddressRequest {
     magic: [u64; 4],
     revision: u64,
     info: *const KernelAddress,

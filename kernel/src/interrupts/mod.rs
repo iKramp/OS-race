@@ -6,12 +6,12 @@ pub mod idt;
 use crate::utils::byte_to_port;
 
 pub fn init_interrupts() {
+    println!("initializing PIC");
+    init_pic();
     println!("initializing GDT");
     gdt::init_gdt();
     println!("initializing IDT");
     idt::init_idt();
-    println!("initializing PIC");
-    init_pic();
     crate::vga_text::set_vga_text_foreground((0, 255, 0));
     println!("interrupts initialized");
     crate::vga_text::reset_vga_color();
@@ -41,8 +41,6 @@ pub fn init_pic() {
 
     byte_to_port(PIC1_DATA, 0x00); //change to 0x00 to handle keyboard
     byte_to_port(PIC2_DATA, 0x00);
-
-    std::panic::print_stack_trace();
 }
 
 pub static mut LEGACY_PIC_TIMER_TICKS: u64 = 0;
