@@ -12,6 +12,7 @@ if [ -z "$LIMINE_DATA_DIR" ]; then
     exit 1
 fi
 
+mkdir -p iso/EFI/BOOT
 cp -u $LIMINE_DATA_DIR/limine-uefi-cd.bin iso/
 cp -u $LIMINE_DATA_DIR/limine-bios-cd.bin iso/
 cp -u $LIMINE_DATA_DIR/limine-bios.sys iso/

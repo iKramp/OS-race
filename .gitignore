@@ -16,3 +16,7 @@ Cargo.lock
 log.txt
 kernel.map
 log.txt.bak
+
+kernel_build_files/
+
+iso/

@@ -4,9 +4,13 @@ fn main() {
     // set by cargo, build scripts should use this directory for output files
     let _out_dir = PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     let kernel = PathBuf::from(std::env::var_os("CARGO_BIN_FILE_KERNEL_kernel").unwrap());
+    let kernel_build_files_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap()).join("kernel_build_files");
+    if !kernel_build_files_dir.exists() {
+        std::fs::create_dir(kernel_build_files_dir.clone()).unwrap();
+    }
     std::fs::copy(
         kernel,
-        PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap()).join("kernel_build_files/kernel.elf"),
+        kernel_build_files_dir.join("kernel.elf"),
     )
     .unwrap();
     let status = Command::new("objcopy")
