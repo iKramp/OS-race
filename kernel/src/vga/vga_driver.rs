@@ -2,7 +2,7 @@
 #![allow(clippy::identity_op)]
 
 use core::arch::asm;
-use crate::println;
+use crate::{limine::{self, LIMINE_BOOTLOADER_REQUESTS}, println};
 
 #[derive(Debug)]
 pub struct FrameBuffer {
@@ -34,21 +34,32 @@ pub static mut VGA_BINDING: FrameBuffer = FrameBuffer {
     red_size: 0,
 };
 
-pub fn init_vga_driver(binding: &FrameBuffer) {
-    unsafe {
-        VGA_BINDING.width = binding.width;
-        VGA_BINDING.height = binding.height;
-        VGA_BINDING.stride = binding.stride;
-        VGA_BINDING.bits_per_pixel = binding.bits_per_pixel;
-        VGA_BINDING.buffer = binding.buffer;
-        VGA_BINDING.blue_offset = binding.blue_offset;
-        VGA_BINDING.green_offset = binding.green_offset;
-        VGA_BINDING.red_offset = binding.red_offset;
-        VGA_BINDING.blue_size = binding.blue_size;
-        VGA_BINDING.green_size = binding.green_size;
-        VGA_BINDING.red_size = binding.red_size;
+pub fn init_vga_driver() {
+    let framebuffer_info = unsafe { &*LIMINE_BOOTLOADER_REQUESTS.frame_buffer_request.info };
+
+    if framebuffer_info.framebuffer_count == 0 {
+        panic!("No framebuffers found");
     }
-    super::vga_text::init_vga_text(binding.width, binding.height);
+
+    let framebuffer_slice = unsafe { core::slice::from_raw_parts(framebuffer_info.framebuffers as *const *const limine::FramebufferInfo, framebuffer_info.framebuffer_count as usize) };
+    let main_framebuffer = unsafe { &*framebuffer_slice[0] };
+
+    //do something with framebuffer modes?
+
+    unsafe {
+        VGA_BINDING.width = main_framebuffer.width as usize;
+        VGA_BINDING.height = main_framebuffer.height as usize;
+        VGA_BINDING.stride = main_framebuffer.pitch as usize;
+        VGA_BINDING.bits_per_pixel = main_framebuffer.bpp as usize;
+        VGA_BINDING.buffer = main_framebuffer.address as *mut u8;
+        VGA_BINDING.blue_offset = main_framebuffer.blue_mask_shift as usize;
+        VGA_BINDING.green_offset = main_framebuffer.green_mask_shift as usize;
+        VGA_BINDING.red_offset = main_framebuffer.red_mask_shift as usize;
+        VGA_BINDING.blue_size = main_framebuffer.blue_mask_size as usize;
+        VGA_BINDING.green_size = main_framebuffer.green_mask_size as usize;
+        VGA_BINDING.red_size = main_framebuffer.red_mask_size as usize;
+    }
+    super::vga_text::init_vga_text(main_framebuffer.width as usize, main_framebuffer.height as usize);
 }
 
 pub fn clear_screen() {

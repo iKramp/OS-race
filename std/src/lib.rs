@@ -56,7 +56,8 @@ pub use core::num;
 pub use core::ops;
 pub use core::option;
 //os
-pub mod panic;
+pub mod eh;
+pub use eh::panic;
 //path
 pub use core::pin;
 pub use core::prelude;

@@ -31,8 +31,8 @@ pub extern "x86-interrupt" fn invalid_opcode(stack_frame: ExceptionStackFrame) -
 pub extern "x86-interrupt" fn breakpoint(stack_frame: ExceptionStackFrame) {
     set_vga_text_foreground((0, 255, 255));
     println!(
-        "Breakpoint reached at {:#X}\n{:#X?}",
-        stack_frame.instruction_pointer, stack_frame
+        "Breakpoint reached at {:#X}",
+        stack_frame.instruction_pointer
     );
     set_vga_text_foreground((255, 255, 255));
 }

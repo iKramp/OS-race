@@ -6,8 +6,6 @@ fn main() {
     println!("cargo:rustc-env=TARGET_FILE={}", target_file.display());
 
     // Set the flag to generate the linker map file
-    println!("cargo:rustc-env=RUSTFLAGS=-C force-frame-pointers=yes");
-    println!("cargo:rustc-env=RUSTFLAGS=-C force-unwind-tables=yes");
     println!("cargo:rustc-link-arg=-T{}", link_script_file.display());
     //println!("cargo:rustc-link-arg=Map=/home/nejc/programming/OS-race/kernel.map");
 

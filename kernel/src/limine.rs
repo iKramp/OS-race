@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::mem_utils::{PhysAddr, VirtAddr};
 
 
@@ -60,6 +62,11 @@ pub static mut LIMINE_BOOTLOADER_REQUESTS: BootloaderRequests = BootloaderReques
         revision: 0,
         info: core::ptr::null(),
     },
+    limine_kernel_file_request: LimineKernelFileRequest {
+        magic: [0xc7b1dd30df4c8b88, 0x0a82e883a194f07b, 0xad97e90e83f1ed67, 0x31eb5d1c5ff23b69],
+        revision: 0,
+        info: core::ptr::null(),
+    },
     _request_end_marker: [0xadc0e0531bb10d03, 0x9572709f31764c62],
 };
 
@@ -76,6 +83,7 @@ pub struct BootloaderRequests {
     pub memory_map_request: MemoryMapRequest,
     pub rsdp_request: RsdpRequest,
     pub kernel_address_request: KernelAddressRequest,
+    pub limine_kernel_file_request: LimineKernelFileRequest,
     
     _request_end_marker: [u64; 2],
 }
@@ -176,7 +184,7 @@ pub struct FramebufferMode {
 
 
 #[repr(C)]
-struct PagingModeRequest {
+pub struct PagingModeRequest {
     magic: [u64; 4],
     revision: u64, //1
     info: *const u8,
@@ -251,18 +259,51 @@ pub struct Rsdp {
 pub struct KernelAddressRequest {
     magic: [u64; 4],
     revision: u64,
-    info: *const KernelAddress,
+    pub info: *const KernelAddress,
 }
 
 #[repr(C)]
-struct KernelAddress {
+pub struct KernelAddress {
     revision: u64,
-    phys_addr: PhysAddr,
-    virt_addr: VirtAddr,
+    pub phys_addr: PhysAddr,
+    pub virt_addr: VirtAddr,
 }
 
+#[repr(C)]
+pub struct Limine_UUID {
+    pub data1: u32,
+    pub data2: u16,
+    pub data3: u16,
+    pub data4: [u8; 8],
+}
 
+#[repr(C)]
+pub struct LimineKernelFileRequest {
+    magic: [u64; 4],
+    revision: u64,
+    pub info: *const LimineKernelFile,
+}
 
+#[repr(C)]
+pub struct LimineKernelFile {
+    revision: u64,
+    pub address: *const LimineFile,
+}
 
-
-
+#[repr(C)]
+pub struct LimineFile {
+    pub revision: u64,
+    pub address: *const (),
+    pub size: u64,
+    pub path : *const u8,
+    pub cmdline: *const u8,
+    pub media_type: u32,
+    unused: u32,
+    pub tftp_ip: u32,
+    pub tftp_port: u32,
+    pub partition_index: u32,
+    pub mbr_disk_id: u32,
+    pub gpt_disk_uuid: Limine_UUID,
+    pub gpt_partition_uuid: Limine_UUID,
+    pub part_uuid: Limine_UUID,
+}

@@ -1,7 +1,7 @@
 use crate::{println, vga::vga_driver};
 use std::Vec;
 
-const PIXELS_PER_SQUARE: i32 = 10;
+const PIXELS_PER_SQUARE: i32 = 30;
 
 pub struct State {
     width: i32,
@@ -40,8 +40,7 @@ pub fn tick(state: &mut State) {
     } else {
         move_food(state);
     }
-    // check if snake is colliding with itself
-    // check if snake is colliding with wall
+    assert!(!is_colliding(state));
 }
 
 fn draw_food(state: &State) {
@@ -80,13 +79,23 @@ fn move_snake(state: &mut State) {
     );
 }
 
+fn is_colliding(state: &State) -> bool {
+    let head = state.snake.first().unwrap();
+    for i in 1..state.snake.len() {
+        if head == &state.snake[i] {
+            return true;
+        }
+    }
+    false
+}
+
 fn delete_last_snake_part(state: &mut State) {
     vga_driver::draw_rectangle(
         (state.snake[state.snake.len() - 1].0 * PIXELS_PER_SQUARE) as usize,
         (state.snake[state.snake.len() - 1].1 * PIXELS_PER_SQUARE) as usize,
         PIXELS_PER_SQUARE as usize,
         PIXELS_PER_SQUARE as usize,
-        (255, 0, 0),
+        (0, 0, 0),
     );
     state.snake.pop();
 }
@@ -101,21 +110,25 @@ fn move_food(state: &mut State) {
 
 fn rotate(state: &mut State) {
     unsafe {
-        if crate::keyboard::KEY_STATES[72] {
+        if crate::keyboard::KEY_STATES[72] && state.direction != (0, 1) {
             // up
             state.direction = (0, -1);
+            return;
         }
-        if crate::keyboard::KEY_STATES[80] {
+        if crate::keyboard::KEY_STATES[80] && state.direction != (0, -1) {
             // down
             state.direction = (0, 1);
+            return;
         }
-        if crate::keyboard::KEY_STATES[75] {
+        if crate::keyboard::KEY_STATES[75] && state.direction != (1, 0) {
             // left
             state.direction = (-1, 0);
+            return;
         }
-        if crate::keyboard::KEY_STATES[77] {
+        if crate::keyboard::KEY_STATES[77] && state.direction != (-1, 0) {
             // right
             state.direction = (1, 0);
+            return;
         }
     }
 }

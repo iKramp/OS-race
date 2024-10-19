@@ -4,7 +4,7 @@
 #![feature(abi_x86_interrupt)]
 #![feature(stmt_expr_attributes)]
 
-use std::panic::PanicInfo;
+use std::{eh::int3, panic::PanicInfo};
 
 mod acpi;
 mod cpuid;
@@ -18,6 +18,7 @@ mod tests;
 mod utils;
 mod vga;
 use limine::LIMINE_BOOTLOADER_REQUESTS;
+use tests::test_runner;
 use vga::vga_text;
 
 use crate::limine::FramebufferMode;
@@ -26,6 +27,7 @@ use crate::limine::FramebufferMode;
 fn panic(info: &PanicInfo) -> ! {
     vga_text::set_vga_text_foreground((0, 0, 255));
     println!("{}", info);
+    int3();
     std::panic::print_stack_trace();
     loop {}
 }
@@ -34,38 +36,19 @@ pub struct BootInfo {}
 
 #[no_mangle]
 extern "C" fn _start() -> ! {
-    let framebuffer_info = unsafe { &*LIMINE_BOOTLOADER_REQUESTS.frame_buffer_request.info };
 
-    if framebuffer_info.framebuffer_count == 0 {
-        panic!("No framebuffers found");
-    }
+    let kernel_file_info = unsafe { &*(*LIMINE_BOOTLOADER_REQUESTS.limine_kernel_file_request.info).address };
 
-    let framebuffer_slice = unsafe { core::slice::from_raw_parts(framebuffer_info.framebuffers as *const *const limine::FramebufferInfo, framebuffer_info.framebuffer_count as usize) };
-    let main_framebuffer = unsafe { &*framebuffer_slice[0] };
 
-    let _modes = if framebuffer_info.revision >= 1 {
-        unsafe { core::slice::from_raw_parts(main_framebuffer.modes as *const *const limine::FramebufferMode, main_framebuffer.mode_count as usize) }
-    } else {
-        #[allow(clippy::invalid_null_ptr_usage)]
-        unsafe { core::slice::from_raw_parts(core::ptr::null::<*const limine::FramebufferMode>(), 0)}
-    };
-
-    let my_vga_binding = vga::vga_driver::FrameBuffer {
-        width:  main_framebuffer.width as usize,
-        height: main_framebuffer.height as usize,
-        stride: main_framebuffer.pitch as usize,
-        bits_per_pixel: main_framebuffer.bpp as usize,
-        buffer: main_framebuffer.address as *mut u8,
-        blue_offset: main_framebuffer.blue_mask_shift as usize,
-        green_offset: main_framebuffer.green_mask_shift as usize,
-        red_offset: main_framebuffer.red_mask_shift as usize,
-        blue_size: main_framebuffer.blue_mask_size as usize,
-        green_size: main_framebuffer.green_mask_size as usize,
-        red_size: main_framebuffer.red_mask_size as usize,
-    };
-
-    vga::init_vga_driver(&my_vga_binding);
+    vga::init_vga_driver();
     vga::clear_screen();
+
+    interrupts::init_interrupts();
+
+
+    let elf_file = std::eh::elf_parser::ElfFile::new(std::mem_utils::VirtAddr(kernel_file_info.address as u64));
+
+    std::panic::test_fn_1();
 
     println!("starting RustOs...");
 
@@ -75,16 +58,14 @@ extern "C" fn _start() -> ! {
     let version = utils::ptr_to_str(boot_info.version);
     println!("Version: {}", version);
 
-    interrupts::init_interrupts();
-
     memory::init_memory();
 
     acpi::init_acpi();
 
     //vga_text::hello_message();
 
-    //let last_time = crate::interrupts::time_since_boot();
-    /*loop {
+    let last_time = crate::interrupts::time_since_boot();
+    loop {
         if last_time + std::time::Duration::from_millis(500) < crate::interrupts::time_since_boot() {
             break
         }
@@ -93,7 +74,6 @@ extern "C" fn _start() -> ! {
     let run_tests = false;
     if run_tests {
         println!("Running tests");
-        use crate::tests::test_runner;
         test_runner();
     }
 
@@ -104,11 +84,11 @@ extern "C" fn _start() -> ! {
     #[allow(clippy::empty_loop)]
     let mut last_time = crate::interrupts::time_since_boot();
     loop {
-        if last_time + std::time::Duration::from_millis(200) < crate::interrupts::time_since_boot() {
+        if last_time + std::time::Duration::from_millis(100) < crate::interrupts::time_since_boot() {
             last_time = crate::interrupts::time_since_boot();
             snake::tick(&mut state);
         }
-    }*/
+    }
     loop {
         unsafe {
             core::arch::asm!("mov rax, 0x0");

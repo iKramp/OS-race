@@ -23,6 +23,7 @@ pub fn print_stack_trace() {
     loop {
         let old_rbp: usize = unsafe { *(rbp as *const usize) };
         if old_rbp == 0 {
+            println!("main.rs");
             break;
         }
         let return_address = unsafe { *((rbp + 8) as *const usize) };
@@ -55,4 +56,16 @@ pub fn print_stack_trace() {
 
     }
     println!("End of stack trace");
+}
+
+pub fn test_fn_1() {
+    test_fn_2();
+}
+
+pub fn test_fn_2() {
+    test_fn_3();
+}
+
+pub fn test_fn_3() {
+    print_stack_trace();
 }

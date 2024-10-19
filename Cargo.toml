@@ -1,14 +1,9 @@
 [package]
 name = "os-race"
 version = "0.1.0"
-
-[build]
-rustflags = ["-g"]
+edition = "2021"
 
 [workspace]
-name = "os-race"
-version = "0.1.0"
-edition = "2018"
 members = [
     "kernel",
     "kernel_test",
@@ -27,8 +22,11 @@ ovmf-prebuilt = "0.1.0-alpha.1"
 
 [profile.dev]
 panic = "unwind"
-force-frame-pointers = true
+opt-level = 0
+lto = false
+
 
 [profile.release]
 panic = "unwind"
-force-frame-pointers = true
+opt-level = 0
+lto = false
