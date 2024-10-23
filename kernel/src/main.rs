@@ -4,7 +4,7 @@
 #![feature(abi_x86_interrupt)]
 #![feature(stmt_expr_attributes)]
 
-use std::{eh::int3, panic::PanicInfo, println};
+use std::{eh::int3, panic::PanicInfo};
 
 mod acpi;
 mod cpuid;
@@ -69,6 +69,6 @@ extern "C" fn _start() -> ! {
     println!("looping infinitely now");
     #[allow(clippy::empty_loop)]
     loop {
-        core::arch::asm!("hlt")
+        unsafe { core::arch::asm!("hlt") }
     }
 }
