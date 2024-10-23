@@ -1,3 +1,4 @@
+use crate::eh::int3;
 use crate::println;
 
 use crate::mem_utils;
@@ -48,15 +49,27 @@ impl HeapPageMetadata {
                 let empty_block = get_at_virtual_addr::<EmptyBlock>(VirtAddr(i));
                 empty_block.ptr_to_prev = VirtAddr(i - size_of_object);
                 empty_block.ptr_to_next = VirtAddr(i + size_of_object);
+                if empty_block.ptr_to_prev.0 < 0x100 || VirtAddr(i).0 < 0x100 || empty_block.ptr_to_next.0 < 0x100 {
+                    panic!(
+                        "prev: {:#x?}, current: {:#x?}, next: {:#x?}",
+                        empty_block.ptr_to_prev,
+                        VirtAddr(i),
+                        empty_block.ptr_to_next
+                    );
+                }
             }
             get_at_virtual_addr::<EmptyBlock>(addr_of_first).ptr_to_prev = page_addr + VirtAddr(4096 - size_of_object);
             get_at_virtual_addr::<EmptyBlock>(page_addr + VirtAddr(4096 - size_of_object)).ptr_to_next = addr_of_first;
             self.ptr_to_first = addr_of_first;
             self.ptr_to_last = page_addr + VirtAddr(4096 - size_of_object);
+            if self.ptr_to_first.0 < 0x100 || self.ptr_to_last.0 < 0x100 || addr_of_first.0 < 0x100 || page_addr.0 + 4096 - size_of_object < 0x100 {
+                panic!("first: {:#x?}, last: {:#x?}", self.ptr_to_first, self.ptr_to_last);
+            }
         }
     }
 }
 
+#[derive(Debug)]
 struct EmptyBlock {
     ptr_to_prev: VirtAddr,
     ptr_to_next: VirtAddr,
@@ -89,7 +102,7 @@ impl HeapAllocationData {
                     max_allocations: ((4096 - crate::mem::size_of::<HeapPageMetadata>()) as u64
                         / (u64::pow(2, self.size_order_of_objects as u32))) as u8,
                     ptr_to_first: VirtAddr(0),
-                    ptr_to_last: VirtAddr(6),
+                    ptr_to_last: VirtAddr(0),
                 };
                 metadata.populate(new_page);
                 set_at_virtual_addr(new_page, metadata);
@@ -106,6 +119,9 @@ impl HeapAllocationData {
             if page_metadata.number_of_allocations < page_metadata.max_allocations {
                 let empty_block = get_at_virtual_addr::<EmptyBlock>(allocated);
                 let after = empty_block.ptr_to_next;
+                if after.0 < 0x100 {
+                    panic!("current: {:#x?}, next: {:#x?}", allocated, after);
+                }
                 page_metadata.ptr_to_first = after;
             }
 
@@ -139,8 +155,16 @@ impl HeapAllocationData {
             );
             last_block.ptr_to_next = addr;
             past_last_block.ptr_to_prev = addr;
+            metadata.ptr_to_last = addr;
+            //print prev, current, next
+            if last_block.ptr_to_prev.0 < 0x100 || addr.0 < 0x100 || last_block.ptr_to_next.0 < 0x100 || metadata.ptr_to_last.0 < 0x100 {
+                panic!(
+                    "prev: {:#x?}, current: {:#x?}, next: {:#x?}, last: {:#x?}",
+                    last_block.ptr_to_prev, addr, last_block.ptr_to_next, metadata.ptr_to_last
+                );
+            }
 
-            //for now i don't deallocate pages lol
+            //for now i don't deallocate pages lol TODO:
         }
     }
 }
@@ -181,19 +205,21 @@ impl Heap {
     }
 
     pub fn deallocate(&mut self, addr: VirtAddr) {
+        if addr.0 == self as *const Heap as u64 {
+            return;
+        }
+
         let page_addr = VirtAddr(addr.0 & !0xFFF);
         unsafe {
             let heap_type = get_at_virtual_addr::<TypeOfHeap>(page_addr);
             if *heap_type == TypeOfHeap::ObjectOverPages {
                 let metadata = get_at_virtual_addr::<MultiPageObjectMetadata>(page_addr);
                 println!("metadata: {metadata:#x?}");
-                core::arch::asm!("int3");
                 todo!("dealloc pages");
             } else {
                 let metadata = get_at_virtual_addr::<HeapPageMetadata>(page_addr);
                 if metadata.size_order_of_objects < 4 {
-                    println!("object has size order: {}", metadata.size_order_of_objects);
-                    return;
+                    panic!("illegal size order: {}", metadata.size_order_of_objects);
                 }
                 let index = metadata.size_order_of_objects - 4;
                 self.allocation_data[index as usize].deallocate(addr);
@@ -232,21 +258,5 @@ pub fn log2_rounded_up(num: u64) -> u64 {
     if num == 1 {
         return 0; //special case
     }
-    let mut first_bit = 0;
-    let mut mask = 1_u64 << 9;
-    for i in 54..64 {
-        if num & mask != 0 {
-            first_bit = i;
-            break;
-        }
-        mask >>= 1;
-    }
-
-    let mask = u64::MAX >> (first_bit + 1);
-    if num & mask != 0 {
-        //needs rounding up
-        first_bit -= 1;
-    }
-
-    64 - first_bit - 1
+    (num * 2 - 1).ilog2().into()
 }

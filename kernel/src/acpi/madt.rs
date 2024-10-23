@@ -27,9 +27,6 @@ impl Madt {
                         entries.push(MadtEntryType::ProcessorLocalAPIC(get_at_virtual_addr::<ProcessorLocalApic>(
                             ptr,
                         )));
-                        //println!("processor local apic: {:#x?}", get_at_virtual_addr::<ProcessorLocalApic>(
-                        //    ptr,
-                        //))
                     },
                     1 => entries.push(MadtEntryType::IoApic(get_at_virtual_addr::<IoApic>(ptr))),
                     2 => entries.push(MadtEntryType::InterruptSourceOverride(get_at_virtual_addr::<
@@ -37,7 +34,6 @@ impl Madt {
                     >(ptr))),
                     3 => {
                         entries.push(MadtEntryType::NMISource(get_at_virtual_addr::<NMISource>(ptr)));
-                        crate::println!("nmi source has length of {}", entry_header.length)
                     }
                     4 => entries.push(MadtEntryType::LocalApicNMI(get_at_virtual_addr::<LocalApicNMI>(ptr))),
                     5 => entries.push(MadtEntryType::LocalApicAddressOverride(get_at_virtual_addr::<

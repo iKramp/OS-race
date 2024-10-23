@@ -1,5 +1,6 @@
 mod A0_trivial;
-mod A1_vec;
+mod A1_log_2_rounded_up;
+mod A2_vec;
 mod memory_utils;
 use crate::println;
 

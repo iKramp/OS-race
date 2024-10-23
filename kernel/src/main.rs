@@ -4,7 +4,7 @@
 #![feature(abi_x86_interrupt)]
 #![feature(stmt_expr_attributes)]
 
-use std::{eh::int3, panic::PanicInfo};
+use std::{eh::int3, panic::PanicInfo, println};
 
 mod acpi;
 mod cpuid;
@@ -37,8 +37,6 @@ extern "C" fn _start() -> ! {
 
     interrupts::init_interrupts();
 
-    std::panic::test_fn_1();
-
     println!("starting RustOs...");
 
     let boot_info = unsafe { &*LIMINE_BOOTLOADER_REQUESTS.bootloader_info_request.info };
@@ -65,8 +63,12 @@ extern "C" fn _start() -> ! {
         println!("Running tests");
         use tests::test_runner;
         test_runner();
+        println!("Finished running tests");
     }
 
+    println!("looping infinitely now");
     #[allow(clippy::empty_loop)]
-    loop {}
+    loop {
+        core::arch::asm!("hlt")
+    }
 }

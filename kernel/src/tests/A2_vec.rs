@@ -1,6 +1,6 @@
 use crate::println;
 use kernel_test::{kernel_test, kernel_test_mod};
-kernel_test_mod!(crate::tests::A1_vec);
+kernel_test_mod!(crate::tests::A2_vec);
 
 #[kernel_test]
 fn vec_test_1() -> bool {
@@ -58,4 +58,68 @@ fn vec_test_6() -> bool {
     vec1.remove(7);
 
     vec1[0] == 1 && vec1[1] == 1 && vec1[2] == 2 && vec1[3] == 3 && vec1[4] == 5 && vec1[5] == 8 && vec1[6] == 13 && vec1[7] == 21 && vec1[8] == 34
+}
+
+//push 128 elements test
+#[kernel_test]
+fn vec_test_7() -> bool {
+    let mut vec1: std::Vec<usize> = std::Vec::new();
+    for i in 0..128 {
+        vec1.push(i);
+    }
+
+    for i in 0..128 {
+        if vec1[i] != i {
+            return false;
+        }
+    }
+    true
+}
+
+//pop 128 elements test
+#[kernel_test]
+fn vec_test_8() -> bool {
+    let mut vec1: std::Vec<usize> = std::Vec::new();
+    for i in 0..128 {
+        vec1.push(i);
+    }
+
+    for i in 0..128 {
+        if vec1.pop() != Some(127 - i) {
+            return false;
+        }
+    }
+    true
+}
+
+//remove 128 elements test
+#[kernel_test]
+fn vec_test_9() -> bool {
+    let mut vec1: std::Vec<usize> = std::Vec::new();
+    for i in 0..128 {
+        vec1.push(i);
+    }
+
+    for i in 0..128 {
+        if vec1.remove(0) != i {
+            return false;
+        }
+    }
+    true
+}
+
+//insert 128 elements test
+#[kernel_test]
+fn vec_test_10() -> bool {
+    let mut vec1: std::Vec<usize> = std::Vec::new();
+    for i in 0..128 {
+        vec1.insert(0, i);
+    }
+
+    for i in 0..128 {
+        if vec1[i] != 127 - i {
+            return false;
+        }
+    }
+    true
 }

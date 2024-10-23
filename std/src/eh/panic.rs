@@ -58,14 +58,14 @@ pub fn print_stack_trace() {
     println!("End of stack trace");
 }
 
-pub fn test_fn_1() {
+fn test_fn_1() {
     test_fn_2();
 }
 
-pub fn test_fn_2() {
+fn test_fn_2() {
     test_fn_3();
 }
 
-pub fn test_fn_3() {
+fn test_fn_3() {
     print_stack_trace();
 }

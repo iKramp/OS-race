@@ -48,6 +48,7 @@ impl<T> Vec<T> {
             }
             crate::HEAP.deallocate(crate::mem_utils::VirtAddr(self.data as *const _ as u64));
             self.data = new_data;
+            self.capacity = new_capacity;
         }
     }
 
@@ -56,15 +57,18 @@ impl<T> Vec<T> {
             if self.size == self.capacity {
                 self.double_capacity();
             }
-            *(self.data.add(self.size)) = data;
+            self.data.add(self.size).write_unaligned(data);
             self.size += 1;
         }
     }
 
-    pub fn pop(&mut self) -> &T {
+    pub fn pop(&mut self) -> Option<T> {
+        if self.size == 0 {
+            return None;
+        }
         self.size -= 1;
         //look into relocating the vector
-        unsafe { &*(self.data.add(self.size)) }
+        unsafe { Some(core::ptr::read(self.data.add(self.size))) }
     }
 
     pub fn at(&self, index: usize) -> Option<&T> {
@@ -98,21 +102,23 @@ impl<T> Vec<T> {
                     *(self.data as *mut u8).add((i + 1) * elem_size + j) = *(self.data as *mut u8).add(i * elem_size + j);
                 }
             }
-            *(self.data.add(index)) = data;
+            self.data.add(index).write_unaligned(data);
             self.size += 1;
         }
     }
 
-    pub fn remove(&mut self, index: usize) {
+    pub fn remove(&mut self, index: usize) -> T {
         if index >= self.size {
             panic!("Index out of bounds");
         }
         unsafe {
+            let t = core::ptr::read(self.data.add(index));
             let elem_size = core::mem::size_of::<T>();
             for i in index * elem_size..(self.size - 1) * elem_size {
                 *(self.data as *mut u8).add(i) = *(self.data as *mut u8).add(i + elem_size);
             }
             self.size -= 1;
+            t
         }
     }
 }
