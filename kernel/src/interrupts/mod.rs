@@ -1,4 +1,5 @@
 mod gdt;
+pub use gdt::GDT_POINTER;
 use crate::println;
 #[macro_use]
 pub mod handlers;
@@ -45,7 +46,7 @@ pub fn init_pic() {
 
 pub static mut LEGACY_PIC_TIMER_TICKS: u64 = 0;
 pub static mut TIMER_TICKS: u64 = 0;
-pub const PIC_TIMER_FREQUENCY: u32 = 59659;
+pub const PIC_TIMER_FREQUENCY: u32 = 1000;
 pub const PIC_TIMER_ORIGINAL_FREQ: u32 = 1193180;
 
 pub fn time_since_boot() -> std::time::Duration {

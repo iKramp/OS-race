@@ -1,12 +1,15 @@
 pub mod paging;
 pub mod physical_allocator;
+
 use crate::println;
-use std::mem_utils::{self, VirtAddr};
+use std::mem_utils::{self, PhysAddr, VirtAddr};
 use crate::LIMINE_BOOTLOADER_REQUESTS;
 
 pub static mut PAGE_TREE_ALLOCATOR: paging::PageTree = paging::PageTree {
     level_4_table: std::mem_utils::PhysAddr(0),
 };
+
+pub static mut TRAMPOLINE_RESERVED: PhysAddr = PhysAddr(0);
 
 pub fn init_memory() {
     println!("initializing memory");
@@ -16,6 +19,8 @@ pub fn init_memory() {
         println!("offset: {:#x?}", offset);
         println!("initializing physical allocator");
         physical_allocator::BuyddyAllocator::init();
+        //allocates low addresses first, so we reserve this for the trampoline
+        TRAMPOLINE_RESERVED = physical_allocator::BUDDY_ALLOCATOR.allocate_frame(); 
         println!("initializing pager");
         PAGE_TREE_ALLOCATOR = paging::PageTree::new();
         crate::vga_text::set_vga_text_foreground((0, 255, 0));

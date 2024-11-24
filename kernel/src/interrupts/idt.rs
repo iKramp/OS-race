@@ -17,13 +17,14 @@ macro_rules! interrupt_message {
 }
 
 #[repr(C, packed)]
+#[derive(Debug, Clone, Copy)]
 pub struct TablePointer {
     pub limit: u16,
     pub base: u64,
 }
 
 #[used]
-static mut IDT_POINTER: TablePointer = TablePointer { limit: 0, base: 0 };
+pub static mut IDT_POINTER: TablePointer = TablePointer { limit: 0, base: 0 };
 
 const IDT_SIZE: usize = 256;
 

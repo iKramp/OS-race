@@ -13,13 +13,13 @@ fn main() {
     let uefi = false;
 
     let mut cmd = std::process::Command::new("qemu-system-x86_64");
-    cmd.arg("-d").arg("int").arg("-D").arg("./log.txt").arg("-no-reboot");
+    cmd.arg("-d").arg("int,cpu_reset").arg("-D").arg("./log.txt").arg("-no-reboot");
     if debug {
         cmd.arg("-s");
         cmd.arg("-S");
     }
     //cmd.arg("-cpu").arg("EPYC");
-    cmd.arg("-smp").arg("1");
+    cmd.arg("-smp").arg("2");
 
     #[cfg(test)]
     {
@@ -40,7 +40,7 @@ fn main() {
         let _ = std::process::Command::new("kitty")
             .arg("gdb")
             .arg("-x").arg("~/programming/OS-race/gdb_commands.txt")
-            .spawn().unwrap();
+            .spawn().unwrap().wait().unwrap();
             
     }
 

@@ -1,3 +1,6 @@
+
+use std::{eh::int3};
+
 use crate::{limine, println};
 
 use super::mem_utils::*;
@@ -10,7 +13,7 @@ pub static mut BUDDY_ALLOCATOR: BuyddyAllocator = BuyddyAllocator {
 };
 
 pub struct BuyddyAllocator {
-    n_pages: u64,
+    pub n_pages: u64,
     binary_tree_size: u64,
     allocated_pages: u64,
     tree_allocator: VirtAddr,
@@ -21,6 +24,8 @@ impl BuyddyAllocator {
         let memory_regions = unsafe { &mut *(*crate::LIMINE_BOOTLOADER_REQUESTS.memory_map_request.info).memory_map };
         let memory_regions = unsafe { core::slice::from_raw_parts_mut(memory_regions, (*crate::LIMINE_BOOTLOADER_REQUESTS.memory_map_request.info).memory_map_count as usize) };
         let n_pages = find_max_usable_address(memory_regions).0 >> 12;
+        println!("n_pages: {}", n_pages);
+        println!("max memory address: {:#X}", n_pages * 4096);
 
         let binary_tree_size_elements = get_binary_tree_size(n_pages);
         // div by 8 for 8 bits in a byte  (also rounded up), times 2 for binary tree
@@ -87,7 +92,9 @@ impl BuyddyAllocator {
         self.allocated_pages += 1;
         let index = self.find_empty_frame();
         self.mark_index(index, true);
-        PhysAddr((index - self.binary_tree_size / 2) * 4096)
+        let address = (index - self.binary_tree_size / 2) * 4096;
+        debug_assert!(address <= self.n_pages * 4096, "address is out of bounds");
+        PhysAddr(address)
     }
 
     fn find_empty_frame(&self) -> u64 {

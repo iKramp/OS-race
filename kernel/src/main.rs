@@ -4,10 +4,12 @@
 #![feature(abi_x86_interrupt)]
 #![feature(stmt_expr_attributes)]
 
-use std::{eh::int3, panic::PanicInfo};
+use std::{panic::PanicInfo};
 
 mod acpi;
+mod ap_startup;
 mod cpuid;
+mod msr;
 mod interrupts;
 mod keyboard;
 mod limine;
@@ -23,8 +25,7 @@ use vga::vga_text;
 fn panic(info: &PanicInfo) -> ! {
     vga_text::set_vga_text_foreground((0, 0, 255));
     println!("{}", info);
-    int3();
-    std::panic::print_stack_trace();
+    //std::panic::print_stack_trace();
     loop {}
 }
 
@@ -32,6 +33,7 @@ pub struct BootInfo {}
 
 #[no_mangle]
 extern "C" fn _start() -> ! {
+    unsafe { std::thread::GET_TIME_SINCE_BOOT = || interrupts::time_since_boot() };
     vga::init_vga_driver();
     vga::clear_screen();
 
@@ -40,6 +42,8 @@ extern "C" fn _start() -> ! {
     println!("starting RustOs...");
 
     let boot_info = unsafe { &*LIMINE_BOOTLOADER_REQUESTS.bootloader_info_request.info };
+    let offset = unsafe { &*LIMINE_BOOTLOADER_REQUESTS.kernel_address_request.info }.phys_addr;
+    println!("Kernel offset: {:#x?}", offset);
     let name = utils::ptr_to_str(boot_info.name);
     println!("Booted with bootloader: {:?}", name);
     let version = utils::ptr_to_str(boot_info.version);
@@ -47,6 +51,7 @@ extern "C" fn _start() -> ! {
 
     memory::init_memory();
 
+    println!("BSP mtrr: {:#x?}", msr::get_mtrr());
     acpi::init_acpi();
 
     //vga_text::hello_message();
@@ -67,8 +72,11 @@ extern "C" fn _start() -> ! {
     }
 
     println!("looping infinitely now");
+    let mut a = 0;
     #[allow(clippy::empty_loop)]
     loop {
-        unsafe { core::arch::asm!("hlt") }
+        //a += 1;
+        //println!("{}", a);
+        std::thread::sleep(std::time::Duration::from_secs(1));
     }
 }

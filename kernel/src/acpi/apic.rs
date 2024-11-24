@@ -1,6 +1,7 @@
-#![allow(clippy::unusual_byte_groupings)]
+#![allow(clippy::unusual_byte_groupings, static_mut_refs)]
 
 use std::{
+    eh::int3,
     mem_utils::{PhysAddr, VirtAddr},
     PageAllocator,
 };
@@ -167,7 +168,7 @@ fn disconnect_imcr() {
     byte_to_port(IMCR + 1, 0x01);
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 pub struct LapicRegisters {
     reserved_0: LapicRegisterValueStructure,
     reserved_1: LapicRegisterValueStructure,
@@ -196,7 +197,8 @@ pub struct LapicRegisters {
     reserved_10: LapicRegisterValueStructure,
     reserved_11: LapicRegisterValueStructure,
     lvt_corrected_machine_check_interrupt: LapicRegisterValueStructure,
-    interurpt_command_register: TwoDWordStructure,
+    interrupt_command_register_0_32: LapicRegisterValueStructure,
+    interrupt_command_register_32_64: LapicRegisterValueStructure,
     lvt_timer: LapicRegisterValueStructure,
     lvt_thermal_sensor: LapicRegisterValueStructure,
     lvt_performance_monitoring_counters: LapicRegisterValueStructure,
@@ -213,14 +215,35 @@ pub struct LapicRegisters {
     reserved_16: LapicRegisterValueStructure,
 }
 
-#[repr(C, packed)]
+impl LapicRegisters {
+    pub fn send_ipi(&mut self, delivery_mode: u8, destination: u8, vector: u8) {
+        let id = self.lapic_id.bytes;
+        let version = self.lapic_version.bytes;
+        println!("{:x?}, {:x?}", id, version);
+        unsafe {
+            (&mut self.interrupt_command_register_32_64.bytes as *mut u32).write_volatile((destination as u32) << 24);
+            (&mut self.interrupt_command_register_0_32.bytes as *mut u32).write_volatile((vector as u32) | ((delivery_mode as u32) << 8));
+        }
+        println!("sent ipi");
+    }
+
+    pub fn send_init_ipi(&mut self, destination: u8) {
+        self.send_ipi(0b101, destination, 0);
+    }
+
+    pub fn send_startup_ipi(&mut self, destination: u8, start_page: u8) {
+        self.send_ipi(0b110, destination, start_page);
+    }
+}
+
+#[repr(C)]
 pub struct LapicRegisterValueStructure {
     pub bytes: u32,
     padding_0: u32,
     padding_1: u64,
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 struct EightDWordStructure {
     bits_000_031: LapicRegisterValueStructure,
     bits_032_063: LapicRegisterValueStructure,
@@ -260,7 +283,7 @@ impl EightDWordStructure {
     }
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 struct TwoDWordStructure {
     pub bits_000_031: LapicRegisterValueStructure,
     pub bits_032_063: LapicRegisterValueStructure,

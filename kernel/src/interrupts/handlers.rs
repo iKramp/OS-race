@@ -29,18 +29,14 @@ pub extern "x86-interrupt" fn invalid_opcode(stack_frame: ExceptionStackFrame) -
 }
 
 pub extern "x86-interrupt" fn breakpoint(stack_frame: ExceptionStackFrame) {
-    let continue_executing = false;
     set_vga_text_foreground((0, 255, 255));
     println!(
         "Breakpoint reached at {:#X}",
         stack_frame.instruction_pointer
     );
     set_vga_text_foreground((255, 255, 255));
-    loop {
-        if continue_executing {
-            break;
-        }
-    }
+    apic_eoi();
+    legacy_eoi();
 }
 
 #[derive(Debug)]

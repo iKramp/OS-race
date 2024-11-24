@@ -8,7 +8,7 @@ pub const MACHINE_CHECK_IST: u16 = 3;
 
 const GDT_LEN: usize = 7;
 #[used]
-static mut GDT_POINTER: TablePointer = TablePointer { limit: 0, base: 0 };
+pub static mut GDT_POINTER: TablePointer = TablePointer { limit: 0, base: 0 };
 
 #[repr(C, packed)]
 struct TaskStateSegment {
@@ -151,7 +151,6 @@ pub fn init_gdt() {
 
     unsafe {
         GDT.load();
-        //can probably remain commented because it has the same offset as the bootloader defined cs
         set_cs();
         core::arch::asm!("mov ax, 0x28", "ltr ax", out("ax") _, options(nostack, preserves_flags, raw));
     }
@@ -163,7 +162,7 @@ fn set_cs() {
             "push 0x08", //code segment
             "lea rax, [rip + 2f]", //load the address of the label
             "push rax", //push the address of the label
-            "retfq", //return far quick
+            "retfq", //return far qword
 
             "2:", //label
             "mov ax, 0x10", //data segment

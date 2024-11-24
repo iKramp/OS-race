@@ -19,7 +19,7 @@ impl<T> Box<T> {
 }
 
 impl <T: ?Sized> Box<T> {
-    pub fn leak<'a>(b: Box<T>) -> &'a mut T {
+    pub fn leak<'a>(b: Self) -> &'a mut T {
         unsafe { &mut *Box::into_raw(b) }
     }
 

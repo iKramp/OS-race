@@ -72,7 +72,7 @@ pub use core::str;
 //string
 pub use core::sync;
 pub use core::task;
-//thread
+pub mod thread;
 pub use core::time;
 //u8   depracation planned
 //u16  depracation planned

@@ -1,4 +1,5 @@
 mod apic;
+mod cpus;
 mod fadt;
 mod ioapic;
 mod madt;
@@ -12,7 +13,6 @@ pub use apic::{LapicRegisters, LAPIC_REGISTERS};
 use crate::{limine::LIMINE_BOOTLOADER_REQUESTS, println};
 
 pub fn init_acpi() {
-
     let Some(rsdp) = rsdp::get_rsdp_table(unsafe { (*LIMINE_BOOTLOADER_REQUESTS.rsdp_request.info).rsdp as u64 }) else {
         return;
     };
@@ -45,6 +45,7 @@ pub fn init_acpi() {
     println!("initing APIC");
     apic::enable_apic(&platform_info);
     ioapic::init_ioapic(&platform_info);
+    cpus::wake_cpus(&platform_info);
 
     //after loading dsdt
     /*
