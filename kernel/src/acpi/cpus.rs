@@ -1,9 +1,11 @@
-use crate::{ap_startup::ap_started_wait_loop, interrupts::idt::TablePointer, memory::{paging::PageTree, PAGE_TREE_ALLOCATOR}, println};
+use crate::{interrupts::idt::TablePointer, memory::PAGE_TREE_ALLOCATOR, println};
 use std::{
     eh::int3,
     mem_utils::{get_at_virtual_addr, VirtAddr},
     PageAllocator,
 };
+
+const STACK_SIZE_PAGES: usize = 2;
 
 //custom data starts at 0x4 from ap_startup
 
@@ -19,11 +21,10 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
 
     let start_page = unsafe { crate::memory::TRAMPOLINE_RESERVED.0 } >> 12;
     unsafe {
-        let stack_addr = crate::memory::PAGE_TREE_ALLOCATOR.allocate_contigious(2); //2 pages
+        let stack_addr = crate::memory::PAGE_TREE_ALLOCATOR.allocate_contigious(STACK_SIZE_PAGES as u64); //2 pages
         let destination = crate::memory::TRAMPOLINE_RESERVED.0 as *mut u8;
-        for i in 0..8 {
-            destination.add(28 + i).write_volatile((stack_addr.0 >> (i * 8)) as u8);
-        }
+        (destination.add(32) as *mut u64).write_unaligned(stack_addr.0 + (STACK_SIZE_PAGES * 0x1000) as u64);
+        println!("stack addr: {:#x?}", stack_addr);
         for cpu in &platform_info.application_processors {
             let lapic_registers = get_at_virtual_addr::<LapicRegisters>(LAPIC_REGISTERS);
             println!("Waking up CPU {}", cpu.apic_id);
@@ -39,7 +40,7 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
             println!("Sending sipi {}", cpu.apic_id);
             lapic_registers.send_startup_ipi(cpu.apic_id, start_page as u8);
 
-            send_bytes(0x12345678, destination.add(44));
+            //send_bytes(0x12345678, destination.add(44));
         }
     }
 }
@@ -81,12 +82,10 @@ fn copy_trampoline() {
         println!("GDTP: {:#x?}", gdt_ptr);
         println!("cr3: {:#x?}", cr3);
 
-        (destination.add(4) as *mut u32).write_unaligned(destination as u32);
-        (destination.add(10) as *mut TablePointer).write_unaligned(gdt_ptr);
-        (destination.add(20) as *mut u64).write_unaligned(cr3);
-        for i in 0..8 {
-            (destination.add(36 + i) as *mut u8).write_volatile((wait_loop_ptr >> (i * 8)) as u8);
-        }
+        (destination.add(4) as *mut u32).write_volatile(destination as u32);
+        (destination.add(14) as *mut TablePointer).write_volatile(gdt_ptr);
+        (destination.add(24) as *mut u64).write_volatile(cr3);
+        (destination.add(40) as *mut u64).write_volatile(wait_loop_ptr);
     }
     int3();
 }

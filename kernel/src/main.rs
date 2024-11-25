@@ -4,16 +4,16 @@
 #![feature(abi_x86_interrupt)]
 #![feature(stmt_expr_attributes)]
 
-use std::{panic::PanicInfo};
+use std::panic::PanicInfo;
 
 mod acpi;
 mod ap_startup;
 mod cpuid;
-mod msr;
 mod interrupts;
 mod keyboard;
 mod limine;
 mod memory;
+mod msr;
 #[allow(unused_imports)]
 mod tests;
 mod utils;
@@ -51,7 +51,7 @@ extern "C" fn _start() -> ! {
 
     memory::init_memory();
 
-    println!("BSP mtrr: {:#x?}", msr::get_mtrr());
+    println!("BSP mtrr cap: {:#x?}", msr::get_mtrr_cap());
     acpi::init_acpi();
 
     //vga_text::hello_message();
@@ -75,8 +75,8 @@ extern "C" fn _start() -> ! {
     let mut a = 0;
     #[allow(clippy::empty_loop)]
     loop {
-        //a += 1;
-        //println!("{}", a);
-        std::thread::sleep(std::time::Duration::from_secs(1));
+        a += 1;
+        println!("{}", a);
+        std::thread::sleep(std::time::Duration::from_secs(100));
     }
 }

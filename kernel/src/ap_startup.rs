@@ -9,14 +9,15 @@ pub static mut NUM_CPUS: u64 = 1;
 
 #[no_mangle]
 pub extern "C" fn ap_started_wait_loop() -> ! {
-    let comm_lock;
+    //let comm_lock;
     unsafe {
-        core::arch::asm!(//pull the argument
-            "mov {comm_lock}, rdi",
-            comm_lock = out(reg) comm_lock
-        );
+        //let a = NUM_CPUS;
+        //core::arch::asm!(//pull the argument
+        //    "mov {comm_lock}, rdi",
+        //    comm_lock = out(reg) comm_lock
+        //);
         //let mtrr = msr::get_mtrr();
-        let _num = read_4_bytes(comm_lock);
+        //let _num = read_4_bytes(comm_lock);
         //core::arch::asm!("lidt [{}]", "sti", in(reg) core::ptr::addr_of!(IDT_POINTER));
     }
     loop {

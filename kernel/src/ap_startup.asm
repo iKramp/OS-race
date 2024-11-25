@@ -9,14 +9,15 @@ ap_startup:
     mov ebx, 0
     jmp _ap_start
 
-
-
+_PADDING:
+    dd 0
 _GDT_PTR:  ; passed from BP
     dw 0xabcd
     dq 0
 _CR3: dq 0 ; passed from BP
 _STACK: dq 0 ; passed from BP
 _WAIT_LOOP: dq 0 ; passed from BP
+_MTRR_DEF_TYPE: dq 0 ; passed from BP
 _COMM_LOCK: db 0
 _COMM_DATA_READY: db 0
 _COMM_DATA: db 0
@@ -107,17 +108,20 @@ _ret_addr:
     mov rax, 0x80010011
     mov cr0, rax
 
-    push 0
+
+    ;set mtrr
+    mov rax, [rbx + _MTRR_DEF_TYPE - ap_startup]
+    mov rdx, rax
+    shr rdx, 32
+    mov ecx, 0xfe
+    wrmsr
+
     push 0
 
-    mov rdi, rbx
-    add rdi, _COMM_LOCK - ap_startup
+    ;mov rdi, rbx
+    ;add rdi, _COMM_LOCK - ap_startup
+    ;push rdi
 
 
     mov rax, [rbx + _WAIT_LOOP - ap_startup]
     call rax
-
-_ap_startup_hlt_loop:
-    hlt
-    jmp _ap_startup_hlt_loop
-    
