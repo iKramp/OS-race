@@ -61,12 +61,12 @@ _ap_start:
 
 [bits 32]
 _ap_start32:
+    mov eax, dword [_CR3 - ap_startup] ; Grab CR3
+    mov cr3, eax
+
     mov eax, cr4
     or eax, 1 << 5     ; Set the PAE bit
     mov cr4, eax
-
-    mov eax, dword [_CR3 - ap_startup] ; Grab CR3
-    mov cr3, eax
 
     ; Set LME (long mode enable)
     mov ecx, 0xC0000080
@@ -101,27 +101,34 @@ _ret_addr:
     mov ax, 0x10 ;data segment
     mov ds, ax
     mov es, ax
+    mov ss, ax
     mov fs, ax
     mov gs, ax
-    mov ss, ax
 
-    mov rax, 0x80010011
-    mov cr0, rax
-
-
-    ;set mtrr
-    mov rax, [rbx + _MTRR_DEF_TYPE - ap_startup]
-    mov rdx, rax
-    shr rdx, 32
-    mov ecx, 0xfe
+    ;set PAT
+    mov rcx, 0x277
+    rdmsr
+    and eax, 0xffff00ff
+    or eax, 0x00000100
     wrmsr
 
+    ;enable SSE
+    mov rax, cr0
+    and ax, 0xFFFB
+    or ax, 0x2
+    mov cr0, rax
+    mov rax, cr4
+    or ax, 3 << 9
+    mov cr4, rax
+
+    push 0
     push 0
 
-    ;mov rdi, rbx
-    ;add rdi, _COMM_LOCK - ap_startup
-    ;push rdi
+    mov rdi, rbx
+    add rdi, _COMM_LOCK - ap_startup
+    push rdi
 
+    cld
 
     mov rax, [rbx + _WAIT_LOOP - ap_startup]
     call rax

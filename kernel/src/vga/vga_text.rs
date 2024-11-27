@@ -96,7 +96,30 @@ impl VgaText {
 
 impl core::fmt::Write for VgaText {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        static mut PRINT_LOCK: u8 = 0;
+
+        let mut lock: u8 = 1;
+        while lock == 1 {
+            unsafe {
+                core::arch::asm!(
+                    "xchg {control}, [{lock}]",
+                    control = inout(reg_byte) lock,
+                    lock = in(reg) core::ptr::addr_of!(PRINT_LOCK)
+                )
+            }
+        }
+
         self.write_text(s);
+
+        unsafe {
+            core::arch::asm!(
+                "mov [{lock}], {zero}",
+                "clflush [{lock}]",
+                zero = in(reg_byte) 0_u8,
+                lock = in(reg) core::ptr::addr_of!(PRINT_LOCK)
+            )
+        }
+
         Ok(())
     }
 }

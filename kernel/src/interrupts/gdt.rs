@@ -156,7 +156,7 @@ pub fn init_gdt() {
     }
 }
 
-fn set_cs() {
+pub fn set_cs() {
     unsafe {
         core::arch::asm!(
             "push 0x08", //code segment

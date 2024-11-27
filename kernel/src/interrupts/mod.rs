@@ -1,5 +1,5 @@
 mod gdt;
-pub use gdt::GDT_POINTER;
+pub use gdt::{GDT_POINTER, set_cs};
 use crate::println;
 #[macro_use]
 pub mod handlers;
