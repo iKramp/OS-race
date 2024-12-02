@@ -30,7 +30,6 @@ pub extern "C" fn ap_started_wait_loop() -> ! {
 
     set_mtrrs(comm_lock);
     set_cr_registers(comm_lock);
-    println!("AP: cpu woke up and received all data");
     set_gdt();
     set_idt();
     PageTree::reload();
@@ -40,6 +39,7 @@ pub extern "C" fn ap_started_wait_loop() -> ! {
     crate::acpi::init_acpi_ap(processor_id);
 
     set_initialized();
+    println!("AP: cpu woke up and received all data");
 
     loop {
         unsafe {
@@ -165,6 +165,7 @@ fn get_next_byte(comm_lock: *mut u8) -> u8 {
                 //bsp didn't write yet
                 core::arch::asm!(//release lock
                     "mov [{comm_lock}], {zero}",
+                    "clflush [{comm_lock}]",
                     comm_lock = in(reg) comm_lock,
                     zero = in(reg_byte) 0_u8,
                 );
@@ -180,11 +181,13 @@ fn get_next_byte(comm_lock: *mut u8) -> u8 {
         );
         core::arch::asm!(//unset pending data
             "mov [{comm_lock}], {zero}",
+            "clflush [{comm_lock}]",
             zero = in(reg_byte) 0_u8,
             comm_lock = in(reg) comm_lock.add(1),
         );
         core::arch::asm!(//release lock
             "mov [{comm_lock}], {zero}",
+            "clflush [{comm_lock}]",
             comm_lock = in(reg) comm_lock,
             zero = in(reg_byte) 0_u8,
         );

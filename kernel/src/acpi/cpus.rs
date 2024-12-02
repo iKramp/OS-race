@@ -8,7 +8,6 @@ use crate::{
     println,
 };
 use std::{
-    eh::int3,
     mem_utils::{get_at_virtual_addr, VirtAddr},
     PageAllocator,
 };
@@ -29,25 +28,25 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
         let stack_addr = crate::memory::PAGE_TREE_ALLOCATOR.allocate_contigious(STACK_SIZE_PAGES as u64); //2 pages
         let destination = crate::memory::TRAMPOLINE_RESERVED.0 as *mut u8;
         let comm_lock = destination.add(56);
-        (destination.add(32) as *mut u64).write_unaligned(stack_addr.0 + (STACK_SIZE_PAGES * 0x1000) as u64);
-        for cpu in &platform_info.application_processors {
+        (destination.add(32) as *mut u64).write_volatile(stack_addr.0 + (STACK_SIZE_PAGES * 0x1000) as u64);
+        for cpu in platform_info.application_processors.iter().enumerate() {
             let lapic_registers = get_at_virtual_addr::<LapicRegisters>(LAPIC_REGISTERS);
-            println!("Waking up CPU {}", cpu.apic_id);
+            println!("Waking up CPU {}", cpu.1.apic_id);
 
-            lapic_registers.send_init_ipi(cpu.apic_id);
+            lapic_registers.send_init_ipi(cpu.1.apic_id);
             std::thread::sleep(std::time::Duration::from_millis(10));
 
-            lapic_registers.send_startup_ipi(cpu.apic_id, start_page as u8);
+            lapic_registers.send_startup_ipi(cpu.1.apic_id, start_page as u8);
             std::thread::sleep(std::time::Duration::from_millis(100));
 
-            lapic_registers.send_startup_ipi(cpu.apic_id, start_page as u8);
+            lapic_registers.send_startup_ipi(cpu.1.apic_id, start_page as u8);
 
             send_mtrrs(comm_lock);
             send_cr_registers(comm_lock);
-            send_byte(cpu.processor_id, comm_lock);
+            send_byte(cpu.1.processor_id, comm_lock);
+            wait_for_cpus(cpu.0 as u8 + 1);
         }
     }
-    wait_for_cpus(platform_info.application_processors.len() as u8);
 }
 
 fn copy_trampoline() {
@@ -84,6 +83,7 @@ fn copy_trampoline() {
 
         (destination.add(4) as *mut u32).write_volatile(destination as u32);
         (destination.add(14) as *mut TablePointer).write_volatile(gdt_ptr);
+
         (destination.add(24) as *mut u64).write_volatile(cr3);
         (destination.add(40) as *mut u64).write_volatile(wait_loop_ptr);
         (destination.add(48) as *mut u64).write_volatile(get_mtrr_def_type());
@@ -150,6 +150,7 @@ fn send_cr_registers(comm_lock: *mut u8) {
             "mov {cr0}, cr0",
             "mov {cr3}, cr3",
             "mov {cr4}, cr4",
+            
             cr0 = out(reg) cr0,
             cr3 = out(reg) cr3,
             cr4 = out(reg) cr4
@@ -207,6 +208,7 @@ fn send_byte(data_byte: u8, comm_lock: *mut u8) {
                 //ap didn't read yet
                 core::arch::asm!(//release lock
                     "mov [{comm_lock}], {zero}",
+                    "clflush [{comm_lock}]",
                     comm_lock = in(reg) comm_lock,
                     zero = in(reg_byte) 0_u8,
                 );
@@ -217,16 +219,19 @@ fn send_byte(data_byte: u8, comm_lock: *mut u8) {
         }
         core::arch::asm!(//write data
             "mov [{comm_lock}], {data}",
+            "clflush [{comm_lock}]",
             data = in(reg_byte) data_byte,
             comm_lock = in(reg) comm_lock.add(2),
         );
         core::arch::asm!(//set pending data
             "mov [{comm_lock}], {one}",
+            "clflush [{comm_lock}]",
             one = in(reg_byte) 1_u8,
             comm_lock = in(reg) comm_lock.add(1),
         );
         core::arch::asm!(//release lock
             "mov [{comm_lock}], {zero}",
+            "clflush [{comm_lock}]",
             comm_lock = in(reg) comm_lock,
             zero = in(reg_byte) 0_u8,
         );
