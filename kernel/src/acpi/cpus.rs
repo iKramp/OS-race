@@ -1,21 +1,28 @@
-use crate::{interrupts::{idt::{TablePointer, IDT_POINTER}, GDT_POINTER}, memory::PAGE_TREE_ALLOCATOR, msr::{get_msr, get_mtrr_cap, get_mtrr_def_type}, println};
+use crate::{
+    interrupts::{
+        idt::{TablePointer, IDT_POINTER},
+        GDT_POINTER,
+    },
+    memory::PAGE_TREE_ALLOCATOR,
+    msr::{get_msr, get_mtrr_cap, get_mtrr_def_type},
+    println,
+};
 use std::{
-    eh::int3, mem_utils::{get_at_virtual_addr, VirtAddr}, PageAllocator
+    eh::int3,
+    mem_utils::{get_at_virtual_addr, VirtAddr},
+    PageAllocator,
 };
 
 const STACK_SIZE_PAGES: usize = 2;
+pub static mut CPU_LOCK: u8 = 0;
+pub static mut CPUS_INITIALIZED: u8 = 0;
 
 //custom data starts at 0x4 from ap_startup
 
 use super::{platform_info::PlatformInfo, LapicRegisters, LAPIC_REGISTERS};
 
 pub fn wake_cpus(platform_info: &PlatformInfo) {
-    println!("Copying trampoline code");
     copy_trampoline();
-    println!(
-        "wait function ptr is {:#x?}",
-        crate::ap_startup::ap_started_wait_loop as *const () as u64
-    );
 
     let start_page = unsafe { crate::memory::TRAMPOLINE_RESERVED.0 } >> 12;
     unsafe {
@@ -23,28 +30,24 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
         let destination = crate::memory::TRAMPOLINE_RESERVED.0 as *mut u8;
         let comm_lock = destination.add(56);
         (destination.add(32) as *mut u64).write_unaligned(stack_addr.0 + (STACK_SIZE_PAGES * 0x1000) as u64);
-        println!("stack addr: {:#x?}", stack_addr);
         for cpu in &platform_info.application_processors {
             let lapic_registers = get_at_virtual_addr::<LapicRegisters>(LAPIC_REGISTERS);
             println!("Waking up CPU {}", cpu.apic_id);
 
-            println!("Sending init ipi {}", cpu.apic_id);
             lapic_registers.send_init_ipi(cpu.apic_id);
             std::thread::sleep(std::time::Duration::from_millis(10));
 
-            println!("Sending sipi {}", cpu.apic_id);
             lapic_registers.send_startup_ipi(cpu.apic_id, start_page as u8);
             std::thread::sleep(std::time::Duration::from_millis(100));
 
-            println!("Sending sipi {}", cpu.apic_id);
             lapic_registers.send_startup_ipi(cpu.apic_id, start_page as u8);
 
             send_mtrrs(comm_lock);
             send_cr_registers(comm_lock);
-            send_dts(comm_lock);
-            println!("cpu woken up");
+            send_byte(cpu.processor_id, comm_lock);
         }
     }
+    wait_for_cpus(platform_info.application_processors.len() as u8);
 }
 
 fn copy_trampoline() {
@@ -52,7 +55,7 @@ fn copy_trampoline() {
     let destination_entry = unsafe { PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(VirtAddr(destination.0)) };
     destination_entry.set_write_through_cahcing(true);
     destination_entry.set_disable_cahce(true);
-    println!("copying trampoline to {:#x?}", destination);
+    println!("copying trampoline to {:x?}", destination);
 
     assert!(
         destination.0 <= 0xFFFFF,
@@ -79,17 +82,39 @@ fn copy_trampoline() {
         };
         let wait_loop_ptr = crate::ap_startup::ap_started_wait_loop as *const () as u64;
 
-        println!("destination: {:#x?}", destination);
-        println!("GDTP: {:#x?}", gdt_ptr);
-        println!("cr3: {:#x?}", cr3);
-
         (destination.add(4) as *mut u32).write_volatile(destination as u32);
         (destination.add(14) as *mut TablePointer).write_volatile(gdt_ptr);
         (destination.add(24) as *mut u64).write_volatile(cr3);
         (destination.add(40) as *mut u64).write_volatile(wait_loop_ptr);
         (destination.add(48) as *mut u64).write_volatile(get_mtrr_def_type());
     }
-    int3();
+}
+
+pub fn wait_for_cpus(num_cpus: u8) {
+    unsafe {
+        loop {
+            let mut lock: u8 = 1;
+            while lock == 1 {
+                core::arch::asm!(
+                    "xchg {control}, [{lock}]",
+                    control = inout(reg_byte) lock,
+                    lock = in(reg) core::ptr::addr_of!(CPU_LOCK)
+                )
+            }
+
+            let num = core::ptr::addr_of!(CPUS_INITIALIZED).read_volatile();
+            if num == num_cpus {
+                return;
+            }
+
+            core::arch::asm!(
+                "mov [{lock}], {zero}",
+                "clflush [{lock}]",
+                zero = in(reg_byte) 0_u8,
+                lock = in(reg) core::ptr::addr_of!(CPU_LOCK)
+            )
+        }
+    }
 }
 
 fn send_mtrrs(comm_lock: *mut u8) {
@@ -120,7 +145,7 @@ fn send_cr_registers(comm_lock: *mut u8) {
         let cr0: u64;
         let cr3: u64;
         let cr4: u64;
-        
+
         core::arch::asm!(
             "mov {cr0}, cr0",
             "mov {cr3}, cr3",

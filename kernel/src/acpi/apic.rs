@@ -16,18 +16,24 @@ use crate::{
 
 pub static mut LAPIC_REGISTERS: VirtAddr = VirtAddr(0);
 const USE_LEGACY_TIMER: bool = false;
+const DIVIDE_VALUE: u32 = 16; //could be 1 on real PCs but VMs don't like it
 
-pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo) {
-    disable_pic_keep_timer();
-    let lapic_registers = get_lapic_registers(platform_info.apic.lapic_address);
+pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo, processor_id: u8) {
+    let bsp = processor_id == platform_info.boot_processor.processor_id;
+    if bsp {
+        disable_pic_keep_timer()
+    };
+    let lapic_registers = get_lapic_registers(platform_info.apic.lapic_address, bsp);
 
-    unsafe {
-        IDT.set(Entry::converging(other_apic_interrupt), 64);
-        IDT.set(Entry::converging(other_apic_interrupt), 65);
-        IDT.set(Entry::converging(other_apic_interrupt), 66);
-        IDT.set(Entry::converging(apic_error), 67);
-        IDT.set(Entry::converging(other_apic_interrupt), 68);
-        IDT.set(Entry::converging(other_apic_interrupt), 69);
+    if bsp {
+        unsafe {
+            IDT.set(Entry::converging(other_apic_interrupt), 64);
+            IDT.set(Entry::converging(other_apic_interrupt), 65);
+            IDT.set(Entry::converging(other_apic_interrupt), 66);
+            IDT.set(Entry::converging(apic_error), 67);
+            IDT.set(Entry::converging(other_apic_interrupt), 68);
+            IDT.set(Entry::converging(other_apic_interrupt), 69);
+        }
     }
 
     lapic_registers.lvt_corrected_machine_check_interrupt.bytes = 0b00000000_00000000_0_000_0_0_000_01000000_u32;
@@ -38,8 +44,7 @@ pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo) {
     lapic_registers.lvt_thermal_sensor.bytes = 0b00000000_00000000_0_000_0_0_000_01000101_u32;
 
     let mut nmi_source = 0b00000000_00000000_0_000_0_0_100_00000000_u32;
-    let lapic_nmi = platform_info.get_nmi_structure(0);
-    println!("NMI: {:#x?}", lapic_nmi);
+    let lapic_nmi = platform_info.get_nmi_structure(processor_id);
 
     if let crate::acpi::madt::IntSoOverTriggerMode::LevelTriggered = lapic_nmi.flags.trigger_mode() {
         nmi_source |= 1 << 15;
@@ -57,6 +62,10 @@ pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo) {
     lapic_registers.spurious_interrupt.bytes = 0b0000000000000000000_0_00_0_1_11111111_u32;
     lapic_registers.task_priority.bytes = 0;
 
+    if !bsp {
+        activate_timer_ap(lapic_registers);
+        return;
+    }
     activate_timer(lapic_registers);
 
     unsafe {
@@ -72,18 +81,31 @@ pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo) {
     disable_pic_completely();
 }
 
-fn get_lapic_registers(lapic_address: PhysAddr) -> &'static mut LapicRegisters {
+fn get_lapic_registers(lapic_address: PhysAddr, bsp: bool) -> &'static mut LapicRegisters {
     unsafe {
-        LAPIC_REGISTERS = crate::memory::PAGE_TREE_ALLOCATOR.allocate(Some(lapic_address));
-        let apic_registers_page_entry = crate::memory::PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(LAPIC_REGISTERS);
-        apic_registers_page_entry.set_write_through_cahcing(true);
-        apic_registers_page_entry.set_disable_cahce(true);
-        core::arch::asm!(
-            "mov rax, cr3",
-            "mov cr3, rax",
-            out("rax") _
-        ); //clear the TLB
+        if bsp {
+            LAPIC_REGISTERS = crate::memory::PAGE_TREE_ALLOCATOR.allocate(Some(lapic_address));
+            let apic_registers_page_entry = crate::memory::PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(LAPIC_REGISTERS);
+            apic_registers_page_entry.set_write_through_cahcing(true);
+            apic_registers_page_entry.set_disable_cahce(true);
+            core::arch::asm!(
+                "mov rax, cr3",
+                "mov cr3, rax",
+                out("rax") _
+            ); //clear the TLB
+        }
         std::mem_utils::get_at_virtual_addr::<LapicRegisters>(LAPIC_REGISTERS)
+    }
+}
+
+static mut TIMER_CONF: u32 = 0;
+static mut INITIAL_COUNT: u32 = 0;
+
+fn activate_timer_ap(lapic_registers: &mut LapicRegisters) {
+    unsafe {
+        lapic_registers.lvt_timer.bytes = TIMER_CONF;
+        lapic_registers.divide_configuration.bytes = DIVIDE_VALUE;
+        lapic_registers.initial_count.bytes = INITIAL_COUNT;
     }
 }
 
@@ -97,20 +119,16 @@ fn activate_timer(lapic_registers: &mut LapicRegisters) {
     timer_conf &= !(1 << 16); //unmask
 
     const TIMER_COUNT: u32 = 100000000;
-    const DIVIDE_VALUE: u32 = 16; //could be 1 on real PCs but VMs don't like it
     lapic_registers.lvt_timer.bytes = timer_conf;
     lapic_registers.divide_configuration.bytes = DIVIDE_VALUE;
     lapic_registers.initial_count.bytes = TIMER_COUNT;
 
     let ticks;
     unsafe {
-        println!("start legacy pic {LEGACY_PIC_TIMER_TICKS}");
         let start_legacy_timer = LEGACY_PIC_TIMER_TICKS;
         while TIMER_TICKS == 0 {}
         ticks = LEGACY_PIC_TIMER_TICKS - start_legacy_timer;
-        println!("end legacy pic {LEGACY_PIC_TIMER_TICKS}");
     }
-    println!("ticks: {ticks}");
 
     if USE_LEGACY_TIMER {
         timer_conf |= 1 << 16; //mask
@@ -132,7 +150,10 @@ fn activate_timer(lapic_registers: &mut LapicRegisters) {
         PIC_TIMER_FREQUENCY
     );
 
-    // INFO: I GIVE UP IT'S IMPOSSIBLE TO MAKE A RELIABLE TIMER IN A VM, I'LL JUST USE THE LEGACY PIT
+    unsafe {
+        TIMER_CONF = lapic_registers.lvt_timer.bytes;
+        INITIAL_COUNT = lapic_registers.initial_count.bytes;
+    }
 }
 
 pub fn disable_pic_keep_timer() {
@@ -217,14 +238,11 @@ pub struct LapicRegisters {
 
 impl LapicRegisters {
     pub fn send_ipi(&mut self, delivery_mode: u8, destination: u8, vector: u8) {
-        let id = self.lapic_id.bytes;
-        let version = self.lapic_version.bytes;
-        println!("{:x?}, {:x?}", id, version);
         unsafe {
             (&mut self.interrupt_command_register_32_64.bytes as *mut u32).write_volatile((destination as u32) << 24);
-            (&mut self.interrupt_command_register_0_32.bytes as *mut u32).write_volatile((vector as u32) | ((delivery_mode as u32) << 8));
+            (&mut self.interrupt_command_register_0_32.bytes as *mut u32)
+                .write_volatile((vector as u32) | ((delivery_mode as u32) << 8));
         }
-        println!("sent ipi");
     }
 
     pub fn send_init_ipi(&mut self, destination: u8) {

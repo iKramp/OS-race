@@ -10,7 +10,7 @@ pub fn init_interrupts() {
     println!("initializing PIC");
     init_pic();
     println!("initializing GDT");
-    gdt::init_gdt();
+    gdt::init_gdt(); //add a separate TSS for each core
     println!("initializing IDT");
     idt::init_idt();
     crate::vga_text::set_vga_text_foreground((0, 255, 0));

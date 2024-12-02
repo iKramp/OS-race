@@ -19,7 +19,7 @@ fn main() {
         cmd.arg("-S");
     }
     //cmd.arg("-cpu").arg("EPYC");
-    cmd.arg("-smp").arg("4");
+    cmd.arg("-smp").arg("3");
 
     #[cfg(test)]
     {
@@ -29,11 +29,8 @@ fn main() {
 
     if uefi {
         cmd.arg("-bios").arg(ovmf_prebuilt::ovmf_pure_efi());
-        cmd.arg("-drive").arg("format=raw,file=kernel_build_files/image.iso");
-    } else {
-        cmd.arg("-drive").arg("format=raw,file=kernel_build_files/image.iso");
-    }
-    //cmd.arg("-cdrom").arg("kernel_build_files/kernel.iso");
+    } 
+    cmd.arg("-drive").arg("format=raw,file=kernel_build_files/image.iso");
     let mut child = cmd.spawn().unwrap();
 
     if debug {

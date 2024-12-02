@@ -1,7 +1,9 @@
 #![allow(clippy::erasing_op)]
 
-use core::arch::asm;
+use crate::interrupts::idt::IDT_POINTER;
+use crate::interrupts::GDT_POINTER;
 use crate::println;
+use core::arch::asm;
 
 use crate::{
     interrupts::idt::TablePointer,
@@ -28,9 +30,16 @@ pub extern "C" fn ap_started_wait_loop() -> ! {
 
     set_mtrrs(comm_lock);
     set_cr_registers(comm_lock);
-    set_gdt(comm_lock);
-    set_idt(comm_lock);
+    println!("AP: cpu woke up and received all data");
+    set_gdt();
+    set_idt();
     PageTree::reload();
+
+    let processor_id = get_next_byte(comm_lock);
+
+    crate::acpi::init_acpi_ap(processor_id);
+
+    set_initialized();
 
     loop {
         unsafe {
@@ -39,23 +48,42 @@ pub extern "C" fn ap_started_wait_loop() -> ! {
     }
 }
 
-fn set_gdt(comm_lock: *mut u8) {
-    let gdt_ptr_limit = read_2_bytes(comm_lock);
-    let gdt_ptr_addr = read_8_bytes(comm_lock);
-    let gdt_ptr = TablePointer {
-        limit: gdt_ptr_limit,
-        base: gdt_ptr_addr,
-    };
+fn set_initialized() {
     unsafe {
-        core::arch::asm!("lgdt [{}]", in(reg) core::ptr::addr_of!(gdt_ptr), options(readonly, nostack, preserves_flags));
+        let mut lock: u8 = 1;
+        while lock == 1 {
+            core::arch::asm!(
+                "xchg {control}, [{lock}]",
+                control = inout(reg_byte) lock,
+                lock = in(reg) core::ptr::addr_of!(crate::acpi::CPU_LOCK)
+            )
+        }
+
+        let num = core::ptr::addr_of!(crate::acpi::CPUS_INITIALIZED).read_volatile();
+
+        core::arch::asm!(
+            "mov [{initialized}], {num}",
+            "mov [{lock}], {zero}",
+            "clflush [{lock}]",
+            "clflush [{initialized}]",
+            zero = in(reg_byte) 0_u8,
+            num = in(reg_byte) num + 1,
+            lock = in(reg) core::ptr::addr_of!(crate::acpi::CPU_LOCK),
+            initialized = in(reg) core::ptr::addr_of!(crate::acpi::CPUS_INITIALIZED)
+        )
+    }
+}
+
+fn set_gdt() {
+    unsafe {
+        core::arch::asm!("lgdt [{}]", in(reg) core::ptr::addr_of!(GDT_POINTER), options(readonly, nostack, preserves_flags));
     }
     crate::interrupts::set_cs();
 }
 
-fn set_idt(comm_lock: *mut u8) {
+fn set_idt() {
     unsafe {
-        let idt_ptr_addr = read_8_bytes(comm_lock);
-        asm!("lidt [{}]", "sti", in(reg) idt_ptr_addr);
+        asm!("lidt [{}]", "sti", in(reg) core::ptr::addr_of!(IDT_POINTER));
     }
 }
 

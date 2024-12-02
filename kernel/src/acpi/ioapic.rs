@@ -4,12 +4,12 @@ use std::{
 };
 
 use super::platform_info::PlatformInfo;
-use crate::println;
+use crate::memory::physical_allocator::BUDDY_ALLOCATOR;
 
 pub fn init_ioapic(platform_info: &PlatformInfo) {
-    println!("{:#x?}", platform_info.apic.io_apics);
     unsafe {
         for io_apic_info in &platform_info.apic.io_apics {
+            BUDDY_ALLOCATOR.mark_addr(PhysAddr(io_apic_info.address.into()), true);
             let io_apic_address = crate::memory::PAGE_TREE_ALLOCATOR.allocate(Some(PhysAddr(io_apic_info.address.into())));
             let apic_registers_page_entry = crate::memory::PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(io_apic_address);
             apic_registers_page_entry.set_write_through_cahcing(true);
@@ -20,7 +20,7 @@ pub fn init_ioapic(platform_info: &PlatformInfo) {
                 out("rax") _
             ); //clear the TLB
             let io_apic = get_at_virtual_addr::<IoApicRegisters>(io_apic_address);
-            let (_, entries ) = io_apic.get_version_and_entries();
+            let (_, entries) = io_apic.get_version_and_entries();
             //println!("got io apic: {:#x?}", io_apic);
             //println!("io apic version: {:#x?}", (version, entries));
             //println!("io apic id: {:#x?}", io_apic.get_id());
