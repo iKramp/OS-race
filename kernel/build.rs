@@ -11,9 +11,9 @@ fn main() {
         .args([
             "-f",
             "elf64",
-            "src/ap_startup.asm",
+            "src/acpi/smp/trampoline.asm",
             "-o",
-            &(out_dir.clone() + "/ap_startup.o"),
+            &(out_dir.clone() + "/trampoline.o"),
         ])
         .status()
         .unwrap()
@@ -25,13 +25,13 @@ fn main() {
         //    .success()
         && Command::new("ar")
             .arg("rcs")
-            .arg(&(out_dir.clone() + "/libap_startup.a"))
-            .arg(&(out_dir.clone() + "/ap_startup.o"))
+            .arg(&(out_dir.clone() + "/libtrampoline.a"))
+            .arg(&(out_dir.clone() + "/trampoline.o"))
             .status()
             .unwrap()
             .success())
     {
-        panic!("Failed to assemble ap_startup.s");
+        panic!("Failed to assemble trampoline.s");
     }
 
     // Set the flag to generate the linker map file
@@ -42,5 +42,5 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=kernel/linker_script.ld");
     println!("cargo:rustc-link-search={}", out_dir);
-    println!("cargo:rustc-link-lib=static=ap_startup");
+    println!("cargo:rustc-link-lib=static=trampoline");
 }

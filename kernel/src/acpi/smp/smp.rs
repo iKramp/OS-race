@@ -15,21 +15,33 @@ use std::{
 const STACK_SIZE_PAGES: usize = 2;
 pub static mut CPU_LOCK: u8 = 0;
 pub static mut CPUS_INITIALIZED: u8 = 0;
+pub static mut CPU_LOCALS: Option<std::Vec<VirtAddr>> = None;
 
 //custom data starts at 0x4 from ap_startup
 
-use super::{platform_info::PlatformInfo, LapicRegisters, LAPIC_REGISTERS};
+use crate::acpi::{platform_info::PlatformInfo, LapicRegisters, LAPIC_REGISTERS};
 
 pub fn wake_cpus(platform_info: &PlatformInfo) {
     copy_trampoline();
 
     let start_page = unsafe { crate::memory::TRAMPOLINE_RESERVED.0 } >> 12;
     unsafe {
-        let stack_addr = crate::memory::PAGE_TREE_ALLOCATOR.allocate_contigious(STACK_SIZE_PAGES as u64); //2 pages
+        CPU_LOCALS = Some(std::Vec::new_with_capacity(platform_info.application_processors.len() + 1));
+        let bsp_local = super::cpu_locals::CpuLocals::new(
+            0,
+            0,
+            platform_info.boot_processor.apic_id,
+            platform_info.boot_processor.processor_id,
+        );
+        let bsp_local_ptr = add_cpu_locals(bsp_local);
+        crate::msr::set_msr(0xC0000101, bsp_local_ptr.0);
+
+
         let destination = crate::memory::TRAMPOLINE_RESERVED.0 as *mut u8;
         let comm_lock = destination.add(56);
-        (destination.add(32) as *mut u64).write_volatile(stack_addr.0 + (STACK_SIZE_PAGES * 0x1000) as u64);
         for cpu in platform_info.application_processors.iter().enumerate() {
+            let stack_addr = crate::memory::PAGE_TREE_ALLOCATOR.allocate_contigious(STACK_SIZE_PAGES as u64); //2 pages
+            (destination.add(32) as *mut u64).write_volatile(stack_addr.0 + (STACK_SIZE_PAGES * 0x1000) as u64);
             let lapic_registers = get_at_virtual_addr::<LapicRegisters>(LAPIC_REGISTERS);
             println!("Waking up CPU {}", cpu.1.apic_id);
 
@@ -43,8 +55,29 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
 
             send_mtrrs(comm_lock);
             send_cr_registers(comm_lock);
-            send_byte(cpu.1.processor_id, comm_lock);
+            
+            let ap_local = super::cpu_locals::CpuLocals::new(
+                stack_addr.0,
+                STACK_SIZE_PAGES as u64 * 0x1000,
+                cpu.1.apic_id,
+                cpu.1.processor_id,
+            );
+            let ap_local_ptr = add_cpu_locals(ap_local);
+
+            send_cpu_locals(ap_local_ptr.0, comm_lock);
             wait_for_cpus(cpu.0 as u8 + 1);
+        }
+    }
+}
+
+fn add_cpu_locals(locals: super::cpu_locals::CpuLocals) -> VirtAddr {
+    unsafe {
+        if let Some(cpu_locals) = &mut CPU_LOCALS {
+            let ptr = std::Box::leak(std::Box::new(locals)) as *const _ as u64;
+            cpu_locals.push(VirtAddr(ptr));
+            VirtAddr(cpu_locals.last().unwrap() as *const _ as u64)
+        } else {
+            panic!("CPU_LOCALS not initialized");
         }
     }
 }
@@ -60,7 +93,7 @@ fn copy_trampoline() {
         destination.0 <= 0xFFFFF,
         "memory addresss should be less than 1MB to initialize APs"
     );
-    let source = crate::ap_startup::ap_startup as *const () as *const u8;
+    let source = super::ap_startup::ap_startup as *const () as *const u8;
     let destination = destination.0 as *mut u8;
     for i in 0..0x1000 {
         unsafe {
@@ -79,7 +112,7 @@ fn copy_trampoline() {
             limit: gdt_ptr.limit,
             base: std::mem_utils::translate_virt_phys_addr(VirtAddr(gdt_ptr.base)).unwrap().0,
         };
-        let wait_loop_ptr = crate::ap_startup::ap_started_wait_loop as *const () as u64;
+        let wait_loop_ptr = super::ap_startup::ap_started_wait_loop as *const () as u64;
 
         (destination.add(4) as *mut u32).write_volatile(destination as u32);
         (destination.add(14) as *mut TablePointer).write_volatile(gdt_ptr);
@@ -103,18 +136,22 @@ pub fn wait_for_cpus(num_cpus: u8) {
             }
 
             let num = core::ptr::addr_of!(CPUS_INITIALIZED).read_volatile();
-            if num == num_cpus {
-                return;
-            }
-
             core::arch::asm!(
                 "mov [{lock}], {zero}",
                 "clflush [{lock}]",
                 zero = in(reg_byte) 0_u8,
                 lock = in(reg) core::ptr::addr_of!(CPU_LOCK)
-            )
+            );
+            if num == num_cpus {
+                return;
+            }
         }
     }
+}
+
+fn send_cpu_locals(ptr: u64, comm_lock: *mut u8) {
+    //TODO:
+    send_u64(ptr, comm_lock);
 }
 
 fn send_mtrrs(comm_lock: *mut u8) {
@@ -150,7 +187,7 @@ fn send_cr_registers(comm_lock: *mut u8) {
             "mov {cr0}, cr0",
             "mov {cr3}, cr3",
             "mov {cr4}, cr4",
-            
+
             cr0 = out(reg) cr0,
             cr3 = out(reg) cr3,
             cr4 = out(reg) cr4

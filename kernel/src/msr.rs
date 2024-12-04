@@ -19,12 +19,10 @@ pub fn set_msr(msr_id: u32, value: u64) {
     let edx = (value >> 32) as u32;
     unsafe {
         core::arch::asm!(
-            "mov ecx, {msr_id:e}",
             "wrmsr",
             in("edx") edx,
-            out("ecx") _,
             in("eax") eax,
-            msr_id = in(reg) msr_id
+            in("ecx") msr_id
         );
     }
 }

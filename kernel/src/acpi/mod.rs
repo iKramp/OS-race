@@ -1,5 +1,5 @@
 mod apic;
-mod cpus;
+mod smp;
 mod fadt;
 mod ioapic;
 mod madt;
@@ -9,7 +9,7 @@ mod rsdt;
 mod sdt;
 
 pub use apic::{LapicRegisters, LAPIC_REGISTERS};
-pub use cpus::{CPU_LOCK, CPUS_INITIALIZED};
+pub use smp::{CPU_LOCK, CPUS_INITIALIZED};
 use platform_info::PlatformInfo;
 
 use crate::{limine::LIMINE_BOOTLOADER_REQUESTS, memory::physical_allocator::BUDDY_ALLOCATOR, println};
@@ -57,7 +57,7 @@ pub fn init_acpi() {
     };
     apic::enable_apic(&platform_info, platform_info.boot_processor.processor_id);
     ioapic::init_ioapic(&platform_info);
-    cpus::wake_cpus(&platform_info);
+    smp::wake_cpus(&platform_info);
     crate::vga_text::set_vga_text_foreground((0, 255, 0));
     println!("ACPI initialized and APs started");
     crate::vga_text::reset_vga_color();

@@ -6,7 +6,6 @@ use crate::println;
 use core::arch::asm;
 
 use crate::{
-    interrupts::idt::TablePointer,
     memory::paging::PageTree,
     msr::{get_mtrr_cap, set_msr, set_mtrr_def_type},
 };
@@ -15,8 +14,6 @@ use crate::{
 extern "C" {
     pub fn ap_startup() -> !;
 }
-
-pub static mut NUM_CPUS: u64 = 1;
 
 #[no_mangle]
 pub extern "C" fn ap_started_wait_loop() -> ! {
@@ -34,8 +31,9 @@ pub extern "C" fn ap_started_wait_loop() -> ! {
     set_idt();
     PageTree::reload();
 
-    let processor_id = get_next_byte(comm_lock);
-
+    set_cpu_local(comm_lock);
+    let locals = super::cpu_locals::CpuLocals::get();
+    let processor_id = locals.processor_id;
     crate::acpi::init_acpi_ap(processor_id);
 
     set_initialized();
@@ -72,6 +70,11 @@ fn set_initialized() {
             initialized = in(reg) core::ptr::addr_of!(crate::acpi::CPUS_INITIALIZED)
         )
     }
+}
+
+fn set_cpu_local(comm_lock: *mut u8) {
+    let cpu_local_ptr = read_8_bytes(comm_lock);
+    crate::msr::set_msr(0xC0000101, cpu_local_ptr);
 }
 
 fn set_gdt() {

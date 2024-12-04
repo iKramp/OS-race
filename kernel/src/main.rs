@@ -7,7 +7,6 @@
 use std::panic::PanicInfo;
 
 mod acpi;
-mod ap_startup;
 mod cpuid;
 mod interrupts;
 mod keyboard;
