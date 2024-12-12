@@ -4,7 +4,7 @@
 #![feature(abi_x86_interrupt)]
 #![feature(stmt_expr_attributes)]
 
-use std::panic::PanicInfo;
+use std::{panic::PanicInfo, println, printlnc};
 
 mod acpi;
 mod cpuid;
@@ -22,8 +22,7 @@ use vga::vga_text;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    vga_text::set_vga_text_foreground((0, 0, 255));
-    println!("{}", info);
+    printlnc!((0, 0, 255), "{}", info);
     //std::panic::print_stack_trace();
     loop {}
 }
@@ -44,7 +43,7 @@ extern "C" fn _start() -> ! {
 
     acpi::init_acpi();
 
-    //vga_text::hello_message();
+    vga_text::hello_message();
 
     let last_time = crate::interrupts::time_since_boot();
     loop {

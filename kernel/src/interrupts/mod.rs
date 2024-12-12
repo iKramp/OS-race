@@ -1,6 +1,6 @@
 mod gdt;
-pub use gdt::{GDT_POINTER, set_cs};
-use crate::println;
+use std::{println, printlnc};
+pub use gdt::{set_cs, GDT_POINTER};
 #[macro_use]
 pub mod handlers;
 pub mod idt;
@@ -13,9 +13,7 @@ pub fn init_interrupts() {
     gdt::init_gdt(); //add a separate TSS for each core
     println!("initializing IDT");
     idt::init_idt();
-    crate::vga_text::set_vga_text_foreground((0, 255, 0));
-    println!("interrupts initialized");
-    crate::vga_text::reset_vga_color();
+    printlnc!((0, 255, 0), "interrupts initialized");
 }
 
 pub fn init_pic() {

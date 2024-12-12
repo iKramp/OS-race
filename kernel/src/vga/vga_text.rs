@@ -1,8 +1,10 @@
-use std::arch::asm;
 use crate::println;
+use std::arch::asm;
+use std::{print, printlnc};
 
 use super::font::*;
 use super::vga_driver::VGA_BINDING;
+use std::sync::mutex::*;
 
 #[derive(Debug)]
 pub struct VgaText {
@@ -56,11 +58,7 @@ impl VgaText {
                     true => self.foreground,
                     false => self.background,
                 };
-                crate::vga::vga_driver::draw_pixel(
-                    self.char * CHAR_WIDTH + i,
-                    curr_row,
-                    color,
-                );
+                crate::vga::vga_driver::draw_pixel(self.char * CHAR_WIDTH + i, curr_row, color);
             }
             curr_row += 1;
         }
@@ -96,101 +94,60 @@ impl VgaText {
 
 impl core::fmt::Write for VgaText {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        static mut PRINT_LOCK: u8 = 0;
-
-        let mut lock: u8 = 1;
-        while lock == 1 {
-            unsafe {
-                core::arch::asm!(
-                    "xchg {control}, [{lock}]",
-                    control = inout(reg_byte) lock,
-                    lock = in(reg) core::ptr::addr_of!(PRINT_LOCK)
-                )
-            }
-        }
-
         self.write_text(s);
-
-        unsafe {
-            core::arch::asm!(
-                "mov [{lock}], {zero}",
-                "clflush [{lock}]",
-                zero = in(reg_byte) 0_u8,
-                lock = in(reg) core::ptr::addr_of!(PRINT_LOCK)
-            )
-        }
-
         Ok(())
     }
 }
 
+impl std::Print for VgaText {
+    fn set_bg_color(&mut self, color: (u8, u8, u8)) {
+       self.background = color;
+    }
+
+    fn set_fg_color(&mut self, color: (u8, u8, u8)) {
+        self.foreground = color;
+    }
+
+    fn reset_color(&mut self) {
+        self.foreground = (255, 255, 255);
+        self.background = (0, 0, 0);
+    }
+}
+
 #[used]
-pub static mut VGA_TEXT: VgaText = VgaText {
+pub static mut VGA_TEXT: Mutex<VgaText> = Mutex::new(VgaText {
     background: (0, 0, 0),
     foreground: (255, 255, 255),
     height_lines: 0,
     width_chars: 0,
     line: 0,
     char: 0,
-};
+});
 
 pub fn init_vga_text(width: usize, height: usize) {
     unsafe {
-        VGA_TEXT.height_lines = height / (CHAR_HEIGHT);
-        VGA_TEXT.width_chars = width / (CHAR_WIDTH);
+        let mut display = VGA_TEXT.lock();
+        display.height_lines = height / (CHAR_HEIGHT);
+        display.width_chars = width / (CHAR_WIDTH);
         std::set_print(core::ptr::addr_of_mut!(VGA_TEXT));
     }
-}
-
-pub fn set_vga_text_foreground(color: (u8, u8, u8)) {
-    unsafe { VGA_TEXT.foreground = color }
-}
-pub fn set_vga_text_background(color: (u8, u8, u8)) {
-    unsafe { VGA_TEXT.background = color }
-}
-pub fn set_vga_text_colors(fg_color: (u8, u8, u8), bg_color: (u8, u8, u8)) {
-    set_vga_text_background(bg_color);
-    set_vga_text_foreground(fg_color);
-}
-
-pub fn reset_vga_color() {
-    set_vga_text_colors((255, 255, 255), (0, 0, 0));
 }
 
 pub fn clear_screen() {
     super::vga_driver::clear_screen();
     unsafe {
-        VGA_TEXT.line = 0;
-        VGA_TEXT.char = 0;
+        let mut display = VGA_TEXT.lock();
+        display.line = 0;
+        display.char = 0;
     }
 }
 
-#[macro_export]
-macro_rules! print {
-    ($($arg:tt)*) => ($crate::vga::vga_text::_print(format_args!($($arg)*)));
-}
 
-#[macro_export]
-macro_rules! println {
-    () => ($crate::print!("\n"));
-    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
-}
-
-#[doc(hidden)]
-pub fn _print(args: core::fmt::Arguments) {
-    use core::fmt::Write;
-    unsafe { VGA_TEXT.write_fmt(args).unwrap() };
-}
 
 pub fn hello_message() {
     print!("Hello via ");
 
-    set_vga_text_foreground((30, 105, 210));
-
-    println!("RustOS");
-
-    println!(
-        "
+    printlnc!((30, 105, 210), "RustOS\n
             .  :*. ## .*:  .            \n    
          :  @@*@@@@@@@@@@*@@  :         \n
         :@@@@@@@@@@  @@@@@@@@@@:        \n
@@ -214,5 +171,4 @@ pub fn hello_message() {
 
              "
     );
-    reset_vga_color();
 }

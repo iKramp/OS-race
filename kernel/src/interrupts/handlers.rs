@@ -1,8 +1,8 @@
 use crate::println;
 use crate::utils::{byte_form_port, byte_to_port};
-use crate::vga::vga_text::set_vga_text_foreground;
 #[allow(unused_imports)] //they are used in macros
 use core::arch::asm;
+use std::printlnc;
 
 #[derive(Debug)]
 #[repr(C)]
@@ -15,12 +15,10 @@ pub struct ExceptionStackFrame {
 }
 
 pub extern "x86-interrupt" fn invalid_opcode(stack_frame: ExceptionStackFrame) -> ! {
-    set_vga_text_foreground((0, 0, 255));
-    println!(
+    printlnc!((0, 0, 255),
         "EXCEPTION: INVALID OPCODE at {:#X}\n{:#X?}",
         stack_frame.instruction_pointer, stack_frame
     );
-    set_vga_text_foreground((255, 255, 255));
     unsafe {
         loop {
             asm!("hlt");
@@ -29,12 +27,10 @@ pub extern "x86-interrupt" fn invalid_opcode(stack_frame: ExceptionStackFrame) -
 }
 
 pub extern "x86-interrupt" fn breakpoint(stack_frame: ExceptionStackFrame) {
-    set_vga_text_foreground((0, 255, 255));
-    println!(
+    printlnc!((0, 255, 255),
         "Breakpoint reached at {:#X}",
         stack_frame.instruction_pointer
     );
-    set_vga_text_foreground((255, 255, 255));
     apic_eoi();
     legacy_eoi();
 }
@@ -62,13 +58,11 @@ impl From<u64> for PageFaultErrorCode {
 }
 
 pub extern "x86-interrupt" fn page_fault(stack_frame: ExceptionStackFrame, error_code: u64) -> ! {
-    set_vga_text_foreground((0, 0, 255));
-    println!(
+    printlnc!((0, 0, 255),
         "EXCEPTION: PAGE FAULT with error code\n{:#X?}\n{:#X?}",
         PageFaultErrorCode::from(error_code),
         stack_frame
     );
-    set_vga_text_foreground((255, 255, 255));
     unsafe {
         loop {
             asm!("hlt");
@@ -78,9 +72,7 @@ pub extern "x86-interrupt" fn page_fault(stack_frame: ExceptionStackFrame, error
 
 //gpf
 pub extern "x86-interrupt" fn general_protection_fault(stack_frame: ExceptionStackFrame, error_code: u64) -> ! {
-    set_vga_text_foreground((0, 0, 255));
-    println!("EXCEPTION: GPF\n{:#X?}\n{:#x?}", stack_frame, error_code);
-    set_vga_text_foreground((255, 255, 255));
+    printlnc!((0, 0, 255), "EXCEPTION: GPF\n{:#X?}\n{:#x?}", stack_frame, error_code);
     unsafe {
         loop {
             asm!("hlt");

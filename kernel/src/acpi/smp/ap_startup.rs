@@ -48,27 +48,12 @@ pub extern "C" fn ap_started_wait_loop() -> ! {
 
 fn set_initialized() {
     unsafe {
-        let mut lock: u8 = 1;
-        while lock == 1 {
-            core::arch::asm!(
-                "xchg {control}, [{lock}]",
-                control = inout(reg_byte) lock,
-                lock = in(reg) core::ptr::addr_of!(crate::acpi::CPU_LOCK)
-            )
+        let mut lock = true;
+        while lock == false {
+            lock = super::CPU_LOCK.swap(true, core::sync::atomic::Ordering::Relaxed)
         }
-
-        let num = core::ptr::addr_of!(crate::acpi::CPUS_INITIALIZED).read_volatile();
-
-        core::arch::asm!(
-            "mov [{initialized}], {num}",
-            "mov [{lock}], {zero}",
-            "clflush [{lock}]",
-            "clflush [{initialized}]",
-            zero = in(reg_byte) 0_u8,
-            num = in(reg_byte) num + 1,
-            lock = in(reg) core::ptr::addr_of!(crate::acpi::CPU_LOCK),
-            initialized = in(reg) core::ptr::addr_of!(crate::acpi::CPUS_INITIALIZED)
-        )
+        let cpus = super::CPUS_INITIALIZED.load(core::sync::atomic::Ordering::Relaxed);
+        super::CPUS_INITIALIZED.store(cpus + 1, core::sync::atomic::Ordering::Relaxed);
     }
 }
 

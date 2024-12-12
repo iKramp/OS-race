@@ -7,14 +7,15 @@ use crate::{
     msr::{get_msr, get_mtrr_cap, get_mtrr_def_type},
     println,
 };
+use core::sync::atomic::{AtomicBool, AtomicU8};
 use std::{
     mem_utils::{get_at_virtual_addr, VirtAddr},
     PageAllocator,
 };
 
 const STACK_SIZE_PAGES: usize = 2;
-pub static mut CPU_LOCK: u8 = 0;
-pub static mut CPUS_INITIALIZED: u8 = 0;
+pub static mut CPU_LOCK: AtomicBool = AtomicBool::new(false);
+pub static mut CPUS_INITIALIZED: AtomicU8 = AtomicU8::new(0);
 pub static mut CPU_LOCALS: Option<std::Vec<VirtAddr>> = None;
 
 //custom data starts at 0x4 from ap_startup
@@ -124,27 +125,10 @@ fn copy_trampoline() {
 }
 
 pub fn wait_for_cpus(num_cpus: u8) {
-    unsafe {
-        loop {
-            let mut lock: u8 = 1;
-            while lock == 1 {
-                core::arch::asm!(
-                    "xchg {control}, [{lock}]",
-                    control = inout(reg_byte) lock,
-                    lock = in(reg) core::ptr::addr_of!(CPU_LOCK)
-                )
-            }
-
-            let num = core::ptr::addr_of!(CPUS_INITIALIZED).read_volatile();
-            core::arch::asm!(
-                "mov [{lock}], {zero}",
-                "clflush [{lock}]",
-                zero = in(reg_byte) 0_u8,
-                lock = in(reg) core::ptr::addr_of!(CPU_LOCK)
-            );
-            if num == num_cpus {
-                return;
-            }
+    loop {
+        let mut cpus_initialized = unsafe { CPUS_INITIALIZED.load(core::sync::atomic::Ordering::Relaxed) };
+        if cpus_initialized == num_cpus {
+            break;
         }
     }
 }

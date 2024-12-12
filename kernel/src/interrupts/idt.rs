@@ -1,15 +1,12 @@
 use super::gdt::{DOUBLE_FAULT_IST, MACHINE_CHECK_IST, NMI_IST};
 use super::handlers::*;
-use crate::println;
-use crate::vga::vga_text::set_vga_text_foreground;
 use core::arch::asm;
+use std::printlnc;
 
 macro_rules! interrupt_message {
     ($name: expr) => {{
         extern "x86-interrupt" fn wrapper(_stack_frame: ExceptionStackFrame) -> ! {
-            set_vga_text_foreground((0, 0, 255));
-            println!("{} exception", $name);
-            set_vga_text_foreground((255, 255, 255));
+            printlnc!((0, 0, 255), "{} exception", $name);
             loop {}
         }
         wrapper

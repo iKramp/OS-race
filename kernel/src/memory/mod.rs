@@ -1,7 +1,7 @@
 pub mod paging;
 pub mod physical_allocator;
 
-use crate::println;
+use crate::{println, printlnc};
 use std::mem_utils::{self, PhysAddr, VirtAddr};
 use crate::LIMINE_BOOTLOADER_REQUESTS;
 
@@ -23,9 +23,7 @@ pub fn init_memory() {
         TRAMPOLINE_RESERVED = physical_allocator::BUDDY_ALLOCATOR.allocate_frame(); 
         println!("initializing pager");
         PAGE_TREE_ALLOCATOR = paging::PageTree::new();
-        crate::vga_text::set_vga_text_foreground((0, 255, 0));
-        println!("memory initialized");
-        crate::vga_text::reset_vga_color();
+        printlnc!((0, 255, 0), "memory initialized");
         #[allow(static_mut_refs)]
         {
             std::PAGE_ALLOCATOR = &mut PAGE_TREE_ALLOCATOR;

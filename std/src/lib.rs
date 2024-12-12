@@ -2,10 +2,12 @@
 #![no_std]
 #![feature(ptr_metadata)]
 #![feature(specialization)]
+#![feature(negative_impls)]
 
-mod print;
+pub mod print;
+pub use print::Print;
 
-pub use print::{set_print, test_fn};
+pub use print::set_print;
 
 pub mod heap;
 pub mod mem_utils;
@@ -69,8 +71,8 @@ pub mod rc;
 pub use core::result;
 pub use core::slice;
 pub use core::str;
-//string
-pub use core::sync;
+pub mod string;
+pub mod sync;
 pub use core::task;
 pub mod thread;
 pub use core::time;

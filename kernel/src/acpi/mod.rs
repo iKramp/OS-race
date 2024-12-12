@@ -8,19 +8,17 @@ mod rsdp;
 mod rsdt;
 mod sdt;
 
+use std::{Box, Vec};
+
 pub use apic::{LapicRegisters, LAPIC_REGISTERS};
-pub use smp::{CPU_LOCK, CPUS_INITIALIZED};
 use platform_info::PlatformInfo;
 
-use crate::{limine::LIMINE_BOOTLOADER_REQUESTS, memory::physical_allocator::BUDDY_ALLOCATOR, println};
+use crate::{limine::LIMINE_BOOTLOADER_REQUESTS, memory::physical_allocator::BUDDY_ALLOCATOR, println, printlnc};
 
 static mut PLATFORM_INFO: Option<PlatformInfo> = None;
 
 pub fn init_acpi() {
-    let Some(rsdp) = rsdp::get_rsdp_table(unsafe { (*LIMINE_BOOTLOADER_REQUESTS.rsdp_request.info).rsdp as u64 }) else {
-        return;
-    };
-    println!("rsdp is present");
+    let rsdp = rsdp::get_rsdp_table(unsafe { (*LIMINE_BOOTLOADER_REQUESTS.rsdp_request.info).rsdp as u64 }).expect("This os doesn not support PCs without ACPI");
     let rsdt = rsdt::get_rsdt(&rsdp);
     assert!(rsdt.validate());
     println!("rsdt is valid");
@@ -28,13 +26,27 @@ pub fn init_acpi() {
     let mut fadt = None;
     let mut madt = None;
 
-    for table in &rsdt.get_tables() {
+    let tables = rsdt.get_tables();
+    for table in &tables {
+        //print header signatures
+        unsafe {
+            let header = std::mem_utils::get_at_physical_addr::<sdt::AcpiSdtHeader>(*table);
+            let mut signature_clone = Vec::new();
+            for i in 0..4 {
+                signature_clone.push(header.signature[i]);
+            }
+            let signature = std::string::String::from_utf8(signature_clone).unwrap();
+            println!("{}", signature);
+        }
+    }
+    for table in &tables {
         unsafe {
             let header = std::mem_utils::get_at_physical_addr::<sdt::AcpiSdtHeader>(*table);
             match &header.signature {
                 b"FACP" => fadt = Some(std::mem_utils::get_at_physical_addr::<fadt::Fadt>(*table)),
                 b"APIC" => madt = Some(std::mem_utils::get_at_physical_addr::<madt::Madt>(*table)),
                 _ => {} //any other tables except SSDT, those are parsed after DSDT
+                        //qemu only reports FACP, APIC, HPET and WAET
             }
         }
     }
@@ -58,9 +70,7 @@ pub fn init_acpi() {
     apic::enable_apic(&platform_info, platform_info.boot_processor.processor_id);
     ioapic::init_ioapic(&platform_info);
     smp::wake_cpus(&platform_info);
-    crate::vga_text::set_vga_text_foreground((0, 255, 0));
-    println!("ACPI initialized and APs started");
-    crate::vga_text::reset_vga_color();
+    printlnc!((0, 255, 0), "ACPI initialized and APs started");
 
     //after loading dsdt
     /*
