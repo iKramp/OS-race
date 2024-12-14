@@ -1,4 +1,5 @@
 mod apic;
+mod aml;
 mod smp;
 mod fadt;
 mod ioapic;
