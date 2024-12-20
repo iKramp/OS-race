@@ -6,7 +6,7 @@ use crate::{boxed::Box, println};
 
 use super::spec_from_elem::SpecFromElem;
 
-pub struct Vec<T: 'static> {
+pub struct Vec<T> {
     size: usize,
     capacity: usize,
     data: *mut T,

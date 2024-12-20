@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
-members = [
+members = [ 
+    "aml_new/functions",
+    "aml_new/macros",
     "kernel",
     "kernel_test",
     "std"

@@ -1,9 +1,13 @@
 use std::{Box, Vec};
 
 use super::data_object::{ComputationalData, EXT_OP_PREFIX};
+use super::name_objects::{SimpleName, SuperName, Target};
 use super::package::PkgLength;
-use super::term_objects::TermArg;
+use super::term_objects::{MethodInvocation, TermArg};
 use super::Integer;
+
+use functions::*;
+use macros::*;
 
 const ACQUIRE_OP: [u8; 2] = [EXT_OP_PREFIX, 0x23];
 const ADD_OP: u8 = 0x72;
@@ -78,23 +82,77 @@ impl MatchOpcode {
     }
 }
 
+//#[derive(EnumNewMacro)]
+pub enum ExpressionOpcode {
+    Acquire(DefAcquire),
+    Add(DefAdd),
+    And(DefAnd),
+    Buffer(DefBuffer),
+    Concat(DefConcat),
+    ConcatRes(DefConcatRes),
+    CondRefOf(DefCondRefOf),
+    CopyObject(DefCopyObject),
+    Decrement(DefDecrement),
+    DerefOf(DefDerefOf),
+    Divide(DefDivide),
+    FindSetLeftBit(DefFindSetLeftBit),
+    FindSetRightBit(DefFindSetRightBit),
+    FromBcd(DefFromBcd),
+    Increment(DefIncrement),
+    Index(DefIndex),
+    LAnd(DefLAnd),
+    LEqual(DefLEqual),
+    LGreater(DefLGreater),
+    LLess(DefLLess),
+    Mid(DefMid),
+    LNot(DefLNot),
+    LoadTable(DefLoadTable),
+    Load(DefLoad),//not in specification?
+    LOr(DefLOr),
+    Match(DefMatch),
+    Mod(DefMod),
+    Multiply(DefMultiply),
+    Nand(DefNand),
+    Nor(DefNor),
+    Not(DefNot),
+    ObjectType(DefObjectType),
+    Or(DefOr),
+    Package(DefPackage),
+    VarPackage(DefVarPackage),
+    RefOf(DefRefOf),
+    ShiftLeft(DefShiftLeft),
+    ShiftRight(DefShiftRight),
+    SizeOf(DefSizeOf),
+    Store(DefStore),
+    Subtract(DefSubtract),
+    Timer(DefTimer),
+    ToBcd(DefToBcd),
+    ToBuffer(DefToBuffer),
+    ToDecString(DefToDecString),
+    ToHexString(DefToHexString),
+    ToInteger(DefToInteger),
+    ToString(DefToString),
+    Wait(DefWait),
+    Xor(DefXor),
+    MethodInvocation(MethodInvocation),
+}
+
 struct DefAcquire {
     //TODO: MutexObject
     timeout: u16,
 }
 
+#[new_aml_struct(ADD_OP)]
 struct DefAdd {
-    operand1: TermArg<Integer>,
-    operand2: TermArg<Integer>,
-    //TODO:
-    //target
+    operand1: TermArg,
+    operand2: TermArg,
+    target: Target,
 }
 
 struct DefAnd {
-    operand1: TermArg<Integer>,
-    operand2: TermArg<Integer>,
-    //TODO:
-    //target
+    operand1: TermArg,
+    operand2: TermArg,
+    target: Target,
 }
 
 pub struct DefBuffer {
@@ -105,47 +163,37 @@ pub struct DefBuffer {
 impl DefBuffer {
     pub fn new(data: &[u8]) -> (Self, usize) {
         debug_assert_eq!(data[0], BUFFER_OP);//sanity check
-        let pkg_length = super::package::PkgLength::new(data);
-        let (buf_size, skip_buf_size) = (0, 0); //evaluate term arg
-        let mut buf_data = Vec::new();
-        for i in 0..buf_size {
-            buf_data.push(data[i as usize]);
-        }
-        return (Self {
-            pkg_length,
-            byte_list: buf_data,
-        }, buf_size + 1 + skip_buf_size);
+        todo!();
     }
 }
 
 struct DefConcat {
-    operand1: TermArg<ComputationalData>,
-    operand2: TermArg<ComputationalData>,
-    //TODO:
-    //target
+    operand1: TermArg,
+    operand2: TermArg,
+    target: Target,
 }
 
 struct DefConcatRes {
     //TODO:
     //operand1
     //operand2
-    //target
+    target: Target,
 }
 
 struct DefCondRefOf {
     //TODO:
     //name
-    //target
+    target: Target,
 }
 
-struct DefCopyObject<T> {
-    source: TermArg<T>,
+struct DefCopyObject {
+    source: TermArg,
     //TODO:
-    //destination: SimpleName
+    destination: SimpleName,
 }
 
 struct DefDecrement {
-    //TODO: operand: SuperName,
+    operand: SuperName,
 }
 
 pub trait Dereferencable {
@@ -153,37 +201,33 @@ pub trait Dereferencable {
 }
 
 struct DefDerefOf {
-    operator: TermArg<Box<dyn Dereferencable>>,
+    operator: TermArg,
 }
 
 struct DefDivide {
-    dividend: TermArg<Integer>,
-    divisor: TermArg<Integer>,
-    //TODO:
-    //remainder: target
-    //quotient: target
+    dividend: TermArg,
+    divisor: TermArg,
+    remainder: Target,
+    quotient: Target,
 }
 
 struct DefFindSetLeftBit {
-    operand: TermArg<Integer>,
-    //TODO:
-    //target
+    operand: TermArg,
+    target: Target,
 }
 
 struct DefFindSetRightBit {
-    operand: TermArg<Integer>,
-    //TODO:
-    //target
+    operand: TermArg,
+    target: Target,
 }
 
 struct DefFromBcd {
-    operand: TermArg<Integer>,
-    //TODO:
-    //target
+    operand: TermArg,
+    target: Target,
 }
 
 struct DefIncrement {
-    //TODO: operand: SuperName,
+    operand: SuperName,
 }
 
 pub trait Indexable {
@@ -191,60 +235,59 @@ pub trait Indexable {
 }
 
 struct DefIndex {
-    operand: TermArg<Box<dyn Indexable>>,
-    index: TermArg<Integer>,
+    operand: TermArg,
+    index: TermArg,
 }
 
 struct DefLAnd {
-    operand1: TermArg<Integer>,
-    operand2: TermArg<Integer>,
+    operand1: TermArg,
+    operand2: TermArg,
 }
 
 struct DefLEqual {
-    operand1: TermArg<Integer>,
-    operand2: TermArg<Integer>,
+    operand1: TermArg,
+    operand2: TermArg,
 }
 
 struct DefLGreater {
-    operand1: TermArg<Integer>,
-    operand2: TermArg<Integer>,
+    operand1: TermArg,
+    operand2: TermArg,
 }
 
 struct DefLLess {
-    operand1: TermArg<Integer>,
-    operand2: TermArg<Integer>,
+    operand1: TermArg,
+    operand2: TermArg,
 }
 
 struct DefLNot {
-    operand: TermArg<Integer>,
+    operand: TermArg,
 }
 
 struct DefLoad {
     name: super::name_objects::NameString,
-    //TODO:
-    //target
+    target: Target,
 }
 
 struct DefLoadTable {//TODO: check documentation
-    arg0: TermArg<()>,
-    arg1: TermArg<()>,
-    arg2: TermArg<()>,
-    arg3: TermArg<()>,
-    arg4: TermArg<()>,
-    arg5: TermArg<()>,
+    arg0: TermArg,
+    arg1: TermArg,
+    arg2: TermArg,
+    arg3: TermArg,
+    arg4: TermArg,
+    arg5: TermArg,
 }
 
 struct DefLOr {
-    operand1: TermArg<Integer>,
-    operand2: TermArg<Integer>,
+    operand1: TermArg,
+    operand2: TermArg,
 }
 
 struct DefMatch {
-    search_pkg: TermArg<super::package::Packgage>,
-    operand1: TermArg<Integer>,
+    search_pkg: TermArg,
+    operand1: TermArg,
     operator: MatchOpcode,
-    operand2: TermArg<Integer>,
-    start_index: TermArg<Integer>,
+    operand2: TermArg,
+    start_index: TermArg,
 }
 
 enum MidObj {
@@ -253,45 +296,39 @@ enum MidObj {
 }
 
 struct DefMid {
-    arg1: TermArg<MidObj>,//TODO:
-    arg2: TermArg<()>,
-    arg3: TermArg<()>,
-    //TODO:
-    //target
+    arg1: TermArg,
+    arg2: TermArg,
+    arg3: TermArg,
+    target: Target,
 }
 
 struct DefMod {
-    dividend: TermArg<Integer>,
-    divisor: TermArg<Integer>,
-    //TODO:
-    //target
+    dividend: TermArg,
+    divisor: TermArg,
+    remainder: Target,
 }
 
 struct DefMultiply {
-    operand1: TermArg<Integer>,
-    operand2: TermArg<Integer>,
-    //TODO:
-    //target
+    operand1: TermArg,
+    operand2: TermArg,
+    target: Target,
 }
 
 struct DefNand {
-    operand1: TermArg<Integer>,
-    operand2: TermArg<Integer>,
-    //TODO:
-    //target
+    operand1: TermArg,
+    operand2: TermArg,
+    target: Target,
 }
 
 struct DefNor {
-    operand1: TermArg<Integer>,
-    operand2: TermArg<Integer>,
-    //TODO:
-    //target
+    operand1: TermArg,
+    operand2: TermArg,
+    target: Target,
 }
 
 struct DefNot {
-    operand: TermArg<Integer>,
-    //TODO:
-    //target
+    operand: TermArg,
+    target: Target,
 }
 
 struct DefObjectType {
@@ -299,14 +336,165 @@ struct DefObjectType {
 }
 
 struct DefOr {
-    operand1: TermArg<Integer>,
-    operand2: TermArg<Integer>,
-    //TODO:
-    //target
+    operand1: TermArg,
+    operand2: TermArg,
+    target: Target,
 }
 
-struct DefPackage {
-    length: PkgLength,
-    num_elements: u8,
-    //TODO: package_element_list: 
+pub struct DefPackage {
+    elemtn_list: PackageElementList,
+}
+
+impl DefPackage {
+    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
+        //sanity check
+        debug_assert_eq!(data[0], PACKAGE_OP);
+        let (pkg_length, skip_pkg_len) = PkgLength::new(&data[1..]);
+        let num_elements = data[skip_pkg_len + 1];
+        let (element_list, skip_element_list) = PackageElementList::new_with_len(&data[skip_pkg_len + 2..], num_elements as usize);
+        debug_assert!(skip_element_list + skip_pkg_len + 2 == pkg_length.get_length() as usize);
+        return Some((Self { elemtn_list: element_list }, pkg_length.get_length() as usize + 1));
+    }
+}
+
+struct PackageElementList {
+    elements: Vec<PackageElement>,
+}
+
+impl PackageElementList {
+    pub fn new_with_len(data: &[u8], num_items: usize) -> (Self, usize) {
+        let mut elements = Vec::new();
+        let mut skip = 0;
+        for _ in 0..num_items {
+            let (element, skip_element) = PackageElement::new(&data[skip..]);
+            elements.push(element);
+            skip += skip_element;
+        }
+        return (Self { elements }, skip);
+    }
+
+    //reads whole buffer
+    pub fn new(data: &[u8]) -> Self {
+        let mut elements = Vec::new();
+        let mut skip = 0;
+        while skip < data.len() {
+            let (element, skip_element) = PackageElement::new(&data[skip..]);
+            elements.push(element);
+            skip += skip_element;
+        }
+        //sanity check
+        debug_assert_eq!(skip, data.len());
+        return Self { elements };
+    }
+}
+
+
+enum PackageElement {
+    DataRefObject(super::data_object::DataRefObject),
+    NameString(super::name_objects::NameString),
+}
+
+impl PackageElement {
+    pub fn new(data: &[u8]) -> (Self, usize) {
+        let ref_object = super::data_object::DataRefObject::aml_new(data);
+        match ref_object {
+            Some((obj, skip)) => return (Self::DataRefObject(obj), skip),
+            None => {
+                let name_string = super::name_objects::NameString::aml_new(data).unwrap();
+                return (Self::NameString(name_string.0), name_string.1.into());
+            }
+        }
+    }
+}
+
+pub struct DefVarPackage {
+    num_elements: TermArg,
+    element_list: PackageElementList
+}
+
+impl DefVarPackage {
+    pub fn new(data: &[u8]) -> (Self, usize) {
+        //sanity check
+        debug_assert_eq!(data[0], PACKAGE_OP);
+        let (pkg_length, skip_pkg_len) = PkgLength::new(&data[1..]);
+        let (num_elements_arg, skip_num_elements_arg) = TermArg::aml_new(&data[skip_pkg_len + 1..]).unwrap();
+        let element_list = PackageElementList::new(&data[skip_pkg_len + 1 + skip_num_elements_arg..pkg_length.get_length() as usize + 1]);
+        return (Self { element_list, num_elements: num_elements_arg }, pkg_length.get_length() as usize + 1);
+    }
+}
+
+struct DefRefOf {
+    operand: SuperName,
+}
+
+struct DefShiftLeft {
+    operand: TermArg,
+    count: TermArg,
+    target: Target,
+}
+
+struct DefShiftRight {
+    operand: TermArg,
+    count: TermArg,
+    target: Target,
+}
+
+struct DefSizeOf {
+    operand: SuperName,
+}
+
+struct DefStore {
+    value: TermArg,
+    target: SuperName,
+}
+
+struct DefSubtract {
+    operand1: TermArg,
+    operand2: TermArg,
+    target: Target,
+}
+
+struct DefTimer;//no fields
+
+struct DefToBcd {
+    operand: TermArg,
+    target: Target,
+}
+
+struct DefToBuffer {
+    operand: TermArg,
+    target: Target,
+}
+
+struct DefToDecString {
+    operand: TermArg,
+    target: Target,
+}
+
+struct DefToHexString {
+    operand: TermArg,
+    target: Target,
+}
+
+struct DefToInteger {
+    operand: TermArg,
+    target: Target,
+}
+
+struct DefToString {
+    operand: TermArg,
+    length_arg: TermArg,
+    target: Target,
+}
+
+struct DefWait {
+    //TODO:
+    //event
+    operand: TermArg,
+}
+
+struct DefXor {
+    operand1: TermArg,
+    operand2: TermArg,
+    target: Target,
 }

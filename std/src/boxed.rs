@@ -2,8 +2,8 @@ use core::ptr::{addr_of_mut, null_mut, DynMetadata};
 
 #[repr(transparent)]
 #[derive(Debug)]
-pub struct Box<T: ?Sized + 'static> {
-    data: &'static mut T,
+pub struct Box<T: ?Sized> {
+    data: *mut T,
 }
 
 impl<T> Box<T> {
@@ -47,7 +47,7 @@ impl<T> core::ops::Deref for Box<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        self.data
+        unsafe {&*self.data} 
     }
 }
 
@@ -61,12 +61,12 @@ impl<T> core::ops::Deref for Box<[T]> {
 
 impl<T> core::ops::DerefMut for Box<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { &mut *(self.data as *mut T) }
+        unsafe { &mut *self.data }
     }
 }
 
 impl<T> core::ops::DerefMut for Box<[T]> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { &mut *(self.data as *mut [T]) }
+        unsafe { &mut *self.data }
     }
 }

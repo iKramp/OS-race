@@ -1,3 +1,7 @@
+use std::Box;
+
+use functions::EnumNew;
+
 use super::expression_opcodes::BUFFER_OP;
 
 const BYTE_PREFIX: u8 = 0x0A;
@@ -24,7 +28,7 @@ pub enum ComputationalData {
 }
 
 impl ComputationalData {
-    pub fn new(data: &[u8]) -> Option<(Self, usize)> {//returns if valid, also returns the number
+    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {//returns if valid, also returns the number
                                                       //of bytes read
         match data[0] {
             BYTE_PREFIX => Some((Self::ByteConst(ByteConst::new(data)), 2)),
@@ -52,9 +56,28 @@ impl ComputationalData {
     }
 }
 
-//TODO: 
-//Data object
-//Data ref object
+pub enum DataObject {
+    Computational(ComputationalData),
+    Package(super::expression_opcodes::DefPackage),
+    VarPackage(super::expression_opcodes::DefVarPackage),
+}
+
+impl EnumNew for DataObject {
+    fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
+        todo!();
+    }
+}
+
+pub enum DataRefObject {
+    DataObject(DataObject),
+    DataRefObject(Box<DataRefObject>),
+}
+
+impl DataRefObject {
+    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
+        todo!();
+    }
+}
 
 struct ByteConst(u8);
 

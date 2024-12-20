@@ -14,6 +14,8 @@ run_tests = []
 [dependencies]
 kernel_test = { path = "../kernel_test"}
 std = { path = "../std", features = ["test_includes"] }
+macros = { path = "../aml_new/macros" }
+functions = { path = "../aml_new/functions" }
 
 [profile.dev]
 panic = "unwind"

@@ -4,6 +4,14 @@
 #![feature(specialization)]
 #![feature(negative_impls)]
 
+
+#[panic_handler]
+fn panic(info: &PanicInfo) -> ! {
+    printlnc!((0, 0, 255), "{}", info);
+    //std::panic::print_stack_trace();
+    loop {}
+}
+
 pub mod print;
 pub use print::Print;
 
@@ -21,6 +29,7 @@ pub use core::any;
 pub use core::arch;
 pub use core::array;
 pub use core::ascii;
+use core::panic::PanicInfo;
 //backtrace
 pub mod boxed;
 pub use boxed::*;

@@ -4,7 +4,7 @@
 #![feature(abi_x86_interrupt)]
 #![feature(stmt_expr_attributes)]
 
-use std::{panic::PanicInfo, println, printlnc};
+use std::{println, printlnc};
 
 mod acpi;
 mod cpuid;
@@ -20,14 +20,8 @@ mod vga;
 use limine::LIMINE_BOOTLOADER_REQUESTS;
 use vga::vga_text;
 
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    printlnc!((0, 0, 255), "{}", info);
-    //std::panic::print_stack_trace();
-    loop {}
-}
-
 pub struct BootInfo {}
+
 
 #[no_mangle]
 extern "C" fn _start() -> ! {
@@ -45,13 +39,6 @@ extern "C" fn _start() -> ! {
 
     vga_text::hello_message();
 
-    let last_time = crate::interrupts::time_since_boot();
-    loop {
-        if last_time + std::time::Duration::from_millis(1) < crate::interrupts::time_since_boot() {
-            break;
-        }
-    }
-
     #[cfg(feature = "run_tests")]
     {
         println!("Running tests");
@@ -66,6 +53,6 @@ extern "C" fn _start() -> ! {
     loop {
         a += 1;
         println!("{}", a);
-        std::thread::sleep(std::time::Duration::from_secs(1));
+        std::thread::sleep(std::time::Duration::from_secs(10));
     }
 }
