@@ -1,8 +1,8 @@
 use std::Box;
 
-use functions::EnumNew;
+use functions::*;
+use macros::*;
 
-use super::expression_opcodes::BUFFER_OP;
 
 const BYTE_PREFIX: u8 = 0x0A;
 const WORD_PREFIX: u8 = 0x0B;
@@ -16,6 +16,7 @@ const ONES_OP: u8 = 0xFF;
 const REVISION_OP: u8 = 0x30;
 pub const EXT_OP_PREFIX: u8 = 0x5B;
 
+#[derive(EnumNewMacro)]
 pub enum ComputationalData {
     ByteConst(ByteConst),
     WordConst(WordConst),
@@ -23,37 +24,8 @@ pub enum ComputationalData {
     QWordConst(QWordConst),
     String(StringConst),
     ConstObj(ConstObj),
-    RevisionOp,
+    RevisionOp(RevisionOp),
     Buffer(super::expression_opcodes::DefBuffer),
-}
-
-impl ComputationalData {
-    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {//returns if valid, also returns the number
-                                                      //of bytes read
-        match data[0] {
-            BYTE_PREFIX => Some((Self::ByteConst(ByteConst::new(data)), 2)),
-            WORD_PREFIX => Some((Self::WordConst(WordConst::new(data)), 3)),
-            DWORD_PREFIX => Some((Self::DWordConst(DWordConst::new(data)), 5)),
-            QWORD_PREFIX => Some((Self::QWordConst(QWordConst::new(data)), 9)),
-            STRING_PREFIX => {
-                let str_const = StringConst::new(data);
-                let len = str_const.0.len();
-                Some((Self::String(str_const), len + 2))//str len + prefix + null char
-            },
-            ZERO_OP | ONE_OP | ONES_OP => Some((Self::ConstObj(ConstObj::new(data)), 1)),
-            EXT_OP_PREFIX => {
-                match data[1] {
-                    REVISION_OP => Some((Self::RevisionOp, 2)),
-                    _ => None,
-                }
-            }
-            BUFFER_OP => {
-                let (buffer, skip) = super::expression_opcodes::DefBuffer::new(data);
-                Some((Self::Buffer(buffer), skip))
-            }
-            _ => None,
-        }
-    }
 }
 
 pub enum DataObject {
@@ -82,56 +54,62 @@ impl DataRefObject {
 struct ByteConst(u8);
 
 impl ByteConst {
-    pub fn new(data: &[u8]) -> Self {
-        //sanity check prefix
-        debug_assert_eq!(data[0], BYTE_PREFIX);
-        Self(data[1])
+    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
+        if data[0] != BYTE_PREFIX {
+            return None;
+        }
+        Some((Self(data[1]), 2))
     }
 }
 
 struct WordConst(u16);
 
 impl WordConst {
-    pub fn new(data: &[u8]) -> Self {
-        //sanity check prefix
-        debug_assert_eq!(data[0], WORD_PREFIX);
-        Self(u16::from_le_bytes([data[1], data[2]]))
+    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
+        if data[0] != WORD_PREFIX {
+            return None;
+        }
+        Some((Self(u16::from_le_bytes([data[1], data[2]])), 3))
     }
 }
 
 struct DWordConst(u32);
 
 impl DWordConst {
-    pub fn new(data: &[u8]) -> Self {
-        //sanity check prefix
-        debug_assert_eq!(data[0], DWORD_PREFIX);
-        Self(u32::from_le_bytes([data[1], data[2], data[3], data[4]]))
+    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
+        if data[0] != DWORD_PREFIX {
+            return None;
+        }
+        Some((Self(u32::from_le_bytes([data[1], data[2], data[3], data[4]])), 5))
     }
 }
 
 struct QWordConst(u64);
 
 impl QWordConst {
-    pub fn new(data: &[u8]) -> Self {
-        //sanity check prefix
-        debug_assert_eq!(data[0], QWORD_PREFIX);
-        Self(u64::from_le_bytes([data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8]]))
+    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
+        if data[0] != QWORD_PREFIX {
+            return None;
+        }
+        Some((Self(u64::from_le_bytes([data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8]])), 9))
     }
 }
 
 struct StringConst(std::Vec<u8>);//ascii chars, terminated by null
 
 impl StringConst {
-    pub fn new(data: &[u8]) -> Self {
-        //sanity check prefix
-        debug_assert_eq!(data[0], STRING_PREFIX);
+    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
+        if data[0] != STRING_PREFIX {
+            return None;
+        }
         let mut vec = std::Vec::new();
         let mut i = 1;
         while data[i] != 0 {
             vec.push(data[i]);
             i += 1;
         }
-        Self(vec)
+
+        return Some((Self(vec), i + 1));
     }
 }
 
@@ -142,12 +120,16 @@ enum ConstObj {
 }
 
 impl ConstObj {
-    pub fn new(data: &[u8]) -> Self {
+    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
         match data[0] {
-            ZERO_OP => Self::ZeroOp,
-            ONE_OP => Self::OneOp,
-            ONES_OP => Self::OnesOp,
+            ZERO_OP => Some((Self::ZeroOp, 1)),
+            ONE_OP => Some((Self::OneOp, 1)),
+            ONES_OP => Some((Self::OnesOp, 1)),
             _ => panic!("Invalid ConstObj prefix"),
         }
     }
 }
+
+#[derive(StructNewMacro)]
+#[op_prefix(REVISION_OP)]
+struct RevisionOp;

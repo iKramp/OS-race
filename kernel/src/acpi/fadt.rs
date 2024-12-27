@@ -4,7 +4,7 @@ use std::mem_utils::PhysAddr;
 pub struct Fadt {
     header: super::sdt::AcpiSdtHeader,
     firmware_ctrl: u32,
-    dsdt: u32,
+    pub dsdt: u32,
     reserved_0: u8,
     preffered_pm_profile: u8,
     sci_int: u16,

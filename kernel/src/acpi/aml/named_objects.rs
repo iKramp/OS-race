@@ -66,17 +66,11 @@ impl FieldFlags {
     }
 }
 
-pub enum NamedObj {
-    BankField(DefBankField),
-}
+pub enum NamedObj {}
 
 impl NamedObj {
-    pub fn new(data: &[u8]) -> Option<(Self, usize)> {
-        if let Some((bank_field, skip)) = DefBankField::new(data) {
-            return Some((Self::BankField(bank_field), skip));
-        }
-        
-        todo!("a lot of options");
+    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
+        todo!("named obj a bit sus here");
     }
 }
 
@@ -110,17 +104,19 @@ impl DefBankField {
 
         let (field_list, skip_field_list) = FieldList::new(&data[skip..(pkg_length.get_length() + 2)]).unwrap();
         skip += skip_field_list;
-        
-        Some((Self {
-            name_1,
-            name_2,
-            bank_value,
-            field_flags,
-            field_list,
-        }, skip))
+
+        Some((
+            Self {
+                name_1,
+                name_2,
+                bank_value,
+                field_flags,
+                field_list,
+            },
+            skip,
+        ))
     }
 }
-
 
 struct FieldList {
     fields: Vec<FieldElement>,
@@ -132,6 +128,4 @@ impl FieldList {
     }
 }
 
-enum FieldElement {
-    
-}
+enum FieldElement {}

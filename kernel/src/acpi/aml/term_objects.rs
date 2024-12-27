@@ -1,5 +1,5 @@
 use std::{Vec, Box};
-use macros::EnumNewMacro;
+use macros::{op_prefix, EnumNewMacro};
 use functions::EnumNew;
 
 use super::arg_local_obj::{ArgObj, LocalObj};
@@ -58,6 +58,12 @@ pub struct MethodInvocation {
     name: NameString,
 }
 
+impl MethodInvocation {
+    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
+        todo!()
+    }
+}
+
 #[repr(transparent)]
 struct TermArgList {
     args: Vec<TermArg>,
@@ -86,13 +92,8 @@ impl TermArgList {
 }
 
 
+#[derive(EnumNewMacro)]
 enum Object {
     NameSpaceModifierObj(NameSpaceModifierObj),
     NamedObj(NamedObj)
-}
-
-impl Object {
-    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
-        todo!()
-    }
 }

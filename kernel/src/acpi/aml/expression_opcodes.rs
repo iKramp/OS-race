@@ -1,10 +1,9 @@
-use std::{Box, Vec};
+use std::Vec;
 
-use super::data_object::{ComputationalData, EXT_OP_PREFIX};
+use super::data_object::EXT_OP_PREFIX;
 use super::name_objects::{SimpleName, SuperName, Target};
 use super::package::PkgLength;
 use super::term_objects::{MethodInvocation, TermArg};
-use super::Integer;
 
 use functions::*;
 use macros::*;
@@ -53,7 +52,8 @@ const SUBTRACT_OP: u8 = 0x74;
 const TIMER_OP: [u8; 2] = [0x5B, 0x33];
 const TO_BCD_OP: [u8; 2] = [EXT_OP_PREFIX, 0x29];
 const TO_BUFFER_OP: u8 = 0x96;
-const TO_DEC_STRING_OP: u8 = 0x98;
+const TO_DEC_STRING_OP: u8 = 0x97;
+const TO_HEX_STRING_OP: u8 = 0x98;
 const TO_INTEGER_OP: u8 = 0x99;
 const TO_STRING_OP: u8 = 0x9C;
 const WAIT_OP: [u8; 2] = [0x5B, 0x25];
@@ -69,20 +69,20 @@ enum MatchOpcode {
 }
 
 impl MatchOpcode {
-    pub fn from_u8(val: u8) -> Option<Self> {
-        match val {
-            x if x == Self::MTR as u8 => Some(Self::MTR),
-            x if x == Self::MatchEqual as u8 => Some(Self::MatchEqual),
-            x if x == Self::MatchLessEqual as u8 => Some(Self::MatchLessEqual),
-            x if x == Self::MatchLess as u8 => Some(Self::MatchLess),
-            x if x == Self::MatchGreaterEqual as u8 => Some(Self::MatchGreaterEqual),
-            x if x == Self::MatchGreater as u8 => Some(Self::MatchGreater),
+    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
+        match data[0] {
+            x if x == Self::MTR as u8 => Some((Self::MTR, 1)),
+            x if x == Self::MatchEqual as u8 => Some((Self::MatchEqual, 1)),
+            x if x == Self::MatchLessEqual as u8 => Some((Self::MatchLessEqual, 1)),
+            x if x == Self::MatchLess as u8 => Some((Self::MatchLess, 1)),
+            x if x == Self::MatchGreaterEqual as u8 => Some((Self::MatchGreaterEqual, 1)),
+            x if x == Self::MatchGreater as u8 => Some((Self::MatchGreater, 1)),
             _ => None,
         }
     }
 }
 
-//#[derive(EnumNewMacro)]
+#[derive(EnumNewMacro)]
 pub enum ExpressionOpcode {
     Acquire(DefAcquire),
     Add(DefAdd),
@@ -107,7 +107,7 @@ pub enum ExpressionOpcode {
     Mid(DefMid),
     LNot(DefLNot),
     LoadTable(DefLoadTable),
-    Load(DefLoad),//not in specification?
+    Load(DefLoad), //not in specification?
     LOr(DefLOr),
     Match(DefMatch),
     Mod(DefMod),
@@ -142,13 +142,26 @@ struct DefAcquire {
     timeout: u16,
 }
 
-#[new_aml_struct(ADD_OP)]
+impl DefAcquire {
+    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
+        //sanity check
+        debug_assert_eq!(data[0], ACQUIRE_OP[0]);
+        debug_assert_eq!(data[1], ACQUIRE_OP[1]);
+        let timeout = u16::from_le_bytes([data[2], data[3]]);
+        return Some((Self { timeout }, 4));
+    }
+}
+
+#[derive(StructNewMacro)]
+#[op_prefix(ADD_OP)]
 struct DefAdd {
     operand1: TermArg,
     operand2: TermArg,
     target: Target,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(AND_OP)]
 struct DefAnd {
     operand1: TermArg,
     operand2: TermArg,
@@ -161,37 +174,44 @@ pub struct DefBuffer {
 }
 
 impl DefBuffer {
-    pub fn new(data: &[u8]) -> (Self, usize) {
-        debug_assert_eq!(data[0], BUFFER_OP);//sanity check
+    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
+        debug_assert_eq!(data[0], BUFFER_OP); //sanity check
         todo!();
     }
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(CONCAT_OP)]
 struct DefConcat {
     operand1: TermArg,
     operand2: TermArg,
     target: Target,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(CONCAT_RES_OP)]
 struct DefConcatRes {
-    //TODO:
-    //operand1
-    //operand2
+    operand1: TermArg,
+    operand2: TermArg,
     target: Target,
 }
 
+#[derive(StructNewMacro)]
+#[ext_op_prefix(COND_REF_OF_OP)]
 struct DefCondRefOf {
-    //TODO:
-    //name
+    name: SuperName,
     target: Target,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(COPY_OBJECT_OP)]
 struct DefCopyObject {
     source: TermArg,
-    //TODO:
     destination: SimpleName,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(DECREMENT_OP)]
 struct DefDecrement {
     operand: SuperName,
 }
@@ -200,10 +220,14 @@ pub trait Dereferencable {
     //TODO:
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(DEREF_OF_OP)]
 struct DefDerefOf {
     operator: TermArg,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(DIVIDE_OP)]
 struct DefDivide {
     dividend: TermArg,
     divisor: TermArg,
@@ -211,64 +235,85 @@ struct DefDivide {
     quotient: Target,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(FIND_SET_LEFT_BIT_OP)]
 struct DefFindSetLeftBit {
     operand: TermArg,
     target: Target,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(FIND_SET_RIGHT_BIT_OP)]
 struct DefFindSetRightBit {
     operand: TermArg,
     target: Target,
 }
 
+#[derive(StructNewMacro)]
+#[ext_op_prefix(FROM_BCD_OP)]
 struct DefFromBcd {
     operand: TermArg,
     target: Target,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(INCREMENT_OP)]
 struct DefIncrement {
     operand: SuperName,
 }
 
-pub trait Indexable {
-    //TODO:
-}
-
+#[derive(StructNewMacro)]
+#[op_prefix(INDEX_OP)]
 struct DefIndex {
     operand: TermArg,
     index: TermArg,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(L_AND_OP)]
 struct DefLAnd {
     operand1: TermArg,
     operand2: TermArg,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(L_EQUAL_OP)]
 struct DefLEqual {
     operand1: TermArg,
     operand2: TermArg,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(L_GREATER_OP)]
 struct DefLGreater {
     operand1: TermArg,
     operand2: TermArg,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(L_LESS_OP)]
 struct DefLLess {
     operand1: TermArg,
     operand2: TermArg,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(L_NOT_OP)]
 struct DefLNot {
     operand: TermArg,
 }
 
+#[derive(StructNewMacro)]
+#[ext_op_prefix(LOAD_OP)]
 struct DefLoad {
     name: super::name_objects::NameString,
     target: Target,
 }
 
-struct DefLoadTable {//TODO: check documentation
+#[derive(StructNewMacro)]
+#[ext_op_prefix(LOAD_TABLE_OP)]
+struct DefLoadTable {
+    //TODO: check documentation
     arg0: TermArg,
     arg1: TermArg,
     arg2: TermArg,
@@ -277,11 +322,15 @@ struct DefLoadTable {//TODO: check documentation
     arg5: TermArg,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(L_OR_OP)]
 struct DefLOr {
     operand1: TermArg,
     operand2: TermArg,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(MATCH_OP)]
 struct DefMatch {
     search_pkg: TermArg,
     operand1: TermArg,
@@ -290,11 +339,8 @@ struct DefMatch {
     start_index: TermArg,
 }
 
-enum MidObj {
-    Buffer(),//TODO:
-    String(),//TODO:
-}
-
+#[derive(StructNewMacro)]
+#[op_prefix(MID_OP)]
 struct DefMid {
     arg1: TermArg,
     arg2: TermArg,
@@ -302,30 +348,40 @@ struct DefMid {
     target: Target,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(MOD_OP)]
 struct DefMod {
     dividend: TermArg,
     divisor: TermArg,
     remainder: Target,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(MULTIPLY_OP)]
 struct DefMultiply {
     operand1: TermArg,
     operand2: TermArg,
     target: Target,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(NAND_OP)]
 struct DefNand {
     operand1: TermArg,
     operand2: TermArg,
     target: Target,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(NOR_OP)]
 struct DefNor {
     operand1: TermArg,
     operand2: TermArg,
     target: Target,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(NOT_OP)]
 struct DefNot {
     operand: TermArg,
     target: Target,
@@ -335,6 +391,16 @@ struct DefObjectType {
     //TODO:
 }
 
+impl DefObjectType {
+    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
+        //sanity check
+        debug_assert_eq!(data[0], OBJECT_TYPE_OP);
+        todo!();
+    }
+}
+
+#[derive(StructNewMacro)]
+#[op_prefix(OR_OP)]
 struct DefOr {
     operand1: TermArg,
     operand2: TermArg,
@@ -351,9 +417,15 @@ impl DefPackage {
         debug_assert_eq!(data[0], PACKAGE_OP);
         let (pkg_length, skip_pkg_len) = PkgLength::new(&data[1..]);
         let num_elements = data[skip_pkg_len + 1];
-        let (element_list, skip_element_list) = PackageElementList::new_with_len(&data[skip_pkg_len + 2..], num_elements as usize);
+        let (element_list, skip_element_list) =
+            PackageElementList::new_with_len(&data[skip_pkg_len + 2..], num_elements as usize)?;
         debug_assert!(skip_element_list + skip_pkg_len + 2 == pkg_length.get_length() as usize);
-        return Some((Self { elemtn_list: element_list }, pkg_length.get_length() as usize + 1));
+        return Some((
+            Self {
+                elemtn_list: element_list,
+            },
+            pkg_length.get_length() as usize + 1,
+        ));
     }
 }
 
@@ -362,137 +434,161 @@ struct PackageElementList {
 }
 
 impl PackageElementList {
-    pub fn new_with_len(data: &[u8], num_items: usize) -> (Self, usize) {
+    pub fn new_with_len(data: &[u8], num_items: usize) -> Option<(Self, usize)> {
         let mut elements = Vec::new();
         let mut skip = 0;
         for _ in 0..num_items {
-            let (element, skip_element) = PackageElement::new(&data[skip..]);
+            let (element, skip_element) = PackageElement::aml_new(&data[skip..])?;
             elements.push(element);
             skip += skip_element;
         }
-        return (Self { elements }, skip);
+        return Some((Self { elements }, skip));
     }
 
     //reads whole buffer
-    pub fn new(data: &[u8]) -> Self {
+    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
         let mut elements = Vec::new();
         let mut skip = 0;
         while skip < data.len() {
-            let (element, skip_element) = PackageElement::new(&data[skip..]);
+            let (element, skip_element) = PackageElement::aml_new(&data[skip..])?;
             elements.push(element);
             skip += skip_element;
         }
         //sanity check
         debug_assert_eq!(skip, data.len());
-        return Self { elements };
+        return Some((Self { elements }, skip));
     }
 }
 
-
+#[derive(EnumNewMacro)]
 enum PackageElement {
     DataRefObject(super::data_object::DataRefObject),
     NameString(super::name_objects::NameString),
 }
 
-impl PackageElement {
-    pub fn new(data: &[u8]) -> (Self, usize) {
-        let ref_object = super::data_object::DataRefObject::aml_new(data);
-        match ref_object {
-            Some((obj, skip)) => return (Self::DataRefObject(obj), skip),
-            None => {
-                let name_string = super::name_objects::NameString::aml_new(data).unwrap();
-                return (Self::NameString(name_string.0), name_string.1.into());
-            }
-        }
-    }
-}
-
 pub struct DefVarPackage {
     num_elements: TermArg,
-    element_list: PackageElementList
+    element_list: PackageElementList,
 }
 
 impl DefVarPackage {
-    pub fn new(data: &[u8]) -> (Self, usize) {
+    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
         //sanity check
         debug_assert_eq!(data[0], PACKAGE_OP);
         let (pkg_length, skip_pkg_len) = PkgLength::new(&data[1..]);
         let (num_elements_arg, skip_num_elements_arg) = TermArg::aml_new(&data[skip_pkg_len + 1..]).unwrap();
-        let element_list = PackageElementList::new(&data[skip_pkg_len + 1 + skip_num_elements_arg..pkg_length.get_length() as usize + 1]);
-        return (Self { element_list, num_elements: num_elements_arg }, pkg_length.get_length() as usize + 1);
+        let (element_list, skip) =
+            PackageElementList::aml_new(&data[skip_pkg_len + 1 + skip_num_elements_arg..pkg_length.get_length() as usize + 1])?;
+        return Some((
+            Self {
+                element_list,
+                num_elements: num_elements_arg,
+            },
+            skip,
+        ));
     }
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(REF_OF_OP)]
 struct DefRefOf {
     operand: SuperName,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(SHIFT_LEFT_OP)]
 struct DefShiftLeft {
     operand: TermArg,
     count: TermArg,
     target: Target,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(SHIFT_RIGHT_OP)]
 struct DefShiftRight {
     operand: TermArg,
     count: TermArg,
     target: Target,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(SIZE_OF_OP)]
 struct DefSizeOf {
     operand: SuperName,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(STORE_OP)]
 struct DefStore {
     value: TermArg,
     target: SuperName,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(SUBTRACT_OP)]
 struct DefSubtract {
     operand1: TermArg,
     operand2: TermArg,
     target: Target,
 }
 
-struct DefTimer;//no fields
+#[derive(StructNewMacro)]
+#[ext_op_prefix(TIMER_OP)]
+struct DefTimer; //no fields
 
+#[derive(StructNewMacro)]
+#[ext_op_prefix(TO_BCD_OP)]
 struct DefToBcd {
     operand: TermArg,
     target: Target,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(TO_BUFFER_OP)]
 struct DefToBuffer {
     operand: TermArg,
     target: Target,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(TO_DEC_STRING_OP)]
 struct DefToDecString {
     operand: TermArg,
     target: Target,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(TO_HEX_STRING_OP)]
 struct DefToHexString {
     operand: TermArg,
     target: Target,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(TO_INTEGER_OP)]
 struct DefToInteger {
     operand: TermArg,
     target: Target,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(TO_STRING_OP)]
 struct DefToString {
     operand: TermArg,
     length_arg: TermArg,
     target: Target,
 }
 
+#[derive(StructNewMacro)]
+#[ext_op_prefix(WAIT_OP)]
 struct DefWait {
     //TODO:
     //event
     operand: TermArg,
 }
 
+#[derive(StructNewMacro)]
+#[op_prefix(XOR_OP)]
 struct DefXor {
     operand1: TermArg,
     operand2: TermArg,

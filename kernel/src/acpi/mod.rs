@@ -1,6 +1,5 @@
-mod apic;
 mod aml;
-mod smp;
+mod apic;
 mod fadt;
 mod ioapic;
 mod madt;
@@ -8,8 +7,9 @@ mod platform_info;
 mod rsdp;
 mod rsdt;
 mod sdt;
+mod smp;
 
-use std::{Box, Vec};
+use std::{mem_utils::PhysAddr, Vec};
 
 pub use apic::{LapicRegisters, LAPIC_REGISTERS};
 use platform_info::PlatformInfo;
@@ -19,7 +19,8 @@ use crate::{limine::LIMINE_BOOTLOADER_REQUESTS, memory::physical_allocator::BUDD
 static mut PLATFORM_INFO: Option<PlatformInfo> = None;
 
 pub fn init_acpi() {
-    let rsdp = rsdp::get_rsdp_table(unsafe { (*LIMINE_BOOTLOADER_REQUESTS.rsdp_request.info).rsdp as u64 }).expect("This os doesn not support PCs without ACPI");
+    let rsdp = rsdp::get_rsdp_table(unsafe { (*LIMINE_BOOTLOADER_REQUESTS.rsdp_request.info).rsdp as u64 })
+        .expect("This os doesn not support PCs without ACPI");
     let rsdt = rsdt::get_rsdt(&rsdp);
     assert!(rsdt.validate());
     println!("rsdt is valid");
@@ -53,7 +54,7 @@ pub fn init_acpi() {
     }
     println!("tables parsed");
 
-    let _fadt = fadt.expect("fadt should be present");
+    let fadt = fadt.expect("fadt should be present");
     let madt = madt.expect("madt should be present");
 
     let entries = madt.get_madt_entries();
@@ -85,6 +86,9 @@ pub fn init_acpi() {
             }
         }
     */
+
+    let dsdt_addr = std::mem_utils::translate_phys_virt_addr(PhysAddr(fadt.dsdt as u64));
+    let aml_code = aml::AmlCode::new(dsdt_addr.0 as *const u8);
 }
 
 pub fn init_acpi_ap(processor_id: u8) {

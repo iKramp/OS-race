@@ -1,4 +1,5 @@
 mod aml_code;
+pub use aml_code::AmlCode;
 mod name_objects;
 mod data_object;
 mod package;

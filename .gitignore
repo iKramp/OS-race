@@ -20,3 +20,5 @@ log.txt.bak
 kernel_build_files/
 
 iso/
+
+*.pdf
