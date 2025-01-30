@@ -50,8 +50,7 @@ pub unsafe fn get_at_physical_addr<T>(addr: PhysAddr) -> &'static mut T {
 pub unsafe fn set_at_physical_addr<T>(addr: PhysAddr, data: T) {
     #[cfg(debug_assertions)]
     assert!(MEM_INITIALIZED);
-    let data_to_replace: *mut T = (addr + PHYSICAL_OFFSET).0 as *mut T;
-    *data_to_replace = data;
+    set_at_virtual_addr(addr + PHYSICAL_OFFSET, data);
 }
 
 #[inline]
@@ -76,7 +75,7 @@ pub unsafe fn get_at_virtual_addr<T>(addr: VirtAddr) -> &'static mut T {
 #[inline]
 pub unsafe fn set_at_virtual_addr<T>(addr: VirtAddr, data: T) {
     let data_to_replace: *mut T = addr.0 as *mut T;
-    *data_to_replace = data;
+    data_to_replace.write(data);
 }
 
 ///# Safety

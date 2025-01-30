@@ -1,4 +1,7 @@
 mod aml_code;
+mod namespace;
+use std::{boxed::Box, vec::Vec};
+
 pub use aml_code::AmlCode;
 mod name_objects;
 mod data_object;
@@ -10,9 +13,11 @@ mod namespace_modifier;
 mod arg_local_obj;
 mod named_objects;
 
+///test documetnation
 struct Integer {
     val_64: u64,
     val_32: u32,
+    a: Vec<u32>,
 }
 
 //TODO: implement operations

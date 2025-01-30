@@ -3,6 +3,7 @@
 #![feature(naked_functions)]
 #![feature(abi_x86_interrupt)]
 #![feature(stmt_expr_attributes)]
+#![feature(box_into_inner)]
 
 use std::{println, printlnc};
 
@@ -25,11 +26,16 @@ pub struct BootInfo {}
 
 #[no_mangle]
 extern "C" fn _start() -> ! {
+    let stack_pointer: *const u64;
+    unsafe {
+        core::arch::asm!("mov {}, rsp", out(reg) stack_pointer);
+    }
     unsafe { std::thread::GET_TIME_SINCE_BOOT = || interrupts::time_since_boot() };
     vga::init_vga_driver();
     vga::clear_screen();
 
     println!("starting RustOs...");
+    println!("stack pointer: {:?}", stack_pointer);
 
     interrupts::init_interrupts();
 

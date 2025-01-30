@@ -27,7 +27,7 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
 
     let start_page = unsafe { crate::memory::TRAMPOLINE_RESERVED.0 } >> 12;
     unsafe {
-        CPU_LOCALS = Some(std::Vec::new_with_capacity(platform_info.application_processors.len() + 1));
+        CPU_LOCALS = Some(std::Vec::with_capacity(platform_info.application_processors.len() + 1));
         let bsp_local = super::cpu_locals::CpuLocals::new(
             0,
             0,

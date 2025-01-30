@@ -10,7 +10,7 @@ use crate::{
     msr::{get_mtrr_cap, set_msr, set_mtrr_def_type},
 };
 
-#[link(name = "ap_startup", kind = "static")]
+#[link(name = "trampoline", kind = "static")]
 extern "C" {
     pub fn ap_startup() -> !;
 }

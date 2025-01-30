@@ -12,6 +12,14 @@ pub fn derive_enum_new(input: TokenStream) -> TokenStream {
     let generics = &input.generics;
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
+    let has_prefix = input.attrs.iter().find(|attr| {
+        attr.path().is_ident("op_prefix") || attr.path().is_ident("ext_op_prefix")
+    });
+
+    if has_prefix.is_some() {
+        panic!("EnumNew cannot be derived for enums with prefix attributes");
+    }
+
     let variants = match &input.data {
         syn::Data::Enum(data) => &data.variants,
         _ => panic!("EnumNew can only be derived for enums"),
@@ -29,8 +37,10 @@ pub fn derive_enum_new(input: TokenStream) -> TokenStream {
                 .first()
                 .expect("EnumNew can only be derived for enums with at least one field");
 
+            let field_type = &field.ty;
+
             quote::quote! {
-                if let Some((data, skip)) = #field::aml_new(data) {
+                if let Some((data, skip)) = <#field_type as AmlNew>::aml_new(data) {
                     return Some((#name::#ident(data), skip));
                 }
             }
@@ -38,7 +48,7 @@ pub fn derive_enum_new(input: TokenStream) -> TokenStream {
         .collect::<Vec<_>>();
 
     let gen = quote::quote! {
-        impl #impl_generics EnumNew for #name #ty_generics #where_clause {
+        impl #impl_generics AmlNew for #name #ty_generics #where_clause {
             fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
                 #(#variant_arms)*
                 None
@@ -60,7 +70,6 @@ pub fn ext_op_prefix(_attributes: TokenStream, item: TokenStream) -> TokenStream
 
 #[proc_macro_derive(StructNewMacro)] //struct without prefix
 pub fn derive_struct_new(input: TokenStream) -> TokenStream {
-    println!("{:?}", input);
     let input = parse_macro_input!(input as syn::DeriveInput);
 
     let name = &input.ident;
@@ -95,8 +104,9 @@ pub fn derive_struct_new(input: TokenStream) -> TokenStream {
         let ty = field.ty.clone();
 
         if op_prefix.is_some() || ext_op_prefix.is_some() {
+            let error_str = format!("Failed to parse field {}", ident);
             quote::quote! {
-                let (#ident, new_skip) = #ty::aml_new(&data[skip..]).unwrap();
+                let (#ident, new_skip) = #ty::aml_new(&data[skip..]).expect(#error_str);
                 skip += new_skip;
             }
         } else {
@@ -116,14 +126,14 @@ pub fn derive_struct_new(input: TokenStream) -> TokenStream {
 
     let prefix_check = if let Some(op_prefix) = &op_prefix {
         quote::quote! {
-            if data[0] != #op_prefix {
+            if data.len() < 1 || data[0] != #op_prefix {
                 return None;
             }
             let mut skip = 1;
         }
     } else if let Some(ext_op_prefix) = &ext_op_prefix {
         quote::quote! {
-            if data[0] != #ext_op_prefix[0] || data[1] != #ext_op_prefix[1] {
+            if data.len() < 2 || data[0] != #ext_op_prefix[0] || data[1] != #ext_op_prefix[1] {
                 return None;
             }
             let mut skip = 2;
@@ -135,7 +145,7 @@ pub fn derive_struct_new(input: TokenStream) -> TokenStream {
     };
 
     let gen = quote::quote! {
-        impl #impl_generics StructNew for #name #ty_generics #where_clause {
+        impl #impl_generics AmlNew for #name #ty_generics #where_clause {
             fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
                 #prefix_check
 

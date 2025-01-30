@@ -1,3 +1,5 @@
+use traits::*;
+
 pub const LOCAL0_OP: u8 = 0x60;
 const LOCAL1_OP: u8 = 0x61;
 const LOCAL2_OP: u8 = 0x62;
@@ -16,6 +18,7 @@ const ARG5_OP: u8 = 0x6D;
 pub const ARG6_OP: u8 = 0x6E;
 
 
+#[derive(Debug)]
 pub enum ArgObj {
     Arg0,
     Arg1,
@@ -26,8 +29,8 @@ pub enum ArgObj {
     Arg6,
 }
 
-impl ArgObj {
-    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
+impl AmlNew for ArgObj {
+    fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
         match data[0] {
             ARG0_OP => Some((Self::Arg0, 1)),
             ARG1_OP => Some((Self::Arg1, 1)),
@@ -41,6 +44,7 @@ impl ArgObj {
     }
 }
 
+#[derive(Debug)]
 pub enum LocalObj {
     Local0,
     Local1,
@@ -52,8 +56,8 @@ pub enum LocalObj {
     Local7,
 }
 
-impl LocalObj {
-    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
+impl AmlNew for LocalObj {
+    fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
         match data[0] {
             LOCAL0_OP => Some((Self::Local0, 1)),
             LOCAL1_OP => Some((Self::Local1, 1)),

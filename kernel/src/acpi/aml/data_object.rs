@@ -1,8 +1,9 @@
 use std::Box;
 
-use functions::*;
 use macros::*;
+use traits::*;
 
+use super::expression_opcodes::{DefBuffer, DefPackage, DefVarPackage};
 
 const BYTE_PREFIX: u8 = 0x0A;
 const WORD_PREFIX: u8 = 0x0B;
@@ -16,45 +17,36 @@ const ONES_OP: u8 = 0xFF;
 const REVISION_OP: u8 = 0x30;
 pub const EXT_OP_PREFIX: u8 = 0x5B;
 
-#[derive(EnumNewMacro)]
+#[derive(EnumNewMacro, Debug)]
 pub enum ComputationalData {
     ByteConst(ByteConst),
     WordConst(WordConst),
     DWordConst(DWordConst),
     QWordConst(QWordConst),
-    String(StringConst),
+    String(Box<StringConst>),
     ConstObj(ConstObj),
     RevisionOp(RevisionOp),
-    Buffer(super::expression_opcodes::DefBuffer),
+    Buffer(Box<DefBuffer>),
 }
 
+#[derive(EnumNewMacro, Debug)]
 pub enum DataObject {
     Computational(ComputationalData),
-    Package(super::expression_opcodes::DefPackage),
-    VarPackage(super::expression_opcodes::DefVarPackage),
+    Package(Box<DefPackage>),
+    VarPackage(Box<DefVarPackage>),
 }
 
-impl EnumNew for DataObject {
-    fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
-        todo!();
-    }
-}
-
+#[derive(EnumNewMacro, Debug)]
 pub enum DataRefObject {
     DataObject(DataObject),
-    DataRefObject(Box<DataRefObject>),
+    //DataRefObject(Box::<DataRefObject>),
 }
 
-impl DataRefObject {
-    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
-        todo!();
-    }
-}
-
+#[derive(Debug)]
 struct ByteConst(u8);
 
-impl ByteConst {
-    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
+impl AmlNew for ByteConst {
+    fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
         if data[0] != BYTE_PREFIX {
             return None;
         }
@@ -62,10 +54,11 @@ impl ByteConst {
     }
 }
 
+#[derive(Debug)]
 struct WordConst(u16);
 
-impl WordConst {
-    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
+impl AmlNew for WordConst {
+    fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
         if data[0] != WORD_PREFIX {
             return None;
         }
@@ -73,10 +66,11 @@ impl WordConst {
     }
 }
 
+#[derive(Debug)]
 struct DWordConst(u32);
 
-impl DWordConst {
-    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
+impl AmlNew for DWordConst {
+    fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
         if data[0] != DWORD_PREFIX {
             return None;
         }
@@ -84,21 +78,28 @@ impl DWordConst {
     }
 }
 
+#[derive(Debug)]
 struct QWordConst(u64);
 
-impl QWordConst {
-    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
+impl AmlNew for QWordConst {
+    fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
         if data[0] != QWORD_PREFIX {
             return None;
         }
-        Some((Self(u64::from_le_bytes([data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8]])), 9))
+        Some((
+            Self(u64::from_le_bytes([
+                data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8],
+            ])),
+            9,
+        ))
     }
 }
 
-struct StringConst(std::Vec<u8>);//ascii chars, terminated by null
+#[derive(Debug)]
+struct StringConst(std::Vec<u8>); //ascii chars, terminated by null
 
-impl StringConst {
-    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
+impl AmlNew for StringConst {
+    fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
         if data[0] != STRING_PREFIX {
             return None;
         }
@@ -113,23 +114,51 @@ impl StringConst {
     }
 }
 
+#[derive(Debug)]
 enum ConstObj {
     ZeroOp,
     OneOp,
     OnesOp,
 }
 
-impl ConstObj {
-    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
+impl AmlNew for ConstObj {
+    fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
         match data[0] {
             ZERO_OP => Some((Self::ZeroOp, 1)),
             ONE_OP => Some((Self::OneOp, 1)),
             ONES_OP => Some((Self::OnesOp, 1)),
-            _ => panic!("Invalid ConstObj prefix"),
+            _ => None,
         }
     }
 }
 
-#[derive(StructNewMacro)]
+#[derive(Debug)]
+pub struct ByteData(u8);
+
+impl ByteData {
+    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
+        Some((Self(data[0]), 1))
+    }
+}
+
+#[derive(Debug)]
+pub struct WordData(u16);
+
+impl WordData {
+    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
+        Some((Self(u16::from_le_bytes([data[0], data[1]])), 2))
+    }
+}
+
+#[derive(Debug)]
+pub struct DWordData(u32);
+
+impl DWordData {
+    pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
+        Some((Self(u32::from_le_bytes([data[0], data[1], data[2], data[3]])), 4))
+    }
+}
+
+#[derive(StructNewMacro, Debug)]
 #[op_prefix(REVISION_OP)]
 struct RevisionOp;

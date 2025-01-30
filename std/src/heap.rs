@@ -143,11 +143,39 @@ impl HeapAllocationData {
     }
     pub fn deallocate(&mut self, addr: VirtAddr) {
         unsafe {
-            self.free_objects += 1;
             let metadata = get_at_virtual_addr::<HeapPageMetadata>(VirtAddr(addr.0 & !0b1111_1111_1111));
+
+            let no_empty_cells = self.free_objects == 0;
+            let full_frame = metadata.max_allocations == metadata.number_of_allocations;
+
+            if no_empty_cells {
+                self.ptr_to_first = addr;
+                set_at_virtual_addr::<EmptyBlock>(
+                    addr,
+                    EmptyBlock {
+                        ptr_to_next: addr,
+                        ptr_to_prev: addr,
+                    },
+                );
+                metadata.ptr_to_first = addr;
+                metadata.ptr_to_last = addr;
+                metadata.number_of_allocations -= 1;
+                self.free_objects += 1;
+                return;
+            }
+
+            let (last_block, past_last_block) = if full_frame {
+                let next_block = get_at_virtual_addr::<EmptyBlock>(self.ptr_to_first);
+                let before_next_block = get_at_virtual_addr::<EmptyBlock>(next_block.ptr_to_prev);
+                (before_next_block, next_block)
+            } else {
+                let last_block = get_at_virtual_addr::<EmptyBlock>(metadata.ptr_to_last);
+                let past_last_block = get_at_virtual_addr::<EmptyBlock>(last_block.ptr_to_next);
+                (last_block, past_last_block)
+            };
+
             metadata.number_of_allocations -= 1;
-            let last_block = get_at_virtual_addr::<EmptyBlock>(metadata.ptr_to_last);
-            let past_last_block = get_at_virtual_addr::<EmptyBlock>(last_block.ptr_to_next);
+            self.free_objects += 1;
 
             set_at_virtual_addr::<EmptyBlock>(
                 addr,
@@ -181,6 +209,7 @@ pub struct Heap {
     allocation_data: [HeapAllocationData; 7],
 }
 
+#[global_allocator]
 pub static mut HEAP: Heap = Heap::new();
 
 impl Heap {
@@ -204,9 +233,7 @@ impl Heap {
         } else if size > 1024 {
             //allocate whole page/pages
             let n_of_pages = (size + 4095 + crate::mem::size_of::<MultiPageObjectMetadata>() as u64) / 4096;
-            unsafe {
-                crate::PAGE_ALLOCATOR.allocate_contigious(n_of_pages)
-            }
+            unsafe { crate::PAGE_ALLOCATOR.allocate_contigious(n_of_pages) }
         } else {
             let size_order = log2_rounded_up(size);
             let index = u64::max(4, size_order) - 4;
@@ -243,6 +270,22 @@ impl Heap {
 impl Default for Heap {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+//TODO: implement layout guarantees
+unsafe impl core::alloc::GlobalAlloc for Heap {
+    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
+        if layout.align() > layout.size() {
+            panic!("alignment is greater than size, not yet supported");
+        }
+        let size = layout.size() as u64;
+        let addr = HEAP.allocate(size);
+        addr.0 as *mut u8
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, _layout: core::alloc::Layout) {
+        HEAP.deallocate(VirtAddr(ptr as u64));
     }
 }
 

@@ -67,6 +67,7 @@ pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo, processor
         return;
     }
     activate_timer(lapic_registers);
+    unsafe { std::thread::TIMER_ACTIVE = true; }
 
     unsafe {
         for i in 38..255 {

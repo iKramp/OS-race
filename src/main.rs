@@ -19,7 +19,7 @@ fn main() {
         cmd.arg("-S");
     }
     //cmd.arg("-cpu").arg("EPYC");
-    cmd.arg("-smp").arg("2");
+    cmd.arg("-smp").arg("1");
 
     #[cfg(test)]
     {
@@ -30,13 +30,17 @@ fn main() {
     if uefi {
         cmd.arg("-bios").arg(ovmf_prebuilt::ovmf_pure_efi());
     } 
-    cmd.arg("-drive").arg("format=raw,file=kernel_build_files/image.iso");
+    cmd.arg("-drive").arg("id=disk,format=raw,file=kernel_build_files/image.iso,if=none");
+    cmd.arg("-device").arg("ahci,id=ahci");
+    cmd.arg("-device").arg("ide-hd,drive=disk,bus=ahci.0");
     let mut child = cmd.spawn().unwrap();
 
     if debug {
         let _ = std::process::Command::new("kitty")
             .arg("gdb")
             .arg("-x").arg("~/programming/OS-race/gdb_commands.txt")
+            //.arg("gdbgui")
+            //.arg("-g").arg("\'gdb -x ~/programming/OS-race/gdb_commands.txt\'")
             .spawn().unwrap().wait().unwrap();
             
     }

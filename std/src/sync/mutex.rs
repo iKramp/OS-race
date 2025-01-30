@@ -26,17 +26,22 @@ impl<T> Mutex<T> {
 impl<T: ?Sized> Mutex<T> {
     pub fn lock(&self) -> MutexGuard<'_, T> {
         loop {
-            if self.state.compare_exchange(0, 1, SeqCst, SeqCst).is_ok() {
+            if self.state.compare_exchange(0, 1, Acquire, SeqCst).is_ok() {
                 break;
             }
         }
+        MutexGuard { lock: self }
+    }
+
+    /// only use this in a panic handler
+    pub fn force_get_lock(&self) -> MutexGuard<'_, T> {
         MutexGuard { lock: self }
     }
 }
 
 impl<T: ?Sized> Drop for MutexGuard<'_, T> {
     fn drop(&mut self) {
-        self.lock.state.store(0, SeqCst);
+        self.lock.state.store(0, Release);
     }
 }
 

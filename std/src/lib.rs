@@ -4,18 +4,22 @@
 #![feature(specialization)]
 #![feature(negative_impls)]
 
-
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    printlnc!((0, 0, 255), "{}", info);
-    //std::panic::print_stack_trace();
-    loop {}
+    unsafe {
+        let mut lock = crate::print::PRINT.as_mut().unwrap().force_get_lock();
+        printlncl!((0, 0, 255), &mut lock, "{}", info);
+        loop {
+            crate::thread::sleep(crate::time::Duration::from_secs(10));
+        }
+    }
 }
 
-pub mod print;
-pub use print::Print;
+extern crate alloc as alloc_crate;
 
+pub mod print;
 pub use print::set_print;
+pub use print::Print;
 
 pub mod heap;
 pub mod mem_utils;
@@ -31,14 +35,14 @@ pub use core::array;
 pub use core::ascii;
 use core::panic::PanicInfo;
 //backtrace
-pub mod boxed;
-pub use boxed::*;
+pub use alloc_crate::boxed;
+pub use alloc_crate::boxed::*;
 pub use core::borrow;
 pub use core::cell;
 pub use core::char;
 pub use core::clone;
 pub use core::cmp;
-//collections
+pub use alloc_crate::collections;
 pub use core::convert;
 pub use core::default;
 pub use core::env;
@@ -77,10 +81,11 @@ pub use core::primitive;
 //process
 pub use core::ptr;
 pub mod rc;
+pub use alloc_crate::string;
+pub use alloc_crate::string::String;
 pub use core::result;
 pub use core::slice;
 pub use core::str;
-pub mod string;
 pub mod sync;
 pub use core::task;
 pub mod thread;
@@ -91,8 +96,8 @@ pub use core::time;
 //u64  depracation planned
 //u128 depracation planned
 //usize depracation planned
-mod vec;
-pub use vec::vec_struct::*;
+pub use alloc_crate::vec;
+pub use alloc_crate::vec::Vec;
 //assert_matches experimental
 //async_iter     experimental
 //intrinsics     experimental
