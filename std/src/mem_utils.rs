@@ -78,7 +78,6 @@ pub unsafe fn set_at_virtual_addr<T>(addr: VirtAddr, data: T) {
     data_to_replace.write(data);
 }
 
-
 ///# Safety
 ///the physical address offset must be correct
 #[inline]
