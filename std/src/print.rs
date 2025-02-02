@@ -98,7 +98,7 @@ pub fn _format(args: Arguments<'_>) -> crate::String {
         output
     }
 
-    args.as_str().map_or_else(|| format_inner(args), crate::alloc_crate::borrow::ToOwned::to_owned)
+    args.as_str().map_or_else(|| format_inner(args), crate::alloc::borrow::ToOwned::to_owned)
 }
 
 #[macro_export]

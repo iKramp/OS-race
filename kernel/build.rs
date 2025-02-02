@@ -3,9 +3,7 @@ use std::process::Command;
 
 fn main() {
     let out_dir = std::env::var("OUT_DIR").unwrap();
-    let target_file = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap()).join("rust_os.json");
     let link_script_file = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap()).join("linker_script.ld");
-    println!("cargo:rustc-env=TARGET_FILE={}", target_file.display());
 
     if !(Command::new("nasm")
         .args([

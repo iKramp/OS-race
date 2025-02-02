@@ -15,7 +15,7 @@ fn panic(info: &PanicInfo) -> ! {
     }
 }
 
-extern crate alloc as alloc_crate;
+extern crate alloc;
 
 pub mod print;
 pub use print::set_print;
@@ -28,21 +28,20 @@ use heap::HEAP;
 pub use page_allocator::PageAllocator;
 pub use page_allocator::PAGE_ALLOCATOR;
 
-pub use core::alloc;
 pub use core::any;
 pub use core::arch;
 pub use core::array;
 pub use core::ascii;
 use core::panic::PanicInfo;
 //backtrace
-pub use alloc_crate::boxed;
-pub use alloc_crate::boxed::*;
+pub use alloc::boxed;
+pub use alloc::boxed::*;
 pub use core::borrow;
 pub use core::cell;
 pub use core::char;
 pub use core::clone;
 pub use core::cmp;
-pub use alloc_crate::collections;
+pub use alloc::collections;
 pub use core::convert;
 pub use core::default;
 pub use core::env;
@@ -81,8 +80,8 @@ pub use core::primitive;
 //process
 pub use core::ptr;
 pub mod rc;
-pub use alloc_crate::string;
-pub use alloc_crate::string::String;
+pub use alloc::string;
+pub use alloc::string::String;
 pub use core::result;
 pub use core::slice;
 pub use core::str;
@@ -96,8 +95,8 @@ pub use core::time;
 //u64  depracation planned
 //u128 depracation planned
 //usize depracation planned
-pub use alloc_crate::vec;
-pub use alloc_crate::vec::Vec;
+pub use alloc::vec;
+pub use alloc::vec::Vec;
 //assert_matches experimental
 //async_iter     experimental
 //intrinsics     experimental

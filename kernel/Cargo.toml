@@ -18,12 +18,12 @@ macros = { path = "../macros/macros" }
 traits = { path = "../macros/traits" }
 
 [profile.dev]
-panic = "unwind"
+panic = "abort"
 opt-level = 0
 lto = false
 
 [profile.release]
-panic = "unwind"
+panic = "abort"
 opt-level = 0
 lto = false
 

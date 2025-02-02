@@ -1,5 +1,11 @@
+#![no_std]
+
 use proc_macro::TokenStream;
-use std::ops::Add;
+extern crate alloc;
+use alloc::borrow::ToOwned;
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
+use core::ops::Add;
 
 use syn::ItemFn;
 
@@ -12,14 +18,15 @@ pub fn kernel_test(_args: TokenStream, input: TokenStream) -> TokenStream {
 
     let input_fn = syn::parse_macro_input!(input as ItemFn);
     let test_fn = input_fn.sig.ident;
-    let function_full_name = unsafe { format!("{CURR_MOD}::{test_fn}") };
+    let mut function_full_name = unsafe { CURR_MOD.clone() };
+    function_full_name.push_str("::");
+    function_full_name.push_str(&test_fn.to_string());
 
-    let code = format!(
-        r#"
+    let mut code = r#"
         #[cfg(feature = "run_tests")]
-        pub {function}
-    "#
-    );
+        pub "#.to_string();
+    code.push_str(&function);
+    code.push_str("\n");
 
     unsafe {
         TESTS.push(function_full_name.to_string());
@@ -36,7 +43,12 @@ pub fn all_tests(_item: TokenStream) -> TokenStream {
         #[allow(static_mut_refs)]
         for test in &TESTS {
             let function_name = test.split(':').last().unwrap();
-            code = code.add(&format!("({test} as fn() -> bool, \"{function_name}\"),"));
+            //code = code.add(&format!("({test} as fn() -> bool, \"{function_name}\"),"));
+            code.push_str("(");
+            code.push_str(test);
+            code.push_str(" as fn() -> bool, \"");
+            code.push_str(function_name);
+            code.push_str("\"),");
         }
     }
 
