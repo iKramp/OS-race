@@ -5,6 +5,7 @@ fn main() {
     //    .arg("/home/nejc/programming/OS-race/kernel.map")
     //    .arg("-o")
     //    .arg("/home/nejc/programming/Os-race/kernel.map");
+    //
 
     //chose whether to debug with GDB
     let debug = true;
