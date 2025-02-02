@@ -39,8 +39,6 @@ fn main() {
         let _ = std::process::Command::new("kitty")
             .arg("gdb")
             .arg("-x").arg("~/programming/OS-race/gdb_commands.txt")
-            //.arg("gdbgui")
-            //.arg("-g").arg("\'gdb -x ~/programming/OS-race/gdb_commands.txt\'")
             .spawn().unwrap().wait().unwrap();
             
     }
