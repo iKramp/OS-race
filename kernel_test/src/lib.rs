@@ -5,7 +5,6 @@ extern crate alloc;
 use alloc::borrow::ToOwned;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use core::ops::Add;
 
 use syn::ItemFn;
 
@@ -26,7 +25,7 @@ pub fn kernel_test(_args: TokenStream, input: TokenStream) -> TokenStream {
         #[cfg(feature = "run_tests")]
         pub "#.to_string();
     code.push_str(&function);
-    code.push_str("\n");
+    code.push('\n');
 
     unsafe {
         TESTS.push(function_full_name.to_string());
@@ -44,7 +43,7 @@ pub fn all_tests(_item: TokenStream) -> TokenStream {
         for test in &TESTS {
             let function_name = test.split(':').last().unwrap();
             //code = code.add(&format!("({test} as fn() -> bool, \"{function_name}\"),"));
-            code.push_str("(");
+            code.push('(');
             code.push_str(test);
             code.push_str(" as fn() -> bool, \"");
             code.push_str(function_name);

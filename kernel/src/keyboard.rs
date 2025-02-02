@@ -1,4 +1,3 @@
-use crate::println;
 
 pub static mut KEY_STATES: [bool; 128] = [false; 128];
 

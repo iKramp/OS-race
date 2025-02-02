@@ -503,7 +503,7 @@ impl std::PageAllocator for PageTree {
             for i in 0..num {
                 level_4_table.allocate(VirtAddr(addr + i * 4096));
             }
-            return VirtAddr(addr);
+            VirtAddr(addr)
         }
     }
 }

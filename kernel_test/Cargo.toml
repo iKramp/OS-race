@@ -3,6 +3,10 @@ name = "kernel_test"
 version = "0.1.0"
 edition = "2021"
 
+[lints.rust]
+dead_code = "allow"
+static_mut_refs = "allow"
+
 [dependencies]
 syn = { version = "2.0", features = ["full"] }
 

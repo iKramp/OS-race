@@ -1,5 +1,3 @@
-use crate::println;
-
 use super::idt::TablePointer;
 
 pub const DOUBLE_FAULT_IST: u16 = 1;

@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 build = "build.rs"
 
+[lints.rust]
+dead_code = "allow"
+static_mut_refs = "allow"
+
 [[bin]]
 name = "kernel"
 path = "src/main.rs"

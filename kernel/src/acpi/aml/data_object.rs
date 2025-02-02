@@ -43,7 +43,7 @@ pub enum DataRefObject {
 }
 
 #[derive(Debug)]
-struct ByteConst(u8);
+pub struct ByteConst(u8);
 
 impl AmlNew for ByteConst {
     fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
@@ -55,7 +55,7 @@ impl AmlNew for ByteConst {
 }
 
 #[derive(Debug)]
-struct WordConst(u16);
+pub struct WordConst(u16);
 
 impl AmlNew for WordConst {
     fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
@@ -67,7 +67,7 @@ impl AmlNew for WordConst {
 }
 
 #[derive(Debug)]
-struct DWordConst(u32);
+pub struct DWordConst(u32);
 
 impl AmlNew for DWordConst {
     fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
@@ -79,7 +79,7 @@ impl AmlNew for DWordConst {
 }
 
 #[derive(Debug)]
-struct QWordConst(u64);
+pub struct QWordConst(u64);
 
 impl AmlNew for QWordConst {
     fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
@@ -96,7 +96,7 @@ impl AmlNew for QWordConst {
 }
 
 #[derive(Debug)]
-struct StringConst(std::Vec<u8>); //ascii chars, terminated by null
+pub struct StringConst(std::Vec<u8>); //ascii chars, terminated by null
 
 impl AmlNew for StringConst {
     fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
@@ -110,23 +110,23 @@ impl AmlNew for StringConst {
             i += 1;
         }
 
-        return Some((Self(vec), i + 1));
+        Some((Self(vec), i + 1))
     }
 }
 
 #[derive(Debug)]
-enum ConstObj {
-    ZeroOp,
-    OneOp,
-    OnesOp,
+pub enum ConstObj {
+    Zero,
+    One,
+    Ones,
 }
 
 impl AmlNew for ConstObj {
     fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
         match data[0] {
-            ZERO_OP => Some((Self::ZeroOp, 1)),
-            ONE_OP => Some((Self::OneOp, 1)),
-            ONES_OP => Some((Self::OnesOp, 1)),
+            ZERO_OP => Some((Self::Zero, 1)),
+            ONE_OP => Some((Self::One, 1)),
+            ONES_OP => Some((Self::Ones, 1)),
             _ => None,
         }
     }
@@ -161,4 +161,4 @@ impl DWordData {
 
 #[derive(StructNewMacro, Debug)]
 #[op_prefix(REVISION_OP)]
-struct RevisionOp;
+pub struct RevisionOp;

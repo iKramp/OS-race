@@ -1,8 +1,8 @@
 //FOR NOW ONLY FULL BYTE COLORS ARE SUPPORTED (32)
 #![allow(clippy::identity_op)]
 
+use crate::limine::{self, LIMINE_BOOTLOADER_REQUESTS};
 use core::arch::asm;
-use crate::{limine::{self, LIMINE_BOOTLOADER_REQUESTS}, println};
 
 #[derive(Debug)]
 pub struct FrameBuffer {
@@ -41,7 +41,12 @@ pub fn init_vga_driver() {
         panic!("No framebuffers found");
     }
 
-    let framebuffer_slice = unsafe { core::slice::from_raw_parts(framebuffer_info.framebuffers as *const *const limine::FramebufferInfo, framebuffer_info.framebuffer_count as usize) };
+    let framebuffer_slice = unsafe {
+        core::slice::from_raw_parts(
+            framebuffer_info.framebuffers as *const *const limine::FramebufferInfo,
+            framebuffer_info.framebuffer_count as usize,
+        )
+    };
     let main_framebuffer = unsafe { &*framebuffer_slice[0] };
 
     //do something with framebuffer modes?

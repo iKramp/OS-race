@@ -5,8 +5,6 @@ use std::{
     Vec,
 };
 
-use crate::println;
-
 #[repr(C, packed)]
 pub struct Madt {
     header: super::sdt::AcpiSdtHeader,

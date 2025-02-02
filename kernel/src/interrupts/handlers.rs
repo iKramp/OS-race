@@ -1,4 +1,3 @@
-use crate::println;
 use crate::utils::{byte_form_port, byte_to_port};
 #[allow(unused_imports)] //they are used in macros
 use core::arch::asm;

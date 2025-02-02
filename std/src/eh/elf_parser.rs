@@ -1,4 +1,4 @@
-use crate::{eh::int3, mem_utils::VirtAddr, println};
+use crate::mem_utils::VirtAddr;
 
 //we only support 64 bit
 #[repr(C)]

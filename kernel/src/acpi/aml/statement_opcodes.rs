@@ -1,5 +1,5 @@
 use macros::*;
-use std::{println, Box, Vec};
+use std::Box;
 use traits::*;
 
 use super::{
@@ -7,7 +7,6 @@ use super::{
     name_objects::SuperName,
     package::PkgLength,
     term_objects::{TermArg, TermList},
-    Integer,
 };
 
 const BREAK_OP: u8 = 0xA5;
@@ -46,19 +45,19 @@ pub enum StatementOpcode {
 
 #[derive(StructNewMacro, Debug)]
 #[op_prefix(BREAK_OP)]
-struct DefBreak;
+pub struct DefBreak;
 
 #[derive(StructNewMacro, Debug)]
 #[op_prefix(CONTINUE_OP)]
-struct DefContinue;
+pub struct DefContinue;
 
 #[derive(StructNewMacro, Debug)]
 #[op_prefix(BREAK_POINT_OP)]
-struct DefBreakPoint;
+pub struct DefBreakPoint;
 
 #[derive(StructNewMacro, Debug)]
 #[op_prefix(NOOP_OP)]
-struct DefNoop;
+pub struct DefNoop;
 
 #[derive(Debug)]
 struct ElseBranch {
@@ -74,13 +73,13 @@ enum DefElse {
 impl DefElse {
     pub fn aml_new(data: &[u8]) -> (Self, usize) {
         //sanity check prefix
-        if data.len() == 0 || data[0] != ELSE_OP {
+        if data.is_empty() || data[0] != ELSE_OP {
             return (Self::NoElse, 0);
         }
         let mut skip = 1;
         let (pkg_length, pkg_len_skip) = PkgLength::new(&data[1..]);
         skip += pkg_len_skip;
-        let (term_list, term_list_skip) = TermList::aml_new(&data[skip..1 + pkg_length.get_length() as usize]).unwrap();
+        let (term_list, term_list_skip) = TermList::aml_new(&data[skip..1 + pkg_length.get_length()]).unwrap();
         skip += term_list_skip;
         (Self::Else(ElseBranch { term_list }), skip)
     }
@@ -88,14 +87,14 @@ impl DefElse {
 
 #[derive(Debug, StructNewMacro)]
 #[ext_op_prefix(FATAL_OP)]
-struct DefFatal {
+pub struct DefFatal {
     fatal_type: ByteData,
     fatal_code: DWordData,
     datal_arg: TermArg,
 }
 
 #[derive(Debug)]
-struct DefIfElse {
+pub struct DefIfElse {
     predicate: TermArg,
     if_branch: TermList,
     else_branch: DefElse,
@@ -112,7 +111,7 @@ impl AmlNew for DefIfElse {
         skip += pkg_skip;
         let (predicate, pred_skip) = TermArg::aml_new(&data[skip..]).unwrap();
         skip += pred_skip;
-        let (if_branch, if_branch_skip) = TermList::aml_new(&data[skip..1 + pkg_length.get_length() as usize]).unwrap();
+        let (if_branch, if_branch_skip) = TermList::aml_new(&data[skip..1 + pkg_length.get_length()]).unwrap();
         skip += if_branch_skip;
         let (else_branch, else_skip) = DefElse::aml_new(&data[skip..]);
         skip += else_skip;
@@ -129,49 +128,49 @@ impl AmlNew for DefIfElse {
 
 #[derive(StructNewMacro, Debug)]
 #[op_prefix(NOTIFY_OP)]
-struct DefNotify {
+pub struct DefNotify {
     event_object: SuperName,
     notify_value: TermArg,
 }
 
 #[derive(Debug, StructNewMacro)]
 #[ext_op_prefix(RELEASE_OP)]
-struct DefRelease {
+pub struct DefRelease {
     mutex: SuperName,
 }
 
 #[derive(Debug, StructNewMacro)]
 #[ext_op_prefix(RESET_OP)]
-struct DefReset {
+pub struct DefReset {
     event_object: SuperName,
 }
 
 #[derive(Debug, StructNewMacro)]
 #[op_prefix(RETURN_OP)]
-struct DefReturn {
+pub struct DefReturn {
     return_value: TermArg,
 }
 
 #[derive(Debug, StructNewMacro)]
 #[ext_op_prefix(SIGNAL_OP)]
-struct DefSignal {
+pub struct DefSignal {
     event_object: SuperName,
 }
 
 #[derive(Debug, StructNewMacro)]
 #[ext_op_prefix(SLEEP_OP)]
-struct DefSleep {
+pub struct DefSleep {
     sleep_millis: TermArg,
 }
 
 #[derive(StructNewMacro, Debug)]
 #[ext_op_prefix(STALL_OP)]
-struct DefStall {
+pub struct DefStall {
     stall_seconds: TermArg,
 }
 
 #[derive(Debug)]
-struct DefWhile {
+pub struct DefWhile {
     predicate: TermArg,
     term_list: TermList,
 }
@@ -186,7 +185,7 @@ impl AmlNew for DefWhile {
         skip += pkg_skip;
         let (predicate, pred_skip) = TermArg::aml_new(&data[skip..]).unwrap();
         skip += pred_skip;
-        let (term_list, term_list_skip) = TermList::aml_new(&data[skip..1 + pkg_length.get_length() as usize]).unwrap();
+        let (term_list, term_list_skip) = TermList::aml_new(&data[skip..1 + pkg_length.get_length()]).unwrap();
         skip += term_list_skip;
         Some((Self { predicate, term_list }, skip))
     }

@@ -1,6 +1,5 @@
-use core::time::Duration;
-use macros::{op_prefix, EnumNewMacro};
-use std::{println, thread, Box, Vec};
+use macros::EnumNewMacro;
+use std::{Box, Vec};
 use traits::*;
 
 use crate::acpi::aml::namespace::get_namespace;
@@ -35,7 +34,7 @@ impl TermList {
                 term_list.push(term_obj);
                 skip += term_skip;
             } else {
-                let min_index = skip.checked_sub(100).unwrap_or(0);
+                let min_index = skip.saturating_sub(100);
                 let max_index = usize::min(skip + 100, data.len());
                 panic!(
                     "TermList::new: could not read term object.\nPreceeding data: {:x?}\nPreceeding objects: {:#x?}\nFollowing data: {:x?}", 

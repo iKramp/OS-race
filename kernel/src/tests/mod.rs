@@ -1,3 +1,4 @@
+#![allow(non_snake_case)]
 mod A0_trivial;
 mod A1_log_2_rounded_up;
 mod A2_vec;

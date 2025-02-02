@@ -1,5 +1,4 @@
 use super::madt::{MadtEntryType, MpsIntiFlags};
-use crate::println;
 use std::mem_utils::PhysAddr;
 
 static mut BOOT_FOUND: bool = false;

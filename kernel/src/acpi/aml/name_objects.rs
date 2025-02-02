@@ -1,9 +1,9 @@
 use core::fmt::Debug;
 use std::{
-    boxed::Box, println, string::{String, ToString}, vec, Vec
+    boxed::Box,
+    string::{String, ToString},
+    Vec,
 };
-
-use crate::acpi::aml::namespace::*;
 
 use super::{
     arg_local_obj::{ArgObj, LocalObj},
@@ -28,7 +28,7 @@ pub struct NameSeg {
     name: [u8; 4],
 }
 
-impl <'a> core::convert::From<&'a NameSeg> for &'a [NameSeg] {
+impl<'a> core::convert::From<&'a NameSeg> for &'a [NameSeg] {
     fn from(name_seg: &'a NameSeg) -> Self {
         core::slice::from_ref(name_seg)
     }
@@ -42,14 +42,13 @@ impl AmlNew for NameSeg {
         if !is_lead_name_char(data[0]) || !is_name_char(data[1]) || !is_name_char(data[2]) || !is_name_char(data[3]) {
             return None;
         }
-        let res = Some((
+
+        Some((
             NameSeg {
                 name: [data[0], data[1], data[2], data[3]],
             },
             4,
-        ));
-
-        res
+        ))
     }
 }
 
@@ -77,11 +76,11 @@ impl std::convert::From<&str> for NameSeg {
 }
 
 fn is_lead_name_char(c: u8) -> bool {
-    (c >= 0x41 && c <= 0x5a) || c == 0x5f
+    (0x41..=0x5a).contains(&c) || c == 0x5f
 }
 
 fn is_name_char(c: u8) -> bool {
-    is_lead_name_char(c) || (c >= 0x30 && c <= 0x39)
+    is_lead_name_char(c) || (0x30..=0x39).contains(&c)
 }
 
 #[derive(Clone)]
@@ -105,7 +104,7 @@ impl AmlNew for NameString {
     fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
         if data[0] == ROOT_CHAR {
             let name_path = NamePath::aml_new(&data[1..])?;
-            return Some((Self::Rootchar(Box::new(name_path.0)), name_path.1 + 1));
+            Some((Self::Rootchar(Box::new(name_path.0)), name_path.1 + 1))
         } else {
             let mut count = 0;
             while data[count] == PARENT_PREFIX_CHAR {
@@ -118,7 +117,7 @@ impl AmlNew for NameString {
             if count == 0 {
                 return Some((Self::BlankPath(Box::new(name_path.0)), name_path.1));
             }
-            return Some((Self::PrefixPath(Box::new((count as u8, name_path.0))), name_path.1 + count));
+            Some((Self::PrefixPath(Box::new((count as u8, name_path.0))), name_path.1 + count))
         }
     }
 }
@@ -126,16 +125,15 @@ impl AmlNew for NameString {
 impl std::convert::From<NameString> for String {
     fn from(name_string: NameString) -> Self {
         let mut res = "".to_string();
-        let name_seq: &[NameSeg];
-        match &name_string {
-            NameString::Rootchar(name_path) | NameString::BlankPath(name_path) => name_seq = (name_path).into(),
+        let name_seq: &[NameSeg] = match &name_string {
+            NameString::Rootchar(name_path) | NameString::BlankPath(name_path) => (name_path).into(),
             NameString::PrefixPath(prefix_path) => {
                 for _ in 0..prefix_path.0 {
                     res.push('\\');
                 }
-                name_seq = (&prefix_path.1).into();
+                (&prefix_path.1).into()
             }
-        }
+        };
         let name_seq = name_seq.iter().map(|seg| seg.into()).collect::<Vec<String>>().join("");
         res.push_str(&name_seq);
         res
@@ -151,29 +149,29 @@ impl Debug for NameString {
 
 #[derive(EnumNewMacro, Debug, Clone)]
 pub enum NamePath {
-    SingleNamePath(NameSeg),
-    DualNamePath(DualNamePath),
-    MultiNamePath(MultiNamePath),
+    Single(NameSeg),
+    Dual(DualNamePath),
+    Multi(MultiNamePath),
     NullName(NullName),
 }
 
-impl <'a> std::convert::From<&'a Box<NamePath>> for &'a[NameSeg] {
+impl<'a> std::convert::From<&'a Box<NamePath>> for &'a [NameSeg] {
     fn from(name_path: &'a Box<NamePath>) -> Self {
         match &**name_path {
-            NamePath::SingleNamePath(single_name_path) => core::slice::from_ref(single_name_path),
-            NamePath::DualNamePath(dual_name_path) => &dual_name_path.segments,
-            NamePath::MultiNamePath(multi_name_path) => &multi_name_path.segments,
+            NamePath::Single(single_name_path) => core::slice::from_ref(single_name_path),
+            NamePath::Dual(dual_name_path) => &dual_name_path.segments,
+            NamePath::Multi(multi_name_path) => &multi_name_path.segments,
             NamePath::NullName(_) => &[],
         }
     }
 }
 
-impl <'a> std::convert::From<&'a NamePath> for &'a[NameSeg] {
+impl<'a> std::convert::From<&'a NamePath> for &'a [NameSeg] {
     fn from(name_path: &'a NamePath) -> Self {
         match name_path {
-            NamePath::SingleNamePath(single_name_path) => core::slice::from_ref(single_name_path),
-            NamePath::DualNamePath(dual_name_path) => &dual_name_path.segments,
-            NamePath::MultiNamePath(multi_name_path) => &multi_name_path.segments,
+            NamePath::Single(single_name_path) => core::slice::from_ref(single_name_path),
+            NamePath::Dual(dual_name_path) => &dual_name_path.segments,
+            NamePath::Multi(multi_name_path) => &multi_name_path.segments,
             NamePath::NullName(_) => &[],
         }
     }
@@ -182,9 +180,9 @@ impl <'a> std::convert::From<&'a NamePath> for &'a[NameSeg] {
 impl std::convert::From<Box<NamePath>> for Box<[NameSeg]> {
     fn from(name_path: Box<NamePath>) -> Self {
         match *name_path {
-            NamePath::SingleNamePath(single_name_path) => Box::new([single_name_path]),
-            NamePath::DualNamePath(dual_name_path) => dual_name_path.segments.into(),
-            NamePath::MultiNamePath(multi_name_path) => multi_name_path.segments.into(),
+            NamePath::Single(single_name_path) => Box::new([single_name_path]),
+            NamePath::Dual(dual_name_path) => dual_name_path.segments.into(),
+            NamePath::Multi(multi_name_path) => multi_name_path.segments.into(),
             NamePath::NullName(_) => Box::new([]),
         }
     }
@@ -192,7 +190,7 @@ impl std::convert::From<Box<NamePath>> for Box<[NameSeg]> {
 
 //identifiable with 0x2E
 #[derive(Debug, Clone)]
-struct DualNamePath {
+pub struct DualNamePath {
     segments: [NameSeg; 2],
 }
 
@@ -206,18 +204,18 @@ impl AmlNew for DualNamePath {
             NameSeg::aml_new(&data[1..]).unwrap().0,
             NameSeg::aml_new(&data[5..]).unwrap().0,
         );
-        return Some((
+        Some((
             DualNamePath {
                 segments: [seg_1, seg_2],
             },
             9,
-        ));
+        ))
     }
 }
 
 //identifiable with 0x2F
 #[derive(Debug, Clone)]
-struct MultiNamePath {
+pub struct MultiNamePath {
     segments: std::Vec<NameSeg>,
 }
 
@@ -239,7 +237,7 @@ impl AmlNew for MultiNamePath {
 
 #[derive(StructNewMacro, Debug, Clone)]
 #[op_prefix(NULL_NAME)]
-struct NullName;
+pub struct NullName;
 
 #[derive(Debug, EnumNewMacro)]
 pub enum SimpleName {
@@ -257,7 +255,7 @@ pub enum SuperName {
 
 #[derive(StructNewMacro, Debug)]
 #[ext_op_prefix(DEBUG_OP)]
-struct DebugObj;
+pub struct DebugObj;
 
 #[derive(EnumNewMacro, Debug)]
 pub enum ReferenceTypeOpcode {

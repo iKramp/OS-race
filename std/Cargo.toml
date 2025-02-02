@@ -3,6 +3,10 @@ name = "std"
 version = "0.1.0"
 edition = "2021"
 
+[lints.rust]
+dead_code = "allow"
+static_mut_refs = "allow"
+
 [build]
 target = "x86_64-unknown-none"
 

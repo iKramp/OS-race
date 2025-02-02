@@ -1,4 +1,4 @@
-use std::{boxed::Box, println, string::String, Vec};
+use std::{boxed::Box, Vec};
 
 use macros::*;
 use traits::*;
@@ -6,7 +6,9 @@ use traits::*;
 use crate::acpi::aml::name_objects::NameString;
 
 use super::{
-    data_object::{ByteData, DWordData, EXT_OP_PREFIX}, namespace::{self, get_namespace, Namespace}, term_objects::{TermArg, TermList}, Integer
+    data_object::{ByteData, DWordData, EXT_OP_PREFIX},
+    namespace::{self, get_namespace, Namespace},
+    term_objects::{TermArg, TermList},
 };
 
 const BANK_FIELD_OP: [u8; 2] = [EXT_OP_PREFIX, 0x87];
@@ -62,13 +64,13 @@ enum FieldFlagsUpdateRule {
 
 #[derive(Debug)]
 enum AccessAttribInner {
-    AttribQuick,
-    AttribSendReceive,
-    AttribByte,
-    AttribWord,
-    AttribBlock,
-    AttribProcessCall,
-    AttribBlockProcessCall,
+    Quick,
+    SendReceive,
+    Byte,
+    Word,
+    Block,
+    ProcessCall,
+    BlockProcessCall,
 }
 
 #[derive(Debug)]
@@ -145,13 +147,13 @@ impl AccessType {
 impl AccessAttribInner {
     pub fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
         match data[0] {
-            0x02 => Some((Self::AttribQuick, 1)),
-            0x04 => Some((Self::AttribSendReceive, 1)),
-            0x06 => Some((Self::AttribByte, 1)),
-            0x08 => Some((Self::AttribWord, 1)),
-            0x0A => Some((Self::AttribBlock, 1)),
-            0x0C => Some((Self::AttribProcessCall, 1)),
-            0x0D => Some((Self::AttribBlockProcessCall, 1)),
+            0x02 => Some((Self::Quick, 1)),
+            0x04 => Some((Self::SendReceive, 1)),
+            0x06 => Some((Self::Byte, 1)),
+            0x08 => Some((Self::Word, 1)),
+            0x0A => Some((Self::Block, 1)),
+            0x0C => Some((Self::ProcessCall, 1)),
+            0x0D => Some((Self::BlockProcessCall, 1)),
             _ => None,
         }
     }
@@ -166,10 +168,10 @@ enum RegionSpace {
     SMBus,
     SystemCMOS,
     PciBarTarget,
-    IPMI,
+    Ipmi,
     GeneralPurposeIO,
     GenericSerialBus,
-    PCC,
+    Pcc,
     OemDefined,
 }
 
@@ -183,10 +185,10 @@ impl RegionSpace {
             4 => Some((Self::SMBus, 1)),
             5 => Some((Self::SystemCMOS, 1)),
             6 => Some((Self::PciBarTarget, 1)),
-            7 => Some((Self::IPMI, 1)),
+            7 => Some((Self::Ipmi, 1)),
             8 => Some((Self::GeneralPurposeIO, 1)),
             9 => Some((Self::GenericSerialBus, 1)),
-            10 => Some((Self::PCC, 1)),
+            10 => Some((Self::Pcc, 1)),
             x if x >= 0x80 => Some((Self::OemDefined, 1)),
             _ => None,
         }
@@ -225,7 +227,7 @@ impl SyncFlags {
 
 impl AmlNew for SyncFlags {
     fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
-        if data.len() < 1 {
+        if data.is_empty() {
             return None;
         }
         Some((Self { flags: data[0] }, 1))
@@ -255,7 +257,7 @@ pub enum NamedObj {
 }
 
 #[derive(Debug)]
-struct DefBankField {
+pub struct DefBankField {
     name_1: NameString,
     name_2: NameString,
     bank_value: TermArg,
@@ -283,7 +285,7 @@ impl AmlNew for DefBankField {
         skip += 1;
 
         let (field_list, _skip_field_list) = FieldList::aml_new(&data[skip..(pkg_length.get_length() + 2)]).unwrap();
-        skip = 2 + pkg_length.get_length() as usize;
+        skip = 2 + pkg_length.get_length();
 
         Some((
             Self {
@@ -300,7 +302,7 @@ impl AmlNew for DefBankField {
 
 #[derive(Debug, StructNewMacro)]
 #[op_prefix(CREATE_BIT_FIELD_OP)]
-struct DefCreateBitField {
+pub struct DefCreateBitField {
     source_buf: TermArg,
     bit_index: TermArg,
     name: NameString,
@@ -308,7 +310,7 @@ struct DefCreateBitField {
 
 #[derive(Debug, StructNewMacro)]
 #[op_prefix(CREATE_BYTE_FIELD_OP)]
-struct DefCreateByteField {
+pub struct DefCreateByteField {
     source_buf: TermArg,
     byte_index: TermArg,
     name: NameString,
@@ -316,7 +318,7 @@ struct DefCreateByteField {
 
 #[derive(Debug, StructNewMacro)]
 #[op_prefix(CREATE_DWORD_FIELD_OP)]
-struct DefCreateDWordField {
+pub struct DefCreateDWordField {
     source_buf: TermArg,
     byte_index: TermArg,
     name: NameString,
@@ -324,7 +326,7 @@ struct DefCreateDWordField {
 
 #[derive(Debug, StructNewMacro)]
 #[op_prefix(CREATE_QWORD_FIELD_OP)]
-struct DefCreateQWordField {
+pub struct DefCreateQWordField {
     source_buf: TermArg,
     byte_index: TermArg,
     name: NameString,
@@ -332,7 +334,7 @@ struct DefCreateQWordField {
 
 #[derive(Debug, StructNewMacro)]
 #[op_prefix(CREATE_WORD_FIELD_OP)]
-struct DefCreateWordField {
+pub struct DefCreateWordField {
     source_buf: TermArg,
     byte_index: TermArg,
     name: NameString,
@@ -340,7 +342,7 @@ struct DefCreateWordField {
 
 #[derive(Debug, StructNewMacro)]
 #[op_prefix(CREATE_FIELD)]
-struct DefCreateField {
+pub struct DefCreateField {
     source_buf: TermArg,
     bit_index: TermArg,
     num_bits: TermArg,
@@ -349,7 +351,7 @@ struct DefCreateField {
 
 #[derive(StructNewMacro, Debug)]
 #[ext_op_prefix(DATA_REGION_OP)]
-struct DefDataRegion {
+pub struct DefDataRegion {
     name: NameString,
     offset: TermArg,
     size: TermArg,
@@ -358,14 +360,14 @@ struct DefDataRegion {
 
 #[derive(Debug, StructNewMacro)]
 #[op_prefix(EXTERNAL_OP)]
-struct DefExternal {
+pub struct DefExternal {
     name: NameString,
     object_type: ByteData,
     argument_count: ByteData,
 }
 
 #[derive(Debug)]
-struct DefField {
+pub struct DefField {
     name: NameString,
     field_flags: FieldFlags,
     field_list: FieldList,
@@ -383,8 +385,8 @@ impl AmlNew for DefField {
         skip += skip_name;
         let field_flags = FieldFlags { flags: data[skip] };
         skip += 1;
-        let (field_list, skip_field_list) = FieldList::aml_new(&data[skip..(pkg_length.get_length() + 2)]).unwrap();
-        skip = 2 + pkg_length.get_length() as usize;
+        let (field_list, _skip_field_list) = FieldList::aml_new(&data[skip..(pkg_length.get_length() + 2)]).unwrap();
+        skip = 2 + pkg_length.get_length();
         Some((
             Self {
                 name,
@@ -397,7 +399,7 @@ impl AmlNew for DefField {
 }
 
 #[derive(Debug)]
-struct DefIndexField {
+pub struct DefIndexField {
     name: NameString,
     name_2: NameString,
     field_flags: FieldFlags,
@@ -451,12 +453,9 @@ impl DefMethod {
         let method_flags = MethodFlags { flags: data[skip] };
         skip += 1;
         Namespace::push_namespace_string(get_namespace(), name.clone());
-        let (term_list, term_list_skip) = TermList::aml_new(&data[skip..(pkg_length.get_length() + 1)]).unwrap();
+        let (term_list, _term_list_skip) = TermList::aml_new(&data[skip..(pkg_length.get_length() + 1)]).unwrap();
         Namespace::pop_namespace(get_namespace());
-        let method = DefMethod {
-            method_flags,
-            term_list,
-        };
+        let method = DefMethod { method_flags, term_list };
         Some((method, name))
     }
 
@@ -474,10 +473,10 @@ impl DefMethod {
         skip += skip_name;
         let method_flags = MethodFlags { flags: data[skip] };
 
-        if pkg_length.get_length() as usize + 1 > data.len() {
+        if pkg_length.get_length() + 1 > data.len() {
             return None;
         }
-        Some((name, method_flags.get_arg_count(), 1 + pkg_length.get_length() as usize))
+        Some((name, method_flags.get_arg_count(), 1 + pkg_length.get_length()))
     }
 }
 
@@ -494,14 +493,14 @@ impl AmlNew for DefFakeMethod {
         let method = DefMethod::aml_new(data).unwrap();
         namespace::get_namespace().add_method(&method.1, method.0);
 
-        skip = 1 + pkg_length.get_length() as usize;
-        Some((Self{}, skip))
+        skip = 1 + pkg_length.get_length();
+        Some((Self {}, skip))
     }
 }
 
 #[derive(Debug, StructNewMacro)]
 #[ext_op_prefix(OP_REGION_OP)]
-struct DefOpRegion {
+pub struct DefOpRegion {
     name: NameString,
     region_space: RegionSpace,
     offset: TermArg,
@@ -525,7 +524,7 @@ impl DefPowerRes {
         let (pkg_length, skip_pkg_len) = super::package::PkgLength::new(&data[skip..]);
         skip += skip_pkg_len;
         let (name, _skip_name) = NameString::aml_new(&data[skip..])?;
-        skip = 2 + pkg_length.get_length() as usize;
+        skip = 2 + pkg_length.get_length();
         Some((name, skip))
     }
 }
@@ -545,7 +544,7 @@ impl AmlNew for DefPowerRes {
         let resource_order = u16::from_le_bytes([data[skip], data[skip + 1]]);
         skip += 2;
         Namespace::push_namespace_string(get_namespace(), name.clone());
-        let (term_list, term_list_skip) = TermList::aml_new(&data[skip..(2 + pkg_length.get_length() as usize)]).unwrap();
+        let (term_list, term_list_skip) = TermList::aml_new(&data[skip..(2 + pkg_length.get_length())]).unwrap();
         Namespace::pop_namespace(get_namespace());
         skip += term_list_skip;
         Some((
@@ -555,7 +554,7 @@ impl AmlNew for DefPowerRes {
                 resource_order,
                 term_list,
             },
-            skip
+            skip,
         ))
     }
 }
@@ -577,7 +576,7 @@ impl DefProcessor {
         let (pkg_length, skip_pkg_len) = super::package::PkgLength::new(&data[skip..]);
         skip += skip_pkg_len;
         let (name, _skip_name) = NameString::aml_new(&data[skip..])?;
-        skip = 2 + pkg_length.get_length() as usize;
+        skip = 2 + pkg_length.get_length();
         Some((name, skip))
     }
 }
@@ -600,11 +599,19 @@ impl AmlNew for DefProcessor {
         skip += skip_pblk_length;
 
         Namespace::push_namespace_string(get_namespace(), name.clone());
-        let (term_list, term_list_skip) = TermList::aml_new(&data[skip..(2 + pkg_length.get_length() as usize)]).unwrap();
+        let (term_list, term_list_skip) = TermList::aml_new(&data[skip..(2 + pkg_length.get_length())]).unwrap();
         Namespace::pop_namespace(get_namespace());
         skip += term_list_skip;
-        
-        Some((Self { processor_id, pblk_address, pblk_length, term_list }, skip))
+
+        Some((
+            Self {
+                processor_id,
+                pblk_address,
+                pblk_length,
+                term_list,
+            },
+            skip,
+        ))
     }
 }
 
@@ -623,7 +630,7 @@ impl DefThermalZone {
         let (pkg_length, skip_pkg_len) = super::package::PkgLength::new(&data[skip..]);
         skip += skip_pkg_len;
         let (name, _skip_name) = NameString::aml_new(&data[skip..])?;
-        skip = 2 + pkg_length.get_length() as usize;
+        skip = 2 + pkg_length.get_length();
         Some((name, skip))
     }
 }
@@ -639,7 +646,7 @@ impl AmlNew for DefThermalZone {
         let (name, skip_name) = NameString::aml_new(&data[skip..]).unwrap();
         skip += skip_name;
         Namespace::push_namespace_string(get_namespace(), name.clone());
-        let (term_list, term_list_skip) = TermList::aml_new(&data[skip..(2 + pkg_length.get_length() as usize)]).unwrap();
+        let (term_list, term_list_skip) = TermList::aml_new(&data[skip..(2 + pkg_length.get_length())]).unwrap();
         Namespace::pop_namespace(get_namespace());
         skip += term_list_skip;
         Some((Self { name, term_list }, skip))
@@ -661,7 +668,7 @@ impl DefDevice {
         let (pkg_length, skip_pkg_len) = super::package::PkgLength::new(&data[skip..]);
         skip += skip_pkg_len;
         let (name, _skip_name) = NameString::aml_new(&data[skip..])?;
-        skip = 2 + pkg_length.get_length() as usize;
+        skip = 2 + pkg_length.get_length();
         Some((name, skip))
     }
 }
@@ -677,7 +684,7 @@ impl AmlNew for DefDevice {
         let (name, skip_name) = NameString::aml_new(&data[skip..]).unwrap();
         skip += skip_name;
         Namespace::push_namespace_string(get_namespace(), name.clone());
-        let (term_list, term_list_skip) = TermList::aml_new(&data[skip..(2 + pkg_length.get_length() as usize)]).unwrap();
+        let (term_list, term_list_skip) = TermList::aml_new(&data[skip..(2 + pkg_length.get_length())]).unwrap();
         Namespace::pop_namespace(get_namespace());
         skip += term_list_skip;
         Some((Self { name, term_list }, skip))
@@ -686,13 +693,13 @@ impl AmlNew for DefDevice {
 
 #[derive(Debug, StructNewMacro)]
 #[ext_op_prefix(EVENT_OP)]
-struct DefEvent {
+pub struct DefEvent {
     name: NameString,
 }
 
 #[derive(Debug, StructNewMacro)]
 #[ext_op_prefix(MUTEX_OP)]
-struct DefMutex {
+pub struct DefMutex {
     name: NameString,
     sync_flafs: SyncFlags,
 }
@@ -717,12 +724,18 @@ impl FieldList {
         }
         //sanity check
         if skip != data.len() {
-            panic!("FieldList::new: did not read all data: {} != {}\n{:x?}", skip, data.len(), data);
+            panic!(
+                "FieldList::new: did not read all data: {} != {}\n{:x?}",
+                skip,
+                data.len(),
+                data
+            );
         }
         Some((Self { fields }, skip))
     }
 }
 
+#[allow(clippy::enum_variant_names)] //they are all fields
 #[derive(Debug, EnumNewMacro)]
 enum FieldElement {
     NamedField(NamedField),
@@ -743,7 +756,13 @@ impl AmlNew for NamedField {
         let (name_seg, mut skip) = super::name_objects::NameSeg::aml_new(data)?;
         let (pkg_length, skip_pkg_len) = super::package::PkgLength::new(&data[skip..]);
         skip += skip_pkg_len;
-        Some((Self { name_seg, len: pkg_length.get_length() }, skip))
+        Some((
+            Self {
+                name_seg,
+                len: pkg_length.get_length(),
+            },
+            skip,
+        ))
     }
 }
 
@@ -759,7 +778,12 @@ impl AmlNew for ReservedField {
         }
         let (pkg_length, skip_pkg_len) = super::package::PkgLength::new(&data[1..]);
         let skip = 1 + skip_pkg_len;
-        Some((Self { len: pkg_length.get_length() }, skip))
+        Some((
+            Self {
+                len: pkg_length.get_length(),
+            },
+            skip,
+        ))
     }
 }
 

@@ -86,19 +86,21 @@ pub unsafe fn set_physical_offset(addr: PhysOffset) {
     PHYSICAL_OFFSET = addr;
 }
 
-pub unsafe fn translate_virt_phys_addr(addr: VirtAddr) -> Option<PhysAddr> {
+pub fn translate_virt_phys_addr(addr: VirtAddr) -> Option<PhysAddr> {
     let mut page_addr = PhysAddr(0);
-    core::arch::asm!(
-        "mov {}, cr3",
-        out(reg) page_addr.0,
-    );
+    unsafe {
+        core::arch::asm!(
+            "mov {}, cr3",
+            out(reg) page_addr.0,
+        );
+    }
     #[allow(clippy::unusual_byte_groupings)] //they are grouped by section masks
     let mut final_mask: u64 = 0b111111111_111111111_111111111_111111111_111111111111;
     let mask = 0b111_111_111_000;
     for level in (1..5).rev() {
         let offset = PhysAddr((addr.0 >> (level * 9)) & mask);
         final_mask >>= 9;
-        let page_entry = *get_at_physical_addr::<u64>(page_addr + offset);
+        let page_entry = unsafe { *get_at_physical_addr::<u64>(page_addr + offset) };
         let present = page_entry & 1 != 0;
         if !present {
             return None;

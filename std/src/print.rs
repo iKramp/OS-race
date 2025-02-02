@@ -1,4 +1,4 @@
-use core::{alloc, fmt::{Arguments, Write}, time::Duration};
+use core::fmt::{Arguments, Write};
 
 use crate::sync::mutex::{Mutex, MutexGuard};
 

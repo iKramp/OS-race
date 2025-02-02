@@ -1,7 +1,6 @@
 #![allow(clippy::unusual_byte_groupings, static_mut_refs)]
 
 use std::{
-    eh::int3,
     mem_utils::{PhysAddr, VirtAddr},
     PageAllocator,
 };

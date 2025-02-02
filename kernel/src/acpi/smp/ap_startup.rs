@@ -48,8 +48,8 @@ pub extern "C" fn ap_started_wait_loop() -> ! {
 
 fn set_initialized() {
     unsafe {
-        let mut lock = true;
-        while lock == false {
+        let mut lock = false;
+        while !lock {
             lock = super::CPU_LOCK.swap(true, core::sync::atomic::Ordering::Relaxed)
         }
         let cpus = super::CPUS_INITIALIZED.load(core::sync::atomic::Ordering::Relaxed);

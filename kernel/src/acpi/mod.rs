@@ -69,9 +69,9 @@ pub fn init_acpi() {
         };
         platform_info
     };
-    apic::enable_apic(&platform_info, platform_info.boot_processor.processor_id);
-    ioapic::init_ioapic(&platform_info);
-    smp::wake_cpus(&platform_info);
+    apic::enable_apic(platform_info, platform_info.boot_processor.processor_id);
+    ioapic::init_ioapic(platform_info);
+    smp::wake_cpus(platform_info);
     printlnc!((0, 255, 0), "ACPI initialized and APs started");
 
     //after loading dsdt
@@ -88,7 +88,7 @@ pub fn init_acpi() {
     */
 
     let dsdt_addr = std::mem_utils::translate_phys_virt_addr(PhysAddr(fadt.dsdt as u64));
-    let aml_code = aml::AmlCode::new(dsdt_addr.0 as *const u8);
+    let _aml_code = aml::AmlCode::new(dsdt_addr.0 as *const u8);
 }
 
 pub fn init_acpi_ap(processor_id: u8) {

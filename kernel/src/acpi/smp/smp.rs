@@ -126,7 +126,7 @@ fn copy_trampoline() {
 
 pub fn wait_for_cpus(num_cpus: u8) {
     loop {
-        let mut cpus_initialized = unsafe { CPUS_INITIALIZED.load(core::sync::atomic::Ordering::Relaxed) };
+        let cpus_initialized = unsafe { CPUS_INITIALIZED.load(core::sync::atomic::Ordering::Relaxed) };
         if cpus_initialized == num_cpus {
             break;
         }

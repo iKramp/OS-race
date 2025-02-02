@@ -1,4 +1,3 @@
-use crate::println;
 use std::arch::asm;
 use std::{print, printlnc};
 

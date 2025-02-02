@@ -17,7 +17,7 @@ impl AmlCode {
         let data = unsafe { core::slice::from_raw_parts(data.add(start_index), data_len) };
         namespace::get_namespace().scan_for_methods(data);
 
-        if namespace::get_namespace().current_namespace.len() > 0 {
+        if !namespace::get_namespace().current_namespace.is_empty() {
             panic!("Namespace not empty after scanning for methods");
         }
         println!("namespacce scanned for methods");

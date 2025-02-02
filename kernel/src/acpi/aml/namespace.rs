@@ -17,7 +17,7 @@ pub struct Namespace {
     pub root: NamespaceNode,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct NamespaceNode {
     //type could be an enum of Scope, Device, PowerRes, ThermalZone, Processor
     pub methods: BTreeMap<NameSeg, (usize, Option<DefMethod>)>,
@@ -68,16 +68,6 @@ impl NamespaceNode {
         message
     }
 }
-
-impl Default for NamespaceNode {
-    fn default() -> Self {
-        Self {
-            methods: BTreeMap::new(),
-            children: BTreeMap::new(),
-        }
-    }
-}
-
 static mut GLOBAL_NAMESPACE: Option<Namespace> = None;
 
 pub fn create_namespace() {
@@ -111,7 +101,7 @@ impl Namespace {
             panic!("Method with name {:#?} not found in namespace", name);
         }
         node.methods
-            .insert(last_seg.clone(), (method.method_flags.get_arg_count() as usize, Some(method)));
+            .insert(*last_seg, (method.method_flags.get_arg_count() as usize, Some(method)));
     }
 
     pub fn add_method_arg_count(&mut self, name: &NameString, arg_count: usize) {
@@ -121,7 +111,7 @@ impl Namespace {
         if node.method_exists(last_seg) {
             panic!("Method with name {:#?} already exists in namespace", name);
         }
-        node.methods.insert(last_seg.clone(), (arg_count, None));
+        node.methods.insert(*last_seg, (arg_count, None));
     }
 
     fn get_node_for_method<'a>(&'a mut self, name: &'a NameString) -> Option<(&'a mut NamespaceNode, &'a NameSeg)> {
@@ -150,13 +140,13 @@ impl Namespace {
             }
             NameString::BlankPath(name_path) => {
                 let current_path = self.get_namespace_sequence();
-                let node = self.root.search_node(&current_path)?;
+                let node = self.root.search_node(current_path)?;
 
                 #[allow(invalid_reference_casting)]
                 let node = unsafe { &mut *(node as *const NamespaceNode as *mut NamespaceNode) };
 
                 let seg_slice: &[NameSeg] = (name_path).into();
-                if seg_slice.len() == 0 {
+                if seg_slice.is_empty() {
                     panic!("Cannot add method with empty name");
                 }
                 Some((
@@ -219,7 +209,7 @@ impl Namespace {
         acc.push(current_node);
         let segments = self.get_namespace_sequence();
         for segment in segments {
-            if let Some(node) = current_node.children.get(&segment) {
+            if let Some(node) = current_node.children.get(segment) {
                 current_node = node;
                 acc.push(current_node);
             } else {
@@ -283,7 +273,7 @@ impl Namespace {
         };
 
         let segments = unsafe { &*(self.get_namespace_sequence() as *const [NameSeg]) };
-        if segments.len() == 0 {
+        if segments.is_empty() {
             return;
         }
 
@@ -292,7 +282,7 @@ impl Namespace {
             .root
             .search_node_mut(&segments[..(segments.len() - 1)])
             .expect(&format!("cannot extend namespace, name path was {:?}", segments));
-        let last_segment = segments.last().unwrap().clone();
+        let last_segment = *segments.last().unwrap();
         if node.children.contains_key(&last_segment) {
             return;
         }

@@ -1,7 +1,7 @@
-use std::{boxed::Box, println};
+use std::boxed::Box;
 
-use traits::*;
 use macros::*;
+use traits::*;
 
 use crate::acpi::aml::namespace::*;
 
@@ -13,21 +13,21 @@ const SCOPE_OP: u8 = 0x10;
 
 #[derive(EnumNewMacro, Debug)]
 pub enum NameSpaceModifierObj {
-    Alias(Box::<DefAlias>),
-    Name(Box::<DefName>),
-    Scope(Box::<DefScope>),
+    Alias(Box<DefAlias>),
+    Name(Box<DefName>),
+    Scope(Box<DefScope>),
 }
 
 #[derive(StructNewMacro, Debug)]
 #[op_prefix(ALIAS_OP)]
-struct DefAlias {
+pub struct DefAlias {
     source: NameString,
     target: NameString,
 }
 
 #[derive(StructNewMacro, Debug)]
 #[op_prefix(NAME_OP)]
-struct DefName {
+pub struct DefName {
     name: NameString,
     obj: DataRefObject,
 }
@@ -52,10 +52,9 @@ impl DefScope {
         }
         skip += skip_pkg_len;
         let (name, _skip_name) = NameString::aml_new(&data[skip..])?;
-        skip = 1 + pkg_length.get_length() as usize;
+        skip = 1 + pkg_length.get_length();
 
-        return Some((name, skip));
-
+        Some((name, skip))
     }
 }
 
@@ -73,12 +72,12 @@ impl AmlNew for DefScope {
         skip += skip_name;
 
         let term_list_start = skip;
-        let term_list_end = pkg_length.get_length() as usize + 1;
+        let term_list_end = pkg_length.get_length() + 1;
         Namespace::push_namespace_string(get_namespace(), name.clone());
         let (term_list, term_list_len) = TermList::aml_new(&data[term_list_start..term_list_end]).unwrap();
         Namespace::pop_namespace(get_namespace());
         skip += term_list_len;
 
-        return Some((Self { name, terms: term_list }, skip));
+        Some((Self { name, terms: term_list }, skip))
     }
 }
