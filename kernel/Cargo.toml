@@ -20,19 +20,3 @@ kernel_test = { path = "../kernel_test"}
 std = { path = "../std", features = ["test_includes"] }
 macros = { path = "../macros/macros" }
 traits = { path = "../macros/traits" }
-
-[profile.dev]
-panic = "abort"
-opt-level = 0
-lto = false
-
-[profile.release]
-panic = "abort"
-opt-level = 0
-lto = false
-
-[profile.dev.package.std]
-debug = true
-
-[profile.release.package.std]
-debug = true

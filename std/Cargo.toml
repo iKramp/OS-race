@@ -7,9 +7,6 @@ edition = "2021"
 dead_code = "allow"
 static_mut_refs = "allow"
 
-[build]
-target = "x86_64-unknown-none"
-
 [lib]
 crate-type = ["rlib"]
 
@@ -17,9 +14,3 @@ crate-type = ["rlib"]
 
 [features]
 test_includes = []
-
-[profile.dev]
-debug = true
-
-[profile.release]
-debug = true
