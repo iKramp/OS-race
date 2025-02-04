@@ -32,6 +32,7 @@ fn main() {
     cmd.arg("-drive").arg("id=disk,format=raw,file=kernel_build_files/image.iso,if=none");
     cmd.arg("-device").arg("ahci,id=ahci");
     cmd.arg("-device").arg("ide-hd,drive=disk,bus=ahci.0");
+    //cmd.arg("-drive").arg("format=raw,file=kernel_build_files/image.iso");
     let mut child = cmd.spawn().unwrap();
 
     if debug {

@@ -144,6 +144,7 @@ pub struct FrameBuffer {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct FramebufferInfo {
     pub address: *const (),
     pub width: u64,
@@ -167,6 +168,7 @@ pub struct FramebufferInfo {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct FramebufferMode {
     pub pitch: u64,
     pub width: u64,

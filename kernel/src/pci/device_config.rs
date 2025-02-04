@@ -1,54 +1,103 @@
 #![allow(clippy::enum_variant_names)]
 
+use super::port_access;
 
-#[derive(Debug)]
+
+#[derive(Debug, Clone)]
 pub struct PciDevice {
     pub bus: u8,
     pub device: u8,
-    pub function: u8,
-    pub vendor_id: u16,
-    pub device_id: u16,
-    pub command: u16,
-    pub status: u16,
-    pub revision_id: u8,
-    pub prog_if: u8,
-    pub class: PciClass,
-    pub cache_line_size: u8,
-    pub latency_timer: u8,
-    pub header_type: u8,
-    pub bist: u8,
+    pub functions: u8,
 }
 
 impl PciDevice {
-    pub fn new(low_bits: u64, high_bits: u64, bus: u8, device: u8, function: u8) -> Self {
-        let vendor_id = (low_bits & 0xFFFF) as u16;
-        let device_id = ((low_bits >> 16) & 0xFFFF) as u16;
-        let command = ((low_bits >> 32) & 0xFFFF) as u16;
-        let status = (low_bits >> 48) as u16;
-        let revision_id = (high_bits & 0xFF) as u8;
-        let prog_if = ((high_bits >> 8) & 0xFF) as u8;
-        let subclass = ((high_bits >> 16) & 0xFF) as u8;
-        let class = ((high_bits >> 24) & 0xFF) as u8;
-        let cache_line_size = ((high_bits >> 32) & 0xFF) as u8;
-        let latency_timer = ((high_bits >> 40) & 0xFF) as u8;
-        let header_type = ((high_bits >> 48) & 0xFF) as u8;
-        let bist = ((high_bits >> 56) & 0xFF) as u8;
+    pub fn new(bus: u8, device: u8, functions: u8) -> Self {
         Self {
             bus,
             device,
-            function,
-            vendor_id,
-            device_id,
-            command,
-            status,
-            revision_id,
-            prog_if,
-            class: PciClass::from(class, subclass),
-            cache_line_size,
-            latency_timer,
-            header_type,
-            bist,
+            functions,
         }
+    }
+
+    pub fn has_function(&self, function: u8) -> bool {
+        //bitmask
+        (self.functions & (1 << function)) != 0
+    }
+
+    pub fn get_dword(&self, function: u8, offset: u8) -> u32 {
+        port_access::get_dword(self.bus, self.device, function, offset)
+    }
+
+    pub fn set_dword(&self, function: u8, offset: u8, value: u32) {
+        port_access::set_dword(self.bus, self.device, function, offset, value)
+    }
+
+    pub fn get_vendor_id(&self, function: u8) -> u16 {
+        self.get_dword(function, 0) as u16
+    }
+
+    pub fn get_device_id(&self) -> u16 {
+        (self.get_dword(0, 0) >> 16) as u16
+    }
+
+    pub fn get_command(&self) -> u16 {
+        self.get_dword(0, 4) as u16
+    }
+
+    pub fn set_command(&self, value: u16) {
+        let dword = self.get_dword(0, 4);
+        let dword = (dword & 0xFFFF0000) | value as u32;
+        self.set_dword(0, 4, dword);
+    }
+
+    pub fn get_status(&self) -> u16 {
+        (self.get_dword(0, 4) >> 16) as u16
+    }
+
+    pub fn get_revision_id(&self) -> u8 {
+        self.get_dword(0, 8) as u8
+    }
+
+    pub fn get_progif(&self) -> u8 {
+        (self.get_dword(0, 8) >> 8) as u8
+    }
+
+    pub fn get_class(&self) -> PciClass {
+        let class_subclass = self.get_dword(0, 8) >> 16;
+        let class = (class_subclass >> 8) as u8;
+        let subclass = class_subclass as u8;
+        PciClass::from(class, subclass)
+    }
+
+    pub fn get_header_type(&self) -> u8 {
+        (self.get_dword(0, 0xC) >> 16) as u8
+    }
+
+    pub fn get_bist(&self) -> u8 {
+        (self.get_dword(0, 0xC) >> 24) as u8
+    }
+
+    pub fn get_latency_timer(&self) -> u8 {
+        (self.get_dword(0, 0xC) >> 8) as u8
+    }
+
+    pub fn get_cache_line_size(&self) -> u8 {
+        self.get_dword(0, 0xC) as u8
+    }
+
+    pub fn get_bar(&self, index: u8) -> u32 {
+        #[cfg(debug_assertions)]
+        {
+            let header_type = self.get_header_type() & 0x7F;
+            if header_type == 0 {
+                assert!(index < 6, "Invalid BAR index for header type 0: {}", index);
+            } else if header_type == 1 {
+                assert!(index < 2, "Invalid BAR index for header type 1: {}", index);
+            } else {
+                panic!("Header type {} does not conatin BARs", header_type);
+            }
+        }
+        self.get_dword(0, 0x10 + index * 4)
     }
 }
 

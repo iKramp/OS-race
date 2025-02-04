@@ -19,8 +19,9 @@ mod tests;
 mod utils;
 mod vga;
 mod pci;
+mod drivers;
+mod disk;
 use limine::LIMINE_BOOTLOADER_REQUESTS;
-use vga::vga_text;
 
 pub struct BootInfo {}
 
