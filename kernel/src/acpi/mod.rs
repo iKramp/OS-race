@@ -87,8 +87,8 @@ pub fn init_acpi() {
         }
     */
 
-    let dsdt_addr = std::mem_utils::translate_phys_virt_addr(PhysAddr(fadt.dsdt as u64));
-    let _aml_code = aml::AmlCode::new(dsdt_addr.0 as *const u8);
+    let _dsdt_addr = std::mem_utils::translate_phys_virt_addr(PhysAddr(fadt.dsdt as u64));
+    //let _aml_code = aml::AmlCode::new(dsdt_addr.0 as *const u8);
 }
 
 pub fn init_acpi_ap(processor_id: u8) {

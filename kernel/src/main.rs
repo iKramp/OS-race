@@ -18,6 +18,7 @@ mod msr;
 mod tests;
 mod utils;
 mod vga;
+mod pci;
 use limine::LIMINE_BOOTLOADER_REQUESTS;
 use vga::vga_text;
 
@@ -43,15 +44,17 @@ extern "C" fn _start() -> ! {
 
     acpi::init_acpi();
 
-    vga_text::hello_message();
+    pci::enumerate_devices();
 
-    #[cfg(feature = "run_tests")]
-    {
-        println!("Running tests");
-        use tests::test_runner;
-        test_runner();
-        println!("Finished running tests");
-    }
+    //vga_text::hello_message();
+
+    //#[cfg(feature = "run_tests")]
+    //{
+    //    println!("Running tests");
+    //    use tests::test_runner;
+    //    test_runner();
+    //    println!("Finished running tests");
+    //}
 
     println!("looping infinitely now");
     let mut a = 0;

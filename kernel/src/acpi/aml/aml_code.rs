@@ -27,6 +27,12 @@ impl AmlCode {
 
         let message = namespace::get_namespace().root.methods_have_bodies("ROOT".to_string());
         print!("{}", message);
+        println!("Namespace:");
+        println!("{:?}", namespace::get_namespace().root
+            .search_node(core::slice::from_ref(&"_SB_".into())).unwrap()
+            .search_node(core::slice::from_ref(&"PCI0".into())).unwrap()
+            .children.keys()
+            );
         Self { header, term_list }
     }
 }
