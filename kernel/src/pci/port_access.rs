@@ -10,23 +10,15 @@ pub fn enumerate_devices() -> Vec<PciDevice> {
     let mut devices = Vec::new();
     for bus in 0..=255 {
         for device in 0..32 {
-            let mut functions = 0;
             for function in 0..8 {
                 let first_dword = get_dword(bus, device, function, 0);
                 let vendor_id = first_dword as u16;
                 if vendor_id == 0xFFFF && function == 0 {
                     break;
                 }
-                functions |= 1 << function;
-                if PciDevice::new(bus, device, 0).get_header_type() & 0x80 == 0 {
-                    break;
-                }
+                let device = PciDevice::new(bus, device, function);
+                devices.push(device);
             }
-            if functions == 0 {
-                continue;
-            }
-            let device = PciDevice::new(bus, device, functions);
-            devices.push(device);
         }
     }
     devices

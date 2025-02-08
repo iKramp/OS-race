@@ -1,5 +1,7 @@
 #![allow(clippy::enum_variant_names)]
 
+use std::vec::Vec;
+
 use super::port_access;
 
 
@@ -7,82 +9,77 @@ use super::port_access;
 pub struct PciDevice {
     pub bus: u8,
     pub device: u8,
-    pub functions: u8,
+    pub function: u8,
 }
 
 impl PciDevice {
-    pub fn new(bus: u8, device: u8, functions: u8) -> Self {
+    pub fn new(bus: u8, device: u8, function: u8) -> Self {
         Self {
             bus,
             device,
-            functions,
+            function,
         }
     }
 
-    pub fn has_function(&self, function: u8) -> bool {
-        //bitmask
-        (self.functions & (1 << function)) != 0
+    pub fn get_dword(&self, offset: u8) -> u32 {
+        port_access::get_dword(self.bus, self.device, self.function, offset)
     }
 
-    pub fn get_dword(&self, function: u8, offset: u8) -> u32 {
-        port_access::get_dword(self.bus, self.device, function, offset)
+    pub fn set_dword(&self, offset: u8, value: u32) {
+        port_access::set_dword(self.bus, self.device, self.function, offset, value)
     }
 
-    pub fn set_dword(&self, function: u8, offset: u8, value: u32) {
-        port_access::set_dword(self.bus, self.device, function, offset, value)
-    }
-
-    pub fn get_vendor_id(&self, function: u8) -> u16 {
-        self.get_dword(function, 0) as u16
+    pub fn get_vendor_id(&self) -> u16 {
+        self.get_dword(0) as u16
     }
 
     pub fn get_device_id(&self) -> u16 {
-        (self.get_dword(0, 0) >> 16) as u16
+        (self.get_dword(0) >> 16) as u16
     }
 
     pub fn get_command(&self) -> u16 {
-        self.get_dword(0, 4) as u16
+        self.get_dword(4) as u16
     }
 
     pub fn set_command(&self, value: u16) {
-        let dword = self.get_dword(0, 4);
+        let dword = self.get_dword(4);
         let dword = (dword & 0xFFFF0000) | value as u32;
-        self.set_dword(0, 4, dword);
+        self.set_dword(4, dword);
     }
 
     pub fn get_status(&self) -> u16 {
-        (self.get_dword(0, 4) >> 16) as u16
+        (self.get_dword(4) >> 16) as u16
     }
 
     pub fn get_revision_id(&self) -> u8 {
-        self.get_dword(0, 8) as u8
+        self.get_dword(8) as u8
     }
 
     pub fn get_progif(&self) -> u8 {
-        (self.get_dword(0, 8) >> 8) as u8
+        (self.get_dword(8) >> 8) as u8
     }
 
     pub fn get_class(&self) -> PciClass {
-        let class_subclass = self.get_dword(0, 8) >> 16;
+        let class_subclass = self.get_dword(8) >> 16;
         let class = (class_subclass >> 8) as u8;
         let subclass = class_subclass as u8;
         PciClass::from(class, subclass)
     }
 
     pub fn get_header_type(&self) -> u8 {
-        (self.get_dword(0, 0xC) >> 16) as u8
+        (self.get_dword(0xC) >> 16) as u8
     }
 
     pub fn get_bist(&self) -> u8 {
-        (self.get_dword(0, 0xC) >> 24) as u8
+        (self.get_dword(0xC) >> 24) as u8
     }
 
     pub fn get_latency_timer(&self) -> u8 {
-        (self.get_dword(0, 0xC) >> 8) as u8
+        (self.get_dword(0xC) >> 8) as u8
     }
 
     pub fn get_cache_line_size(&self) -> u8 {
-        self.get_dword(0, 0xC) as u8
+        self.get_dword(0xC) as u8
     }
 
     pub fn get_bar(&self, index: u8) -> u32 {
@@ -97,7 +94,25 @@ impl PciDevice {
                 panic!("Header type {} does not conatin BARs", header_type);
             }
         }
-        self.get_dword(0, 0x10 + index * 4)
+        self.get_dword(0x10 + index * 4)
+    }
+
+    pub fn get_capabilities_pointer(&self) -> u8 {
+        (self.get_dword(0x34) & 0b11111100) as u8
+    }
+
+    pub fn get_capabilities_list(&self) -> Vec<u8> {
+        let status = self.get_status();
+        if (status & 0x10) == 0 {
+            return Vec::new();
+        }
+        let mut capabilities = Vec::new();
+        let mut pointer = self.get_capabilities_pointer();
+        while pointer != 0 {
+            capabilities.push(pointer);
+            pointer = self.get_dword(pointer as u8) as u8;
+        }
+        capabilities
     }
 }
 
