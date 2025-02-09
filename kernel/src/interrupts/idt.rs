@@ -25,6 +25,8 @@ pub static mut IDT_POINTER: TablePointer = TablePointer { limit: 0, base: 0 };
 
 const IDT_SIZE: usize = 256;
 
+pub static mut CUSTOM_INTERRUPT_VECTOR: u64 = 0;
+
 pub struct Idt {
     entry_table: [Entry; IDT_SIZE],
 }
@@ -96,6 +98,16 @@ impl Idt {
 
         self.set(Entry::converging(apic_timer_tick), 100);
         self.set(Entry::converging(spurious_interrupt), 255);
+
+        //entries set by other files: 
+        //38-255 other apic interrupt (blank)
+        //67 - apic error
+        //33 - apic keyboard
+        //32 + 12 (44) - ps2 mouse
+        //32 + 13 (45) - fpu
+        //32 + 14 (46) - ata????
+        //32: selected timer (100 is free to use)
+        //use anything above 128 for pci devices for now
     }
 }
 

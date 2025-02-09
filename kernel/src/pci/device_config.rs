@@ -1,6 +1,6 @@
 #![allow(clippy::enum_variant_names)]
 
-use std::vec::Vec;
+use std::{mem_utils::VirtAddr, println, vec::Vec};
 
 use super::port_access;
 
@@ -10,6 +10,7 @@ pub struct PciDevice {
     pub bus: u8,
     pub device: u8,
     pub function: u8,
+    pub capabilities: Vec<Capability>,
 }
 
 impl PciDevice {
@@ -18,6 +19,7 @@ impl PciDevice {
             bus,
             device,
             function,
+            capabilities: Vec::new(),
         }
     }
 
@@ -101,19 +103,97 @@ impl PciDevice {
         (self.get_dword(0x34) & 0b11111100) as u8
     }
 
-    pub fn get_capabilities_list(&self) -> Vec<u8> {
+    pub fn get_capabilities_list(&mut self) -> &Vec<Capability> {
         let status = self.get_status();
         if (status & 0x10) == 0 {
-            return Vec::new();
+            return &self.capabilities;
         }
         let mut capabilities = Vec::new();
         let mut pointer = self.get_capabilities_pointer();
         while pointer != 0 {
-            capabilities.push(pointer);
-            pointer = self.get_dword(pointer as u8) as u8;
+            let capability_first_dword = self.get_dword(pointer);
+            let capability_id = capability_first_dword as u8;
+            capabilities.push(Capability {
+                id: capability_id,
+                pointer,
+            });
+            pointer = (capability_first_dword >> 8) as u8;
         }
-        capabilities
+        self.capabilities = capabilities;
+        return &self.capabilities;
     }
+
+    //MSI functions
+    //
+    pub fn get_msi_64_bit(&self) -> bool {
+        let capabilities = &self.capabilities;
+        let msi_cap = capabilities.iter().find(|cap| cap.id == 5).cloned();
+        let Some(msi_cap) = msi_cap else {
+            panic!("Device does not support MSI");
+        };
+
+        let dword = self.get_dword(msi_cap.pointer) >> 16;
+        return (dword & 0x80) != 0;
+    }
+    
+    pub fn init_msi_interrupt(&self) {
+        let is_64_capable = self.get_msi_64_bit();
+        let capabilities = &self.capabilities;
+        let msi_cap = capabilities.iter().find(|cap| cap.id == 5).cloned().expect("Device does not support MSI");
+        let first_dword = self.get_dword(msi_cap.pointer);
+        let mut message_control = (first_dword >> 16) as u16;
+
+        self.set_msi_address(&msi_cap);
+
+        //get number of requested interrupts, and allow max...?
+        let requested_interrupts_power = u16::min((message_control & 0b1110) >> 1, 5);
+        let requested_interrupts = 1 << requested_interrupts_power;
+        println!("Requested interrupts: {}", requested_interrupts);
+        message_control &= !0b1110000;
+        //give number of vectors
+        message_control |= requested_interrupts_power << 4; 
+
+        //get mext available irq with bottom bits set to 0
+        let mut current_free_irq = unsafe { crate::interrupts::idt::CUSTOM_INTERRUPT_VECTOR };
+        current_free_irq += requested_interrupts - 1;
+        current_free_irq &= !(requested_interrupts - 1);
+
+        let data_dword_offset = if is_64_capable { 0xC } else { 0x8 };
+        let data_dword = self.get_dword(msi_cap.pointer + data_dword_offset);
+        self.set_dword(msi_cap.pointer + data_dword_offset, data_dword & 0xFFFF_0000 | current_free_irq as u32);
+
+        unsafe {
+            crate::interrupts::idt::CUSTOM_INTERRUPT_VECTOR = current_free_irq + 1;
+        }
+        
+        //enable MSI
+        message_control |= 0x1;
+
+        self.set_dword(msi_cap.pointer, (message_control as u32) << 16 | (first_dword & 0xFFFF));
+    }
+
+    fn set_msi_address(&self, msi_cap: &Capability) {
+        let platform_info = crate::acpi::get_platform_info();
+        let destination_mode = 0;
+        let destination_id = platform_info.boot_processor.apic_id as u32;
+
+        let irq_address = 0xFFE << 20 |
+            destination_mode << 2 |
+            destination_id << 12;
+
+        let low_address = irq_address;
+        let high_address = 0;
+
+        self.set_dword(msi_cap.pointer + 4, low_address);
+        self.set_dword(msi_cap.pointer + 8, high_address);
+    }
+
+}
+
+#[derive(Debug, Clone)]
+pub struct Capability {
+    pub id: u8,
+    pub pointer: u8,
 }
 
 #[derive(Debug)]

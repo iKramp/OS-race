@@ -13,8 +13,12 @@ pub fn enumerate_devices() -> Vec<PciDevice> {
             for function in 0..8 {
                 let first_dword = get_dword(bus, device, function, 0);
                 let vendor_id = first_dword as u16;
-                if vendor_id == 0xFFFF && function == 0 {
-                    break;
+                if vendor_id == 0xFFFF {
+                    if function == 0 {
+                        break;
+                    } else {
+                        continue;
+                    }
                 }
                 let device = PciDevice::new(bus, device, function);
                 devices.push(device);

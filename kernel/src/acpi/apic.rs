@@ -20,9 +20,10 @@ const DIVIDE_VALUE: u32 = 16; //could be 1 on real PCs but VMs don't like it
 pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo, processor_id: u8) {
     let bsp = processor_id == platform_info.boot_processor.processor_id;
     if bsp {
-        disable_pic_keep_timer()
+        disable_pic_keep_timer();
+        map_lapic_registers(platform_info.apic.lapic_address);
     };
-    let lapic_registers = get_lapic_registers(platform_info.apic.lapic_address, bsp);
+    let lapic_registers = get_lapic_registers();
 
     if bsp {
         unsafe {
@@ -66,12 +67,15 @@ pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo, processor
         return;
     }
     activate_timer(lapic_registers);
-    unsafe { std::thread::TIMER_ACTIVE = true; }
+    unsafe {
+        std::thread::TIMER_ACTIVE = true;
+    }
 
     unsafe {
         for i in 38..255 {
             IDT.set(Entry::converging(other_apic_interrupt), i);
         }
+        IDT.set(Entry::converging(apic_error), 67);
 
         IDT.set(Entry::converging(apic_keyboard_interrupt), 32 + 1);
         IDT.set(Entry::converging(ps2_mouse_interrupt), 32 + 12);
@@ -81,19 +85,22 @@ pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo, processor
     disable_pic_completely();
 }
 
-fn get_lapic_registers(lapic_address: PhysAddr, bsp: bool) -> &'static mut LapicRegisters {
+fn map_lapic_registers(lapic_address: PhysAddr) {
     unsafe {
-        if bsp {
-            LAPIC_REGISTERS = crate::memory::PAGE_TREE_ALLOCATOR.allocate(Some(lapic_address));
-            let apic_registers_page_entry = crate::memory::PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(LAPIC_REGISTERS);
-            apic_registers_page_entry.set_write_through_cahcing(true);
-            apic_registers_page_entry.set_disable_cahce(true);
-            core::arch::asm!(
-                "mov rax, cr3",
-                "mov cr3, rax",
-                out("rax") _
-            ); //clear the TLB
-        }
+        LAPIC_REGISTERS = crate::memory::PAGE_TREE_ALLOCATOR.allocate(Some(lapic_address));
+        let apic_registers_page_entry = crate::memory::PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(LAPIC_REGISTERS);
+        apic_registers_page_entry.set_write_through_cahcing(true);
+        apic_registers_page_entry.set_disable_cahce(true);
+        core::arch::asm!(
+            "mov rax, cr3",
+            "mov cr3, rax",
+            out("rax") _
+        ); //clear the TLB
+    }
+}
+
+fn get_lapic_registers() -> &'static mut LapicRegisters {
+    unsafe {
         std::mem_utils::get_at_virtual_addr::<LapicRegisters>(LAPIC_REGISTERS)
     }
 }
@@ -200,7 +207,7 @@ pub struct LapicRegisters {
     reserved_4: LapicRegisterValueStructure,
     reserved_5: LapicRegisterValueStructure,
     task_priority: LapicRegisterValueStructure,
-    arbitration_proority: LapicRegisterValueStructure,
+    arbitration_priority: LapicRegisterValueStructure,
     processor_priority: LapicRegisterValueStructure,
     pub end_of_interrupt: LapicRegisterValueStructure,
     remote_read: LapicRegisterValueStructure,

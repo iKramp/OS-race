@@ -17,6 +17,14 @@ use platform_info::PlatformInfo;
 use crate::{limine::LIMINE_BOOTLOADER_REQUESTS, memory::physical_allocator::BUDDY_ALLOCATOR, println, printlnc};
 
 static mut PLATFORM_INFO: Option<PlatformInfo> = None;
+pub fn get_platform_info() -> &'static PlatformInfo {
+    unsafe {
+        let Some(platform_info) = &PLATFORM_INFO else {
+            panic!("platform info not initialized");
+        };
+        platform_info
+    }
+}
 
 pub fn init_acpi() {
     let rsdp = rsdp::get_rsdp_table(unsafe { (*LIMINE_BOOTLOADER_REQUESTS.rsdp_request.info).rsdp as u64 })
@@ -71,6 +79,9 @@ pub fn init_acpi() {
     };
     apic::enable_apic(platform_info, platform_info.boot_processor.processor_id);
     ioapic::init_ioapic(platform_info);
+    if platform_info.application_processors.len() > 0 {
+        panic!("before re-enabling multiprocessing fix PCI interrupts. Separate LAPIC registers?");
+    }
     smp::wake_cpus(platform_info);
     printlnc!((0, 255, 0), "ACPI initialized and APs started");
 
