@@ -86,22 +86,57 @@ impl BuyddyAllocator {
 
     pub fn allocate_frame(&mut self) -> PhysAddr {
         if self.allocated_pages == self.binary_tree_size / 2 {
-            panic!("no more frames to sllocate");
+            panic!("no more frames to allocate");
         }
         self.allocated_pages += 1;
-        let index = self.find_empty_frame();
+        let index = self.find_empty_frame_high();
         self.mark_index(index, true);
         let address = (index - self.binary_tree_size / 2) * 4096;
         debug_assert!(address <= self.n_pages * 4096, "address is out of bounds");
         PhysAddr(address)
     }
 
-    fn find_empty_frame(&self) -> u64 {
-        assert!(!self.get_at_index(1), "root node of physical memory allocator is filled");
-        self.find_empty_frame_recursively(1)
+    pub fn allocate_frame_low(&mut self) -> PhysAddr {
+        if self.allocated_pages == self.binary_tree_size / 2 {
+            panic!("no more frames to allocate");
+        }
+        self.allocated_pages += 1;
+        let index = self.find_empty_frame_low();
+        self.mark_index(index, true);
+        let address = (index - self.binary_tree_size / 2) * 4096;
+        debug_assert!(address <= self.n_pages * 4096, "address is out of bounds");
+        PhysAddr(address)
     }
 
-    fn find_empty_frame_recursively(&self, curr_index: u64) -> u64 {
+    fn find_empty_frame_high(&self) -> u64 {
+        assert!(!self.get_at_index(1), "root node of physical memory allocator is filled");
+        self.find_empty_frame_recursively_high(1)
+    }
+
+    fn find_empty_frame_recursively_high(&self, curr_index: u64) -> u64 {
+        if curr_index >= self.binary_tree_size / 2 {
+            //is in second half of the tree, so last level
+            return curr_index;
+        }
+        #[cfg(debug_assertions)]
+        assert!(
+            !self.get_at_index(curr_index),
+            "asked to find empty page from this index {} but all sub-regions are filled",
+            curr_index
+        );
+        if !self.get_at_index(curr_index * 2 + 1) {
+            self.find_empty_frame_recursively_high(curr_index * 2 + 1)
+        } else {
+            self.find_empty_frame_recursively_high(curr_index * 2)
+        }
+    }
+
+    fn find_empty_frame_low(&self) -> u64 {
+        assert!(!self.get_at_index(1), "root node of physical memory allocator is filled");
+        self.find_empty_frame_recursively_low(1)
+    }
+
+    fn find_empty_frame_recursively_low(&self, curr_index: u64) -> u64 {
         if curr_index >= self.binary_tree_size / 2 {
             //is in second half of the tree, so last level
             return curr_index;
@@ -113,9 +148,9 @@ impl BuyddyAllocator {
             curr_index
         );
         if !self.get_at_index(curr_index * 2) {
-            self.find_empty_frame_recursively(curr_index * 2)
+            self.find_empty_frame_recursively_low(curr_index * 2)
         } else {
-            self.find_empty_frame_recursively(curr_index * 2 + 1)
+            self.find_empty_frame_recursively_low(curr_index * 2 + 1)
         }
     }
 

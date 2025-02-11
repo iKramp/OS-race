@@ -232,7 +232,7 @@ impl Heap {
         } else if size > 1024 {
             //allocate whole page/pages
             let n_of_pages = (size + 4095 + crate::mem::size_of::<MultiPageObjectMetadata>() as u64) / 4096;
-            unsafe { crate::PAGE_ALLOCATOR.allocate_contigious(n_of_pages) }
+            unsafe { crate::PAGE_ALLOCATOR.allocate_contigious(n_of_pages, None) }
         } else {
             let size_order = log2_rounded_up(size);
             let index = u64::max(4, size_order) - 4;

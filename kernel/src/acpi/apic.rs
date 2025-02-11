@@ -6,11 +6,7 @@ use std::{
 };
 
 use crate::{
-    interrupts::handlers::*,
-    interrupts::idt::{Entry, IDT},
-    interrupts::{LEGACY_PIC_TIMER_TICKS, PIC_TIMER_FREQUENCY, TIMER_TICKS},
-    println,
-    utils::byte_to_port,
+    interrupts::{handlers::*, idt::{Entry, IDT}, LEGACY_PIC_TIMER_TICKS, PIC_TIMER_FREQUENCY, TIMER_TICKS}, memory::paging::LiminePat, println, utils::byte_to_port
 };
 
 pub static mut LAPIC_REGISTERS: VirtAddr = VirtAddr(0);
@@ -89,8 +85,7 @@ fn map_lapic_registers(lapic_address: PhysAddr) {
     unsafe {
         LAPIC_REGISTERS = crate::memory::PAGE_TREE_ALLOCATOR.allocate(Some(lapic_address));
         let apic_registers_page_entry = crate::memory::PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(LAPIC_REGISTERS);
-        apic_registers_page_entry.set_write_through_cahcing(true);
-        apic_registers_page_entry.set_disable_cahce(true);
+        apic_registers_page_entry.set_pat(LiminePat::UC);
         core::arch::asm!(
             "mov rax, cr3",
             "mov cr3, rax",
@@ -118,7 +113,7 @@ fn activate_timer_ap(lapic_registers: &mut LapicRegisters) {
 
 fn activate_timer(lapic_registers: &mut LapicRegisters) {
     let mut timer_conf = lapic_registers.lvt_timer.bytes;
-
+    
     timer_conf &= !0xFF_u32;
     timer_conf |= 100; //init the timer vector //TODO reset
     timer_conf &= !(0b11 << 17);

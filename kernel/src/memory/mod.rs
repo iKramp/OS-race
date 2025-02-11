@@ -1,6 +1,8 @@
 pub mod paging;
 pub mod physical_allocator;
 
+use paging::LiminePat;
+
 use crate::{println, printlnc};
 use std::mem_utils::{self, PhysAddr, VirtAddr};
 use crate::LIMINE_BOOTLOADER_REQUESTS;
@@ -20,7 +22,7 @@ pub fn init_memory() {
         println!("initializing physical allocator");
         physical_allocator::BuyddyAllocator::init();
         //allocates low addresses first, so we reserve this for the trampoline
-        TRAMPOLINE_RESERVED = physical_allocator::BUDDY_ALLOCATOR.allocate_frame(); 
+        TRAMPOLINE_RESERVED = physical_allocator::BUDDY_ALLOCATOR.allocate_frame_low(); 
         println!("initializing pager");
         PAGE_TREE_ALLOCATOR = paging::PageTree::new();
         printlnc!((0, 255, 0), "memory initialized");
@@ -30,8 +32,7 @@ pub fn init_memory() {
         }
         let page_table_entry =
             PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(VirtAddr(crate::vga::vga_driver::VGA_BINDING.buffer as u64));
-        page_table_entry.set_disable_cahce(true);
-        page_table_entry.set_write_through_cahcing(true);
+        page_table_entry.set_pat(LiminePat::UC);
         core::arch::asm!(
             "mov rax, cr3",
             "mov cr3, rax",

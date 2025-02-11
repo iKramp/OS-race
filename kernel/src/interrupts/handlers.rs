@@ -1,4 +1,4 @@
-use crate::utils::{byte_form_port, byte_to_port};
+use crate::utils::{byte_from_port, byte_to_port};
 #[allow(unused_imports)] //they are used in macros
 use core::arch::asm;
 use std::printlnc;
@@ -136,7 +136,7 @@ pub extern "x86-interrupt" fn spurious_interrupt(_stack_frame: ExceptionStackFra
 }
 
 pub extern "x86-interrupt" fn legacy_keyboard_interrupt(_stack_frame: ExceptionStackFrame) {
-    let code = byte_form_port(0x60);
+    let code = byte_from_port(0x60);
     //println!("{code}");
     crate::keyboard::handle_key(code);
     legacy_eoi();
@@ -144,7 +144,7 @@ pub extern "x86-interrupt" fn legacy_keyboard_interrupt(_stack_frame: ExceptionS
 
 pub extern "x86-interrupt" fn apic_keyboard_interrupt(_stack_frame: ExceptionStackFrame) {
     apic_eoi();
-    let code = byte_form_port(0x60);
+    let code = byte_from_port(0x60);
     crate::keyboard::handle_key(code);
     //println!("{code}");
 }

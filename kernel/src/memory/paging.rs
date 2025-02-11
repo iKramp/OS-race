@@ -4,6 +4,16 @@ use super::physical_allocator::BUDDY_ALLOCATOR;
 #[derive(Clone, Copy)]
 pub struct PageTableEntry(u64);
 
+//first 4 are identical as at power-on/reset
+pub enum LiminePat {
+    WB = 0,
+    WT = 1,
+    UCMinus = 2,
+    UC = 3,
+    WP = 4,
+    WC = 5,
+}
+
 impl PageTableEntry {
     //creates default entry:
     //present, writeable, not user accessible, not write-through, not cache disabled, not accessed,
@@ -55,7 +65,7 @@ impl PageTableEntry {
         self.0 & (1 << 3) != 0
     }
 
-    pub fn set_write_through_cahcing(&mut self, present: bool) {
+    fn set_write_through_cahcing(&mut self, present: bool) {
         const OFFSET: u64 = 3;
         const MASK: u64 = 1 << OFFSET;
         const INVERSE_MASK: u64 = MASK ^ u64::MAX;
@@ -66,11 +76,27 @@ impl PageTableEntry {
         self.0 & (1 << 4) != 0
     }
 
-    pub fn set_disable_cahce(&mut self, present: bool) {
+    fn set_disable_cahce(&mut self, present: bool) {
         const OFFSET: u64 = 4;
         const MASK: u64 = 1 << OFFSET;
         const INVERSE_MASK: u64 = MASK ^ u64::MAX;
         self.0 = (self.0 & INVERSE_MASK) | ((present as u64) << OFFSET);
+    }
+
+    pub fn set_pat(&mut self, pat_val: LiminePat) {
+        let (pat, pcd, pwt) = match pat_val {
+            LiminePat::WB => (false, false, false),
+            LiminePat::WT => (false, false, true),
+            LiminePat::UCMinus => (false, true, false),
+            LiminePat::UC => (false, true, true),
+            LiminePat::WP => (true, false, false),
+            LiminePat::WC => (true, false, true),
+        };
+        self.set_disable_cahce(pcd);
+        self.set_write_through_cahcing(pwt);
+        //for now i ignore pat teehee :3
+        //pat bit depends on if it's a page directory or page table. Can be checked with huge
+        //table, but huge-huge tables (1GB) also have huge tables, and don't have pat bit
     }
 
     pub fn accessed(&self) -> bool {
@@ -231,7 +257,6 @@ impl PageTable {
         u64::MAX
     }
 
-
     pub unsafe fn allocate_any(&mut self) -> VirtAddr {
         let frame_addr = BUDDY_ALLOCATOR.allocate_frame();
         self.mmap_any(frame_addr)
@@ -254,6 +279,21 @@ impl PageTable {
         self.mmap(virtual_address, frame_addr)
     }
 
+    pub unsafe fn mmap_contigious_any(&mut self, num: u64, physical_address: PhysAddr) -> VirtAddr {
+        let address = self.get_available_entry_pages(4, num);
+        if address == u64::MAX {
+            panic!("could not find contigious space");
+        }
+        for i in 0..num {
+            assert!(
+                !BUDDY_ALLOCATOR.is_frame_allocated(physical_address + PhysAddr(i * 4096)),
+                "memory space already allocated"
+            );
+            BUDDY_ALLOCATOR.mark_addr(physical_address + PhysAddr(i * 4096), true);
+            self.mmap(VirtAddr(address + i * 4096), physical_address + PhysAddr(i * 4096));
+        }
+        VirtAddr(address)
+    }
 
     ///maps the given virtual address to the given physical address. Physical address must be
     ///marked as used
@@ -466,10 +506,11 @@ impl PageTree {
 }
 
 impl std::PageAllocator for PageTree {
-    fn allocate(&mut self, physical_address: Option<PhysAddr>) -> std::mem_utils::VirtAddr { //TODO:, make mmap and such methods here instead of Options
+    fn allocate(&mut self, physical_address: Option<PhysAddr>) -> std::mem_utils::VirtAddr {
+        //TODO:, make mmap and such methods here instead of Options
         unsafe {
             let level_4_table = get_at_physical_addr::<PageTable>(self.level_4_table);
-            match physical_address {           
+            match physical_address {
                 None => level_4_table.allocate_any(),
                 Some(physical_address) => level_4_table.mmap_any(physical_address),
             }
@@ -493,17 +534,22 @@ impl std::PageAllocator for PageTree {
         }
     }
 
-    fn allocate_contigious(&mut self, num: u64) -> std::mem_utils::VirtAddr {
+    fn allocate_contigious(&mut self, num: u64, physical_address: Option<PhysAddr>) -> std::mem_utils::VirtAddr {
         unsafe {
             let level_4_table = get_at_physical_addr::<PageTable>(self.level_4_table);
-            let addr = level_4_table.get_available_entry_pages(4, num);
-            if addr == u64::MAX {
-                panic!("could not find contigious space");
-            }
-            for i in 0..num {
-                level_4_table.allocate(VirtAddr(addr + i * 4096));
-            }
-            VirtAddr(addr)
+            return match physical_address {
+                None => {
+                    let addr = level_4_table.get_available_entry_pages(4, num);
+                    if addr == u64::MAX {
+                        panic!("could not find contigious space");
+                    }
+                    for i in 0..num {
+                        level_4_table.allocate(VirtAddr(addr + i * 4096));
+                    }
+                    VirtAddr(addr)
+                }
+                Some(physical_address) => level_4_table.mmap_contigious_any(num, physical_address),
+            };
         }
     }
 }

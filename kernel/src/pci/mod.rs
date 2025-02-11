@@ -1,6 +1,6 @@
 use std::{boxed::Box, println};
 
-use device_config::MassStorageController;
+use device_config::{MassStorageController, RegularPciDevice};
 
 use crate::interrupts::handlers::{apic_eoi, ExceptionStackFrame};
 
@@ -15,12 +15,13 @@ pub fn enumerate_devices() {
             continue;
         }
         device.init_msi_interrupt();
+        let device = RegularPciDevice::new(device.clone());
         if matches!(
-            device.get_class(),
+            device.device.get_class(),
             device_config::PciClass::MassStorageController(MassStorageController::SerialATAController)
         ) {
-            println!("Device: {:#x?}", device);
-            crate::disk::add_pci_disk(device.clone(), Box::new(crate::drivers::ahci::AhciDriver {}));
+            let ahci_disk = crate::drivers::ahci::AhciDisk::new(device);
+            crate::disk::add_disk(Box::new(ahci_disk));
         }
     }
     crate::disk::print_disks();

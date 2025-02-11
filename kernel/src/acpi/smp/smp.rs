@@ -3,7 +3,7 @@ use crate::{
         idt::{TablePointer, IDT_POINTER},
         GDT_POINTER,
     },
-    memory::PAGE_TREE_ALLOCATOR,
+    memory::{paging::LiminePat, PAGE_TREE_ALLOCATOR},
     msr::{get_msr, get_mtrr_cap, get_mtrr_def_type},
     println,
 };
@@ -41,7 +41,7 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
         let destination = crate::memory::TRAMPOLINE_RESERVED.0 as *mut u8;
         let comm_lock = destination.add(56);
         for cpu in platform_info.application_processors.iter().enumerate() {
-            let stack_addr = crate::memory::PAGE_TREE_ALLOCATOR.allocate_contigious(STACK_SIZE_PAGES as u64); //2 pages
+            let stack_addr = crate::memory::PAGE_TREE_ALLOCATOR.allocate_contigious(STACK_SIZE_PAGES as u64, None); //2 pages
             (destination.add(32) as *mut u64).write_volatile(stack_addr.0 + (STACK_SIZE_PAGES * 0x1000) as u64);
             let lapic_registers = get_at_virtual_addr::<LapicRegisters>(LAPIC_REGISTERS);
             println!("Waking up CPU {}", cpu.1.apic_id);
@@ -86,8 +86,7 @@ fn add_cpu_locals(locals: super::cpu_locals::CpuLocals) -> VirtAddr {
 fn copy_trampoline() {
     let destination = unsafe { crate::memory::TRAMPOLINE_RESERVED };
     let destination_entry = unsafe { PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(VirtAddr(destination.0)) };
-    destination_entry.set_write_through_cahcing(true);
-    destination_entry.set_disable_cahce(true);
+    destination_entry.set_pat(LiminePat::UC);
     println!("copying trampoline to {:x?}", destination);
 
     assert!(

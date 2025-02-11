@@ -1,9 +1,15 @@
 #![allow(clippy::enum_variant_names)]
 
-use std::{mem_utils::VirtAddr, println, vec::Vec};
+use std::{
+    mem_utils::{PhysAddr, VirtAddr},
+    println,
+    vec::Vec,
+    PageAllocator,
+};
+
+use crate::memory::{paging::LiminePat, PAGE_TREE_ALLOCATOR};
 
 use super::port_access;
-
 
 #[derive(Debug, Clone)]
 pub struct PciDevice {
@@ -11,6 +17,97 @@ pub struct PciDevice {
     pub device: u8,
     pub function: u8,
     pub capabilities: Vec<Capability>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RegularPciDevice {
+    pub device: PciDevice,
+    pub bars: Vec<Bar>,
+    //more fields?
+}
+
+impl RegularPciDevice {
+    pub fn new(device: PciDevice) -> Self {
+        let mut bars = Vec::new();
+        let mut i = 0;
+
+        //disconnect device from any BARs
+        let command = device.get_command();
+        device.set_command(command & !0x3);
+
+        while i < 6 {
+            let bar = device.get_bar(i as u8);
+            if let Some(bar) = bar {
+                bars.push(bar.0);
+                i += bar.1;
+            } else {
+                i += 1;
+            }
+        }
+
+        device.set_command(command);
+        Self { device, bars }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum Bar {
+    Memory(u8, VirtAddr, u64),
+    IO(u8, u16, u32),
+}
+
+impl Bar {
+    pub fn write_to_bar<T>(&self, data: &T, offset: u64) {
+        let data = unsafe { core::slice::from_raw_parts(data as *const T as *const u8, core::mem::size_of::<T>()) };
+        match self {
+            Bar::Memory(_, address, limit) => {
+                let address = (address.0 + offset) as *mut u8;
+                assert!(offset + data.len() as u64 <= *limit, "Data exceeds BAR size");
+                unsafe {
+                    for i in 0..data.len() {
+                        address.add(i).write_volatile(data[i]);
+                    }
+                }
+            }
+            Bar::IO(_, address, limit) => {
+                let address = *address + offset as u16;
+                assert!(offset + data.len() as u64 <= *limit as u64, "Data exceeds BAR size");
+                for i in 0..data.len() {
+                    crate::utils::byte_to_port(address + i as u16, data[i]);
+                }
+            }
+        }
+    }
+
+    pub fn read_from_bar<T: Sized>(&self, offset: u64) -> T {
+        let mut data = Vec::with_capacity(core::mem::size_of::<T>());
+        match self {
+            Bar::Memory(_, address, limit) => {
+                let address = (address.0 + offset) as *const u8;
+                assert!(offset + data.len() as u64 <= *limit, "Data exceeds BAR size");
+                unsafe {
+                    for i in 0..data.len() {
+                        data[i] = address.add(i).read_volatile();
+                    }
+                }
+            }
+            Bar::IO(_, address, limit) => {
+                let address = *address + offset as u16;
+                assert!(offset + data.len() as u64 <= *limit as u64, "Data exceeds BAR size");
+                for i in 0..data.len() {
+                    data[i] = crate::utils::byte_from_port(address + i as u16);
+                }
+            }
+        }
+        unsafe { core::ptr::read(data.as_ptr() as *const T) }
+    }
+    
+    pub fn get_index(&self) -> u8 {
+        match self {
+            Bar::Memory(index, _, _) => *index,
+            Bar::IO(index, _, _) => *index,
+        }
+    }
 }
 
 impl PciDevice {
@@ -44,9 +141,7 @@ impl PciDevice {
     }
 
     pub fn set_command(&self, value: u16) {
-        let dword = self.get_dword(4);
-        let dword = (dword & 0xFFFF0000) | value as u32;
-        self.set_dword(4, dword);
+        self.set_dword(4, value as u32);
     }
 
     pub fn get_status(&self) -> u16 {
@@ -84,7 +179,7 @@ impl PciDevice {
         self.get_dword(0xC) as u8
     }
 
-    pub fn get_bar(&self, index: u8) -> u32 {
+    fn get_bar(&self, index: u8) -> Option<(Bar, u8)> {
         #[cfg(debug_assertions)]
         {
             let header_type = self.get_header_type() & 0x7F;
@@ -96,7 +191,59 @@ impl PciDevice {
                 panic!("Header type {} does not conatin BARs", header_type);
             }
         }
-        self.get_dword(0x10 + index * 4)
+
+        let first_bar = self.get_dword(0x10 + index * 4);
+        if first_bar == 0 {
+            return None;
+        }
+        if first_bar & 0x1 == 0 {
+            //memory space bar
+            let physical_bar_addr: PhysAddr;
+            let size: u64;
+            let bars: u8;
+            let prefetchable = (first_bar & 0b1000) != 0;
+            if first_bar & 0b100 != 0 {
+                let second_bar = self.get_dword(0x10 + index * 4 + 4);
+                let address = (first_bar & 0xFFFF_FFF0) as u64 | ((second_bar as u64) << 32);
+                physical_bar_addr = PhysAddr(address);
+                bars = 2;
+                size = (self.get_bar_size(index, 0xF) as u64) | ((self.get_bar_size(index + 1, 0) as u64) << 32);
+            } else {
+                physical_bar_addr = PhysAddr(first_bar as u64 & 0xFFFF_FFF0);
+                bars = 1;
+                size = self.get_bar_size(index, 0xF) as u64;
+            }
+
+            let num = size / 4096;
+            let address = unsafe { 
+                let address = PAGE_TREE_ALLOCATOR.allocate_contigious(num, Some(physical_bar_addr));
+                //mark caching as uncacheable, unless prefetchable, then write-through
+                for i in 0..num {
+                    let page_entry = PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(address + VirtAddr(i * 4096));
+                    if prefetchable {
+                        page_entry.set_pat(LiminePat::WT);
+                    } else {
+                        page_entry.set_pat(LiminePat::UC);
+                    }
+                }
+
+                address
+            };
+            Some((Bar::Memory(index, address, size), bars))
+        } else {
+            //io space bar
+            let address = first_bar as u16 & 0xFFFC;
+            let size = self.get_bar_size(index, 0x3);
+            Some((Bar::IO(index, address, size), 1))
+        }
+    }
+
+    fn get_bar_size(&self, index: u8, mask: u32) -> u32 {
+        let bar = self.get_dword(0x10 + index * 4);
+        self.set_dword(0x10 + index * 4, 0xFFFF_FFFF);
+        let size = self.get_dword(0x10 + index * 4) & !mask;
+        self.set_dword(0x10 + index * 4, bar);
+        return (!size) + 1;
     }
 
     pub fn get_capabilities_pointer(&self) -> u8 {
@@ -135,11 +282,19 @@ impl PciDevice {
         let dword = self.get_dword(msi_cap.pointer) >> 16;
         return (dword & 0x80) != 0;
     }
-    
+
     pub fn init_msi_interrupt(&self) {
+        //disable INTx# interrupts (pins?)
+        let command = self.get_command();
+        self.set_command(command & !0x400);
+
         let is_64_capable = self.get_msi_64_bit();
         let capabilities = &self.capabilities;
-        let msi_cap = capabilities.iter().find(|cap| cap.id == 5).cloned().expect("Device does not support MSI");
+        let msi_cap = capabilities
+            .iter()
+            .find(|cap| cap.id == 5)
+            .cloned()
+            .expect("Device does not support MSI");
         let first_dword = self.get_dword(msi_cap.pointer);
         let mut message_control = (first_dword >> 16) as u16;
 
@@ -151,7 +306,7 @@ impl PciDevice {
         println!("Requested interrupts: {}", requested_interrupts);
         message_control &= !0b1110000;
         //give number of vectors
-        message_control |= requested_interrupts_power << 4; 
+        message_control |= requested_interrupts_power << 4;
 
         //get mext available irq with bottom bits set to 0
         let mut current_free_irq = unsafe { crate::interrupts::idt::CUSTOM_INTERRUPT_VECTOR };
@@ -160,12 +315,15 @@ impl PciDevice {
 
         let data_dword_offset = if is_64_capable { 0xC } else { 0x8 };
         let data_dword = self.get_dword(msi_cap.pointer + data_dword_offset);
-        self.set_dword(msi_cap.pointer + data_dword_offset, data_dword & 0xFFFF_0000 | current_free_irq as u32);
+        self.set_dword(
+            msi_cap.pointer + data_dword_offset,
+            data_dword & 0xFFFF_0000 | current_free_irq as u32,
+        );
 
         unsafe {
             crate::interrupts::idt::CUSTOM_INTERRUPT_VECTOR = current_free_irq + 1;
         }
-        
+
         //enable MSI
         message_control |= 0x1;
 
@@ -177,9 +335,7 @@ impl PciDevice {
         let destination_mode = 0;
         let destination_id = platform_info.boot_processor.apic_id as u32;
 
-        let irq_address = 0xFFE << 20 |
-            destination_mode << 2 |
-            destination_id << 12;
+        let irq_address = 0xFFE << 20 | destination_mode << 2 | destination_id << 12;
 
         let low_address = irq_address;
         let high_address = 0;
@@ -187,7 +343,6 @@ impl PciDevice {
         self.set_dword(msi_cap.pointer + 4, low_address);
         self.set_dword(msi_cap.pointer + 8, high_address);
     }
-
 }
 
 #[derive(Debug, Clone)]
@@ -323,8 +478,8 @@ impl PciClass {
             },
             0x0A => Self::DockingStation,
             0x0B => match subclass {
-                0x00 => Self::Processor(Processor::i386),
-                0x01 => Self::Processor(Processor::i486),
+                0x00 => Self::Processor(Processor::I386),
+                0x01 => Self::Processor(Processor::I486),
                 0x02 => Self::Processor(Processor::Pentium),
                 0x10 => Self::Processor(Processor::Alpha),
                 0x20 => Self::Processor(Processor::PowerPC),
@@ -492,8 +647,8 @@ pub enum InputDeviceController {
 
 #[derive(Debug)]
 pub enum Processor {
-    i386,
-    i486,
+    I386,
+    I486,
     Pentium,
     Alpha,
     PowerPC,

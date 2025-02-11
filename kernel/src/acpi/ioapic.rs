@@ -4,7 +4,7 @@ use std::{
 };
 
 use super::platform_info::PlatformInfo;
-use crate::memory::physical_allocator::BUDDY_ALLOCATOR;
+use crate::memory::{paging::LiminePat, physical_allocator::BUDDY_ALLOCATOR};
 
 pub fn init_ioapic(platform_info: &PlatformInfo) {
     unsafe {
@@ -12,8 +12,7 @@ pub fn init_ioapic(platform_info: &PlatformInfo) {
             BUDDY_ALLOCATOR.mark_addr(PhysAddr(io_apic_info.address.into()), true);
             let io_apic_address = crate::memory::PAGE_TREE_ALLOCATOR.allocate(Some(PhysAddr(io_apic_info.address.into())));
             let apic_registers_page_entry = crate::memory::PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(io_apic_address);
-            apic_registers_page_entry.set_write_through_cahcing(true);
-            apic_registers_page_entry.set_disable_cahce(true);
+            apic_registers_page_entry.set_pat(LiminePat::UC);
             core::arch::asm!(
                 "mov rax, cr3",
                 "mov cr3, rax",
