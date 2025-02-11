@@ -88,7 +88,7 @@ pub use core::str;
 pub mod sync;
 pub use core::task;
 pub mod thread;
-pub use core::time;
+pub mod time;
 //u8   depracation planned
 //u16  depracation planned
 //u32  depracation planned

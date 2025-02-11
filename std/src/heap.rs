@@ -307,7 +307,6 @@ pub fn next_pow_2(mut num: u64) -> u64 {
     num
 }
 
-///WARNING this function only works for numbers <= 1024
 pub fn log2_rounded_up(num: u64) -> u64 {
     if num == 1 {
         return 0; //special case

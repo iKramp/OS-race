@@ -1,4 +1,4 @@
-use std::{boxed::Box, println};
+use std::{boxed::Box, println, printlnc};
 
 use device_config::{MassStorageController, RegularPciDevice};
 
@@ -10,21 +10,23 @@ mod port_access;
 pub fn enumerate_devices() {
     let mut devices = port_access::enumerate_devices();
     for device in &mut devices {
+        let class = device.get_class();
         let capabilities = device.get_capabilities_list();
         if !capabilities.iter().any(|cap| cap.id == 5) {
             continue;
         }
+        printlnc!((51, 153, 10), "configuring pci device: {:#x?}", class);
         device.init_msi_interrupt();
         let device = RegularPciDevice::new(device.clone());
         if matches!(
-            device.device.get_class(),
+            class,
             device_config::PciClass::MassStorageController(MassStorageController::SerialATAController)
         ) {
             let ahci_disk = crate::drivers::ahci::AhciDisk::new(device);
             crate::disk::add_disk(Box::new(ahci_disk));
         }
+        printlnc!((51, 153, 10), "Device configured");
     }
-    crate::disk::print_disks();
 }
 
 

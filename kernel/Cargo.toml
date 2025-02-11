@@ -20,3 +20,4 @@ kernel_test = { path = "../kernel_test"}
 std = { path = "../std", features = ["test_includes"] }
 macros = { path = "../macros/macros" }
 traits = { path = "../macros/traits" }
+bitfield = "0.18.1" #yeah outside dependency, crazy, i know

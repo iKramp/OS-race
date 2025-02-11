@@ -118,8 +118,7 @@ pub fn translate_virt_phys_addr(addr: VirtAddr) -> Option<PhysAddr> {
 #[inline]
 pub fn translate_phys_virt_addr(addr: PhysAddr) -> VirtAddr {
     unsafe {
-        #[cfg(debug_assertions)]
-        assert!(MEM_INITIALIZED);
+        debug_assert!(MEM_INITIALIZED);
         addr + PHYSICAL_OFFSET
     }
 }

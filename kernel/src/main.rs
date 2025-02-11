@@ -49,13 +49,13 @@ extern "C" fn _start() -> ! {
 
     //vga_text::hello_message();
 
-    //#[cfg(feature = "run_tests")]
-    //{
-    //    println!("Running tests");
-    //    use tests::test_runner;
-    //    test_runner();
-    //    println!("Finished running tests");
-    //}
+    #[cfg(feature = "run_tests")]
+    {
+        println!("Running tests");
+        use tests::test_runner;
+        test_runner();
+        println!("Finished running tests");
+    }
 
     println!("looping infinitely now");
     let mut a = 0;
