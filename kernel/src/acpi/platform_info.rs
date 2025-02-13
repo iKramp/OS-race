@@ -1,5 +1,5 @@
 use super::madt::{MadtEntryType, MpsIntiFlags};
-use std::mem_utils::PhysAddr;
+use std::{mem_utils::PhysAddr, println};
 
 static mut BOOT_FOUND: bool = false;
 
@@ -17,19 +17,22 @@ impl PlatformInfo {
         for entry in madt_entries {
             match entry {
                 MadtEntryType::ProcessorLocalAPIC(data) => {
+                    let processor = Processor {
+                        processor_id: data.acpi_processor_uid,
+                        apic_id: data.apic_id,
+                        flags: data.flags,
+                    };
+                    if !processor.flags.online_capable() {
+                        println!("processor {} is not online capable", processor.apic_id);
+                        continue;
+                    }
                     if unsafe { BOOT_FOUND } {
-                        info.application_processors.push(Processor {
-                            processor_id: data.acpi_processor_uid,
-                            apic_id: data.apic_id,
-                            flags: data.flags,
-                        })
+                        info.application_processors.push(processor)
                     } else {
-                        unsafe {BOOT_FOUND = true;}
-                        info.boot_processor = Processor {
-                            processor_id: data.acpi_processor_uid,
-                            apic_id: data.apic_id,
-                            flags: data.flags,
+                        unsafe {
+                            BOOT_FOUND = true;
                         }
+                        info.boot_processor = processor;
                     }
                 }
                 MadtEntryType::IoApic(data) => {

@@ -79,9 +79,6 @@ pub fn init_acpi() {
     };
     apic::enable_apic(platform_info, platform_info.boot_processor.processor_id);
     ioapic::init_ioapic(platform_info);
-    if platform_info.application_processors.len() > 0 {
-        panic!("before re-enabling multiprocessing fix PCI interrupts. Separate LAPIC registers?");
-    }
     smp::wake_cpus(platform_info);
     printlnc!((0, 255, 0), "ACPI initialized and APs started");
 

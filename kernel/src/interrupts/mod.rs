@@ -13,7 +13,10 @@ pub fn init_interrupts() {
     gdt::init_gdt(); //add a separate TSS for each core
     println!("initializing IDT");
     idt::init_idt();
+    unsafe { core::arch::asm!("hlt") };
+    println!("Some println");
     printlnc!((0, 255, 0), "interrupts initialized");
+
 }
 
 pub fn init_pic() {
@@ -54,7 +57,8 @@ pub fn time_since_boot() -> std::time::Duration {
 fn init_timer() {
     const DIVISOR: u16 = (PIC_TIMER_ORIGINAL_FREQ / (PIC_TIMER_FREQUENCY)) as u16;
 
-    byte_to_port(0x43, 0x36);
+    #[allow(clippy::unusual_byte_groupings)]
+    byte_to_port(0x43, 0b00_11_011_0);
     byte_to_port(0x40, (DIVISOR & 0xFF) as u8);
     byte_to_port(0x40, ((DIVISOR >> 8) & 0xFF) as u8);
 }

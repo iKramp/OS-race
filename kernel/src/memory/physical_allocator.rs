@@ -66,10 +66,12 @@ impl BuyddyAllocator {
                 (entry.base & !0xFFF) + 0x1000
             };
             for addr in (start..((start + entry.length) & !0xFFF)).step_by(4096) {
-                allocator.mark_addr(PhysAddr(addr), false);
+                let index = (addr >> 12) + (allocator.binary_tree_size / 2);
+                allocator.set_at_index(index, false);
                 allocator.allocated_pages -= 1;
             }
         }
+        allocator.update_all();
         unsafe { BUDDY_ALLOCATOR = allocator }
     }
 
@@ -231,9 +233,9 @@ impl BuyddyAllocator {
             if res.is_some() {
                 return res;
             }
-            return self.find_contigious_empty_recursively_high(curr_index * 2, order);
+            self.find_contigious_empty_recursively_high(curr_index * 2, order)
         } else {
-            return self.find_contigious_empty_recursively_high(curr_index * 2, order);
+            self.find_contigious_empty_recursively_high(curr_index * 2, order)
         }
 
     }
@@ -301,6 +303,12 @@ impl BuyddyAllocator {
             set_at_virtual_addr(self.tree_allocator + VirtAddr(index >> 3), num);
         }
     }
+
+    fn update_all(&self) {
+        for i in (0..self.binary_tree_size / 2).rev() {
+            self.set_at_index(i, self.get_at_index(i << 1) && self.get_at_index((i << 1) + 1));
+        }
+    }
 }
 
 fn find_mem_region_to_shrink(memory_regions: &[&mut limine::MemoryMapEntry], space_needed_bytes: u64) -> usize {
@@ -333,6 +341,7 @@ fn is_memory_region_usable(entry: &limine::MemoryMapEntry) -> bool {
     entry.entry_type == limine::LIMINE_MEMMAP_USABLE// || entry.entry_type == limine::LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE //if we want to use bootloader reclaimable move bootloader structures to our own memory
 }
 
+///rounded up to power of 2
 fn get_binary_tree_size(mut n_pages: u64) -> u64 {
     let mut first_bit = 0;
     for i in 0..64 {

@@ -7,7 +7,7 @@ use crate::{
     msr::{get_msr, get_mtrr_cap, get_mtrr_def_type},
     println,
 };
-use core::sync::atomic::{AtomicBool, AtomicU8};
+use core::{sync::atomic::{AtomicBool, AtomicU8}};
 use std::{
     mem_utils::{get_at_virtual_addr, VirtAddr},
     PageAllocator,
@@ -45,6 +45,9 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
             (destination.add(32) as *mut u64).write_volatile(stack_addr.0 + (STACK_SIZE_PAGES * 0x1000) as u64);
             let lapic_registers = get_at_virtual_addr::<LapicRegisters>(LAPIC_REGISTERS);
             println!("Waking up CPU {}", cpu.1.apic_id);
+            if cpu.1.apic_id == 255 {
+                panic!("invalid cpu: {:?}", cpu);
+            }
 
             lapic_registers.send_init_ipi(cpu.1.apic_id);
             std::thread::sleep(std::time::Duration::from_millis(10));

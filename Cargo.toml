@@ -30,7 +30,7 @@ lto = false
 
 [profile.release]
 panic = "unwind"
-opt-level = 0
+opt-level = 2
 lto = false
 
 [profile.dev.package.std]

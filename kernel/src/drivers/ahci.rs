@@ -1,13 +1,17 @@
 #![allow(non_snake_case)]
 
 use core::fmt::Debug;
-use std::{mem_utils::VirtAddr, println, vec::Vec, PageAllocator, PAGE_ALLOCATOR};
+use std::{
+    mem_utils::{PhysAddr, VirtAddr},
+    println,
+    vec::Vec,
+};
 
 use bitfield::bitfield;
 
 use crate::{
     disk::Disk,
-    memory::{physical_allocator::BUDDY_ALLOCATOR, PAGE_TREE_ALLOCATOR},
+    memory::physical_allocator::BUDDY_ALLOCATOR,
     pci::device_config::{self, Bar},
 };
 
@@ -37,17 +41,17 @@ pub struct AhciDriver {}
 pub struct AhciDisk {
     pub device: device_config::RegularPciDevice,
     pub abar: Bar,
-    pub ports: Vec<u8>,
+    pub ports: Vec<VirtualPort>,
+    is_64_bit: bool,
 }
 
 impl Disk for AhciDisk {
+    //https://forum.osdev.org/viewtopic.php?t=40969
     fn init(&mut self) {
         let mut ghc = self.abar.read_from_bar::<GenericHostControl>(0);
-        let is_64_bit = (ghc.cap & (1 << 31)) != 0;
 
         //enable AHCI
         ghc.ghc.SetAE(true);
-        ghc.ghc.SetHR(false); //just in case, this is enabled with writing 1
         self.abar.write_to_bar(&ghc.ghc, 4);
 
         //bios handoff??
@@ -57,20 +61,25 @@ impl Disk for AhciDisk {
             println!("No bios handoff");
         }
 
-        //https://forum.osdev.org/viewtopic.php?t=40969
+        self.wait_for_idle_ports();
 
-        //enable AHCI again, just in case
-        ghc.ghc.SetAE(true);
-        ghc.ghc.SetHR(false);
+        //reset HBA
+        ghc.ghc.SetHR(true);
         self.abar.write_to_bar(&ghc.ghc, 4);
-        
+        while ghc.ghc.HR() {
+            unsafe { core::arch::asm!("hlt") };
+            ghc.ghc = self.abar.read_from_bar(4);
+        }
+
+        //enable AHCI again after reset
+        ghc.ghc.SetAE(true);
+        self.abar.write_to_bar(&ghc.ghc, 4);
+
+        let staggered_spin_up = ghc.cap.SSS();
 
         //loop and init ports
-        
-        for port_index in &self.ports {
-            let mut port = self.abar.read_from_bar::<Port>(0x100 + (*port_index as u64) * 0x80);
-            port.init(is_64_bit);
-            self.abar.write_to_bar(&port, 0x100 + (*port_index as u64) * 0x80);
+        for port in &mut self.ports {
+            Self::init_port(port, self.is_64_bit, &self.abar, staggered_spin_up);
         }
     }
 }
@@ -81,17 +90,27 @@ impl AhciDisk {
         let abar = device.bars.iter().find(|bar| bar.get_index() == 5).unwrap().clone();
 
         let ghc = abar.read_from_bar::<GenericHostControl>(0);
+        let is_64_bit = ghc.cap.S64A();
 
         let mut ports = Vec::new();
         let ports_implemented = ghc.pi;
 
         for i in 0..32 {
             if ports_implemented & (1 << i) != 0 {
-                ports.push(i as u8);
+                ports.push(VirtualPort {
+                    index: i as u8,
+                    command_list: VirtAddr(0),
+                    fis: VirtAddr(0),
+                });
             }
         }
 
-        Self { device, abar, ports }
+        Self {
+            device,
+            abar,
+            ports,
+            is_64_bit,
+        }
     }
 
     fn perform_bios_handoff(&self) {
@@ -105,7 +124,7 @@ impl AhciDisk {
             if bohc.BB() {
                 loop {
                     let bohc = self.abar.read_from_bar::<Bohc>(0x28);
-                    if !bohc.BB()  || start.elapsed().as_secs() > 2 {
+                    if !bohc.BB() || start.elapsed().as_secs() > 2 {
                         break;
                     }
                     unsafe { core::arch::asm!("hlt") };
@@ -121,17 +140,111 @@ impl AhciDisk {
         }
     }
 
-    fn get_port(&self, port: u8) -> Port {
-        let port_offset = 0x100 + (port as u64) * 0x80;
+    fn wait_for_idle_ports(&self) {
+        for port in &self.ports {
+            //let mut port_command = self.get_port(port_index).PxCMD;
+            let mut port_command = PortCommand(port.get_port_property(0x18, &self.abar));
+            if port_command.ST() {
+                port_command.SetST(false);
+                port.set_port_property(0x18, port_command.0, &self.abar);
+                unsafe { core::arch::asm!("hlt") }; //i need to find a better system to sleep, 1ms
+                                                    //is too long
+            }
+            while port_command.CR() {
+                unsafe { core::arch::asm!("hlt") };
+                port_command = PortCommand(port.get_port_property(0x18, &self.abar));
+            }
+            if port_command.FR() {
+                port_command.SetFRE(false);
+                port.set_port_property(0x18, port_command.0, &self.abar);
+                while port_command.FR() {
+                    unsafe { core::arch::asm!("hlt") };
+                    port_command = PortCommand(port.get_port_property(0x18, &self.abar));
+                }
+            }
+            let mut sctl = SATAControl(port.get_port_property(0x2C, &self.abar));
+            if sctl.DET() != 0 {
+                sctl.SetDet(0);
+                port.set_port_property(0x2C, sctl.0, &self.abar);
+            }
+        }
+    }
+
+    fn get_port(&self, port: &VirtualPort) -> Port {
+        let port_offset = 0x100 + (port.index as u64) * 0x80;
         let port = self.abar.read_from_bar::<Port>(port_offset);
         port
+    }
+
+    fn init_port(port: &mut VirtualPort, is_64_bit: bool, abar: &Bar, staggered_spin_up: bool) {
+        port.init_cmd_list_fis(is_64_bit, abar);
+        let mut port_cmd = PortCommand(port.get_port_property(0x18, abar));
+        port_cmd.SetFRE(true);
+        port.set_port_property(0x18, port_cmd.0, abar);
+
+        while port_cmd.FRE() {
+            port_cmd = PortCommand(port.get_port_property(0x18, abar));
+        }
+        while !port_cmd.FRE() {
+            port_cmd = PortCommand(port.get_port_property(0x18, abar));
+        }
+        while port_cmd.FRE() {
+            port_cmd = PortCommand(port.get_port_property(0x18, abar));
+        }
+        while !port_cmd.FRE() {
+            port_cmd = PortCommand(port.get_port_property(0x18, abar));
+        }
+        while port_cmd.FRE() {
+            port_cmd = PortCommand(port.get_port_property(0x18, abar));
+        }
+        while !port_cmd.FRE() {
+            port_cmd = PortCommand(port.get_port_property(0x18, abar));
+        }
+        while port_cmd.FRE() {
+            port_cmd = PortCommand(port.get_port_property(0x18, abar));
+        }
+        while !port_cmd.FRE() {
+            port_cmd = PortCommand(port.get_port_property(0x18, abar));
+        }
+
+        if staggered_spin_up {
+            println!("Staggered spin up");
+            port_cmd.SetSUD(true);
+            port.set_port_property(0x18, port_cmd.0, abar);
+        }
+
+        println!("Port command: {:#x?}", PortCommand(port.get_port_property(0x18, abar)));
+
+        //wait for port to be ready
+        let mut sata_status = SATAStatus(port.get_port_property(0x28, abar));
+        let start = std::time::Instant::now();
+        while sata_status.DET() != 3 {
+            //if start.elapsed().as_millis() > 10 {
+            //    println!("Port not working");
+            //    break;
+            //}
+            unsafe { core::arch::asm!("hlt") };
+            sata_status = SATAStatus(port.get_port_property(0x28, abar));
+        }
+
+        //clear error register
+        port.set_port_property(0x30, 0xFFFFFFFF, abar);
+
+        //wait for device to be ready
+        let mut task_file_data = TaskFileData(port.get_port_property(0x20, abar));
+        while task_file_data.STS_BSY() || task_file_data.STS_DRQ() || task_file_data.STS_ERR() {
+            unsafe { core::arch::asm!("hlt") };
+            task_file_data = TaskFileData(port.get_port_property(0x20, abar));
+        }
+
+        println!("Port initialized");
     }
 }
 
 #[derive(Debug)]
 #[repr(C)]
 struct GenericHostControl {
-    cap: u32,
+    cap: Capabilities,
     ghc: GlobalHostControl,
     is: u32,
     pi: u32,
@@ -153,6 +266,13 @@ bitfield! {
     IE, SetIE: 1;
     /// SetOOC write 1 to set
     HR, SetHR: 0;
+}
+
+bitfield! {
+    struct Capabilities(u32);
+    impl Debug;
+    S64A, _: 31;
+    SSS, _: 27;
 }
 
 bitfield! {
@@ -178,18 +298,67 @@ bitfield! {
 }
 
 #[derive(Debug)]
-#[repr(C, packed)]
+struct VirtualPort {
+    index: u8,
+    command_list: VirtAddr,
+    fis: VirtAddr,
+}
+
+impl VirtualPort {
+    pub fn init_cmd_list_fis(&mut self, is_64_bit: bool, abar: &Bar) {
+        const FIS_SWITCHING: bool = false;
+
+        let cmd_list_base = if is_64_bit {
+            unsafe { BUDDY_ALLOCATOR.allocate_frame() }
+        } else {
+            unsafe { BUDDY_ALLOCATOR.allocate_frame_low() }
+        };
+
+        let fis_base = if !FIS_SWITCHING {
+            cmd_list_base + PhysAddr(0x400)
+        } else if is_64_bit {
+            unsafe { BUDDY_ALLOCATOR.allocate_frame() }
+        } else {
+            unsafe { BUDDY_ALLOCATOR.allocate_frame_low() }
+        };
+
+        self.set_port_property(0, cmd_list_base.0 as u32, abar);
+        self.set_port_property(4, (cmd_list_base.0 >> 32) as u32, abar);
+        self.set_port_property(8, fis_base.0 as u32, abar);
+        self.set_port_property(12, (fis_base.0 >> 32) as u32, abar);
+
+        let clb_virt = std::mem_utils::translate_phys_virt_addr(cmd_list_base);
+        let fis_virt = std::mem_utils::translate_phys_virt_addr(fis_base);
+
+        self.command_list = clb_virt;
+        self.fis = fis_virt;
+    }
+
+    fn set_port_property(&self, offset: u64, value: u32, abar: &Bar) {
+        let port_offset = 0x100 + (self.index as u64) * 0x80 + offset;
+        abar.write_to_bar(&value, port_offset);
+    }
+
+    fn get_port_property(&self, offset: u64, abar: &Bar) -> u32 {
+        let port_offset = 0x100 + (self.index as u64) * 0x80 + offset;
+        abar.read_from_bar(port_offset)
+    }
+}
+
+#[derive(Debug)]
+#[repr(C)]
 struct Port {
     PxCLB: u64,
     PxFB: u64,
     PxIS: u32,
     PxIE: u32,
-    PxCMD: u32,
+    ///WARNING! contains RW1 field
+    PxCMD: PortCommand,
     reserved: u32,
-    PxTFD: u32,
+    PxTFD: TaskFileData,
     PxSIG: u32,
-    PxSSTS: u32,
-    PxSCTL: u32,
+    PxSSTS: SATAStatus,
+    PxSCTL: SATAControl,
     PxSERR: u32,
     PxSACT: u32,
     PxCI: u32,
@@ -200,31 +369,42 @@ struct Port {
     PxVS: u32,
 }
 
-impl Port {
-    pub fn init(&mut self, is_64_bit: bool) -> VirtAddr {
-        let allocated_frame_addr = if is_64_bit {
-            unsafe { BUDDY_ALLOCATOR.allocate_frame() }
-        } else {
-            unsafe { BUDDY_ALLOCATOR.allocate_frame_low() }
-        };
+impl Port {}
 
-        self.PxCLB = allocated_frame_addr.0;
-        self.PxFB = allocated_frame_addr.0 + 0x400;
-        let clb_fis_virt = std::mem_utils::translate_phys_virt_addr(allocated_frame_addr);
+bitfield! {
+    struct PortCommand(u32);
+    impl Debug;
+    CR, _: 15;
+    FR, _: 14;
+    FRE, SetFRE: 4;
+    /// RW1
+    CLO, SetClo: 3;
+    ///Before setting, set CLO and wait for it to clear
+    SUD, SetSUD: 1;
+    ST, SetST: 0;
+}
 
-        clb_fis_virt
-    }
+bitfield! {
+    struct TaskFileData(u32);
+    impl Debug;
+    ERR, _: 15, 8;
+    STS_BSY, _: 7;
+    STS_DRQ, _: 3;
+    STS_ERR, _: 0;
+}
 
-    fn init_command_list(&self, addr: VirtAddr) {
-        //let command_list = addr.0 as *mut CommandHeader;
-        //for i in 0..32 {
-        //    unsafe {
-        //        let header = command_list.add(i);
-        //        (*header).prdtl = 8;
-        //        (*header).ctba = addr.0 + 0x80 + i * 0x1000;
-        //    }
-        //}
-    }
+bitfield! {
+    struct SATAStatus(u32);
+    impl Debug;
+    IPM, _: 11, 8;
+    SPD, _: 7, 4;
+    DET, _: 3, 0;
+}
+
+bitfield! {
+    struct SATAControl(u32);
+    impl Debug;
+    DET, SetDet: 3, 0;
 }
 
 #[derive(Debug)]

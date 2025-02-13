@@ -112,12 +112,14 @@ fn activate_timer_ap(lapic_registers: &mut LapicRegisters) {
 }
 
 fn activate_timer(lapic_registers: &mut LapicRegisters) {
+    //TODO: redo this logic, instead of waiting some ticks by lapic timer, wait 10 miliseconds by
+    //legacy timer and set lapic timer divisor to very low
     let mut timer_conf = lapic_registers.lvt_timer.bytes;
     
     timer_conf &= !0xFF_u32;
     timer_conf |= 100; //init the timer vector //TODO reset
     timer_conf &= !(0b11 << 17);
-    timer_conf |= 0b00 << 17; //set to one-shot
+    timer_conf |= 0b01 << 17; //set to periodic
     timer_conf &= !(1 << 16); //unmask
 
     const TIMER_COUNT: u32 = 100000000;
@@ -128,9 +130,13 @@ fn activate_timer(lapic_registers: &mut LapicRegisters) {
     let ticks;
     unsafe {
         let start_legacy_timer = LEGACY_PIC_TIMER_TICKS;
-        while TIMER_TICKS == 0 {}
-        ticks = LEGACY_PIC_TIMER_TICKS - start_legacy_timer;
+        if TIMER_TICKS != 0 {
+            panic!("Timer is already running");
+        }
+        while TIMER_TICKS < 1 {}
+        ticks = (LEGACY_PIC_TIMER_TICKS - start_legacy_timer + 1) / 1;
     }
+    println!("Ticks: {}", ticks);
 
     if USE_LEGACY_TIMER {
         timer_conf |= 1 << 16; //mask

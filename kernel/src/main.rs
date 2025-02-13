@@ -22,6 +22,7 @@ mod pci;
 mod drivers;
 mod disk;
 use limine::LIMINE_BOOTLOADER_REQUESTS;
+use vga::vga_text;
 
 pub struct BootInfo {}
 
@@ -45,9 +46,10 @@ extern "C" fn _start() -> ! {
 
     acpi::init_acpi();
 
+
     pci::enumerate_devices();
 
-    //vga_text::hello_message();
+    vga_text::hello_message();
 
     #[cfg(feature = "run_tests")]
     {
