@@ -1,13 +1,13 @@
 #![allow(clippy::enum_variant_names)]
 
 use std::{
-    mem_utils::{PhysAddr, VirtAddr},
+    mem_utils::{get_at_physical_addr, get_at_virtual_addr, PhysAddr, VirtAddr},
     println,
     vec::Vec,
     PageAllocator,
 };
 
-use crate::memory::{paging::LiminePat, PAGE_TREE_ALLOCATOR};
+use crate::{drivers::ahci::GenericHostControl, memory::{paging::LiminePat, PAGE_TREE_ALLOCATOR}};
 
 use super::port_access;
 
@@ -44,7 +44,6 @@ impl RegularPciDevice {
                 i += 1;
             }
         }
-
         device.set_command(command);
         Self { device, bars }
     }
@@ -86,8 +85,8 @@ impl Bar {
                 let address = (address.0 + offset) as *const u8;
                 assert!(offset + data.len() as u64 <= *limit, "Data exceeds BAR size");
                 unsafe {
-                    for i in 0..data.len() {
-                        data[i] = address.add(i).read_volatile();
+                    for i in 0..core::mem::size_of::<T>() {
+                        data.push(address.add(i).read_volatile());
                     }
                 }
             }
@@ -213,7 +212,6 @@ impl PciDevice {
                 bars = 1;
                 size = self.get_bar_size(index, 0xF) as u64;
             }
-
             let num = size / 4096;
             let address = unsafe { 
                 let address = PAGE_TREE_ALLOCATOR.allocate_contigious(num, Some(physical_bar_addr));

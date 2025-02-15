@@ -2,7 +2,7 @@ use std::{boxed::Box, println, printlnc};
 
 use device_config::{MassStorageController, RegularPciDevice};
 
-use crate::interrupts::handlers::{apic_eoi, ExceptionStackFrame};
+use crate::{drivers::ahci::GenericHostControl, interrupts::handlers::{apic_eoi, ExceptionStackFrame}};
 
 pub mod device_config;
 mod port_access;
@@ -16,8 +16,10 @@ pub fn enumerate_devices() {
             continue;
         }
         printlnc!((51, 153, 10), "configuring pci device: {:#x?}", class);
+
         device.init_msi_interrupt();
         let device = RegularPciDevice::new(device.clone());
+        
         if matches!(
             class,
             device_config::PciClass::MassStorageController(MassStorageController::SerialATAController)

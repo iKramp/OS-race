@@ -5,13 +5,14 @@ use std::{
     mem_utils::{PhysAddr, VirtAddr},
     println,
     vec::Vec,
+    PageAllocator,
 };
 
 use bitfield::bitfield;
 
 use crate::{
     disk::Disk,
-    memory::physical_allocator::BUDDY_ALLOCATOR,
+    memory::{paging::LiminePat, physical_allocator::BUDDY_ALLOCATOR, PAGE_TREE_ALLOCATOR},
     pci::device_config::{self, Bar},
 };
 
@@ -77,10 +78,15 @@ impl Disk for AhciDisk {
 
         let staggered_spin_up = ghc.cap.SSS();
 
+        let mut active_ports = Vec::new();
         //loop and init ports
         for port in &mut self.ports {
-            Self::init_port(port, self.is_64_bit, &self.abar, staggered_spin_up);
+            if Self::init_port(port, self.is_64_bit, &self.abar, staggered_spin_up) {
+                active_ports.push(port.index);
+            }
         }
+
+        self.ports.retain(|port| active_ports.contains(&port.index));
     }
 }
 
@@ -176,34 +182,13 @@ impl AhciDisk {
         port
     }
 
-    fn init_port(port: &mut VirtualPort, is_64_bit: bool, abar: &Bar, staggered_spin_up: bool) {
+    fn init_port(port: &mut VirtualPort, is_64_bit: bool, abar: &Bar, staggered_spin_up: bool) -> bool {
         port.init_cmd_list_fis(is_64_bit, abar);
         let mut port_cmd = PortCommand(port.get_port_property(0x18, abar));
         port_cmd.SetFRE(true);
         port.set_port_property(0x18, port_cmd.0, abar);
 
-        while port_cmd.FRE() {
-            port_cmd = PortCommand(port.get_port_property(0x18, abar));
-        }
-        while !port_cmd.FRE() {
-            port_cmd = PortCommand(port.get_port_property(0x18, abar));
-        }
-        while port_cmd.FRE() {
-            port_cmd = PortCommand(port.get_port_property(0x18, abar));
-        }
-        while !port_cmd.FRE() {
-            port_cmd = PortCommand(port.get_port_property(0x18, abar));
-        }
-        while port_cmd.FRE() {
-            port_cmd = PortCommand(port.get_port_property(0x18, abar));
-        }
-        while !port_cmd.FRE() {
-            port_cmd = PortCommand(port.get_port_property(0x18, abar));
-        }
-        while port_cmd.FRE() {
-            port_cmd = PortCommand(port.get_port_property(0x18, abar));
-        }
-        while !port_cmd.FRE() {
+        while !port_cmd.FR() {
             port_cmd = PortCommand(port.get_port_property(0x18, abar));
         }
 
@@ -213,16 +198,14 @@ impl AhciDisk {
             port.set_port_property(0x18, port_cmd.0, abar);
         }
 
-        println!("Port command: {:#x?}", PortCommand(port.get_port_property(0x18, abar)));
-
         //wait for port to be ready
         let mut sata_status = SATAStatus(port.get_port_property(0x28, abar));
         let start = std::time::Instant::now();
         while sata_status.DET() != 3 {
-            //if start.elapsed().as_millis() > 10 {
-            //    println!("Port not working");
-            //    break;
-            //}
+            if start.elapsed().as_millis() > 10 {
+                println!("Port {} not working", port.index);
+                return false;
+            }
             unsafe { core::arch::asm!("hlt") };
             sata_status = SATAStatus(port.get_port_property(0x28, abar));
         }
@@ -237,15 +220,16 @@ impl AhciDisk {
             task_file_data = TaskFileData(port.get_port_property(0x20, abar));
         }
 
-        println!("Port initialized");
+        println!("Port {} initialized", port.index);
+        return true;
     }
 }
 
 #[derive(Debug)]
 #[repr(C)]
-struct GenericHostControl {
+pub struct GenericHostControl {
     cap: Capabilities,
-    ghc: GlobalHostControl,
+    ghc: GlobalHBAControl,
     is: u32,
     pi: u32,
     vs: u32,
@@ -259,7 +243,7 @@ struct GenericHostControl {
 }
 
 bitfield! {
-    struct GlobalHostControl(u32);
+    struct GlobalHBAControl(u32);
     impl Debug;
     AE, SetAE: 31;
     MRSM, _: 2;
@@ -327,8 +311,19 @@ impl VirtualPort {
         self.set_port_property(8, fis_base.0 as u32, abar);
         self.set_port_property(12, (fis_base.0 >> 32) as u32, abar);
 
-        let clb_virt = std::mem_utils::translate_phys_virt_addr(cmd_list_base);
-        let fis_virt = std::mem_utils::translate_phys_virt_addr(fis_base);
+        let clb_virt = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(cmd_list_base)) };
+        let fis_virt = if !FIS_SWITCHING {
+            clb_virt + VirtAddr(0x400)
+        } else {
+            unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(fis_base)) }
+        };
+
+        unsafe {
+            PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(clb_virt).set_pat(LiminePat::UC);
+            if FIS_SWITCHING {
+                PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(fis_virt).set_pat(LiminePat::UC);
+            }
+        }
 
         self.command_list = clb_virt;
         self.fis = fis_virt;
