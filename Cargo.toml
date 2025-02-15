@@ -23,13 +23,13 @@ kernel = { path = "kernel", artifact = "bin", target = "x86_64-unknown-none", fe
 ovmf-prebuilt = "0.1.0-alpha.1"
 
 [profile.dev]
-panic = "unwind"
+panic = "abort"
 opt-level = 0
 lto = false
 
 
 [profile.release]
-panic = "unwind"
+panic = "abort"
 opt-level = 2
 lto = false
 

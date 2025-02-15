@@ -2,7 +2,6 @@ mod aml_code;
 mod namespace;
 use std::vec::Vec;
 
-pub use aml_code::AmlCode;
 mod arg_local_obj;
 mod data_object;
 mod expression_opcodes;

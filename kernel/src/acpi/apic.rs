@@ -134,7 +134,7 @@ fn activate_timer(lapic_registers: &mut LapicRegisters) {
             panic!("Timer is already running");
         }
         while TIMER_TICKS < 1 {}
-        ticks = (LEGACY_PIC_TIMER_TICKS - start_legacy_timer + 1) / 1;
+        ticks = LEGACY_PIC_TIMER_TICKS - start_legacy_timer + 1;
     }
     println!("Ticks: {}", ticks);
 

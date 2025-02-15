@@ -2,8 +2,6 @@
 
 use std::heap::log2_rounded_up;
 
-use kernel_test::kernel_test;
-
 use crate::{limine, println};
 
 use super::mem_utils::*;
@@ -209,9 +207,9 @@ impl BuyddyAllocator {
             if res.is_some() {
                 return res;
             }
-            return self.find_contigious_empty_recursively_low(curr_index * 2 + 1, order);
+            self.find_contigious_empty_recursively_low(curr_index * 2 + 1, order)
         } else {
-            return self.find_contigious_empty_recursively_low(curr_index * 2 + 1, order);
+            self.find_contigious_empty_recursively_low(curr_index * 2 + 1, order)
         }
 
     }

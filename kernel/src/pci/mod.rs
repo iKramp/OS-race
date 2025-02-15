@@ -2,7 +2,7 @@ use std::{boxed::Box, println, printlnc};
 
 use device_config::{MassStorageController, RegularPciDevice};
 
-use crate::{drivers::ahci::GenericHostControl, interrupts::handlers::{apic_eoi, ExceptionStackFrame}};
+use crate::interrupts::handlers::{apic_eoi, ExceptionStackFrame};
 
 pub mod device_config;
 mod port_access;

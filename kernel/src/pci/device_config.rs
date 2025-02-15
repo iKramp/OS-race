@@ -1,13 +1,14 @@
 #![allow(clippy::enum_variant_names)]
+#![allow(clippy::needless_range_loop)]
 
 use std::{
-    mem_utils::{get_at_physical_addr, get_at_virtual_addr, PhysAddr, VirtAddr},
+    mem_utils::{PhysAddr, VirtAddr},
     println,
     vec::Vec,
     PageAllocator,
 };
 
-use crate::{drivers::ahci::GenericHostControl, memory::{paging::LiminePat, PAGE_TREE_ALLOCATOR}};
+use crate::memory::{paging::LiminePat, PAGE_TREE_ALLOCATOR};
 
 use super::port_access;
 
@@ -36,7 +37,7 @@ impl RegularPciDevice {
         device.set_command(command & !0x3);
 
         while i < 6 {
-            let bar = device.get_bar(i as u8);
+            let bar = device.get_bar(i);
             if let Some(bar) = bar {
                 bars.push(bar.0);
                 i += bar.1;
@@ -94,7 +95,7 @@ impl Bar {
                 let address = *address + offset as u16;
                 assert!(offset + data.len() as u64 <= *limit as u64, "Data exceeds BAR size");
                 for i in 0..data.len() {
-                    data[i] = crate::utils::byte_from_port(address + i as u16);
+                    data.push(crate::utils::byte_from_port(address + i as u16));
                 }
             }
         }
@@ -241,7 +242,7 @@ impl PciDevice {
         self.set_dword(0x10 + index * 4, 0xFFFF_FFFF);
         let size = self.get_dword(0x10 + index * 4) & !mask;
         self.set_dword(0x10 + index * 4, bar);
-        return (!size) + 1;
+        (!size) + 1
     }
 
     pub fn get_capabilities_pointer(&self) -> u8 {
@@ -265,7 +266,7 @@ impl PciDevice {
             pointer = (capability_first_dword >> 8) as u8;
         }
         self.capabilities = capabilities;
-        return &self.capabilities;
+        &self.capabilities
     }
 
     //MSI functions
@@ -278,7 +279,7 @@ impl PciDevice {
         };
 
         let dword = self.get_dword(msi_cap.pointer) >> 16;
-        return (dword & 0x80) != 0;
+        (dword & 0x80) != 0
     }
 
     pub fn init_msi_interrupt(&self) {
@@ -455,13 +456,13 @@ impl PciClass {
                 _ => panic!("Invalid subclass for class 0x07: {:x}", subclass),
             },
             0x08 => match subclass {
-                0x00 => Self::BaseSystemPeripheral(BaseSystemPeripheral::PIC),
+                0x00 => Self::BaseSystemPeripheral(BaseSystemPeripheral::Pic),
                 0x01 => Self::BaseSystemPeripheral(BaseSystemPeripheral::DMAController),
                 0x02 => Self::BaseSystemPeripheral(BaseSystemPeripheral::Timer),
-                0x03 => Self::BaseSystemPeripheral(BaseSystemPeripheral::RTC),
+                0x03 => Self::BaseSystemPeripheral(BaseSystemPeripheral::Rtc),
                 0x04 => Self::BaseSystemPeripheral(BaseSystemPeripheral::PCIHotPlugController),
                 0x05 => Self::BaseSystemPeripheral(BaseSystemPeripheral::SDHostController),
-                0x06 => Self::BaseSystemPeripheral(BaseSystemPeripheral::IOMMU),
+                0x06 => Self::BaseSystemPeripheral(BaseSystemPeripheral::Iommu),
                 0x80 => Self::BaseSystemPeripheral(BaseSystemPeripheral::Other),
                 _ => panic!("Invalid subclass for class 0x08: {:x}", subclass),
             },
@@ -481,7 +482,7 @@ impl PciClass {
                 0x02 => Self::Processor(Processor::Pentium),
                 0x10 => Self::Processor(Processor::Alpha),
                 0x20 => Self::Processor(Processor::PowerPC),
-                0x30 => Self::Processor(Processor::MIPS),
+                0x30 => Self::Processor(Processor::Mips),
                 0x40 => Self::Processor(Processor::CoProcessor),
                 0x80 => Self::Processor(Processor::Other),
                 _ => panic!("Invalid subclass for class 0x0B: {:x}", subclass),
@@ -489,7 +490,7 @@ impl PciClass {
             0x0C => match subclass {
                 0x00 => Self::SerialBusController(SerialBusController::FireWireController),
                 0x01 => Self::SerialBusController(SerialBusController::ACCESSBusController),
-                0x02 => Self::SerialBusController(SerialBusController::SSA),
+                0x02 => Self::SerialBusController(SerialBusController::Ssa),
                 0x03 => Self::SerialBusController(SerialBusController::USBController),
                 0x04 => Self::SerialBusController(SerialBusController::FibreChannelController),
                 0x05 => Self::SerialBusController(SerialBusController::SMBus),
@@ -623,13 +624,13 @@ pub enum SimpleCommunicationController {
 
 #[derive(Debug)]
 pub enum BaseSystemPeripheral {
-    PIC,
+    Pic,
     DMAController,
     Timer,
-    RTC,
+    Rtc,
     PCIHotPlugController,
     SDHostController,
-    IOMMU,
+    Iommu,
     Other,
 }
 
@@ -650,7 +651,7 @@ pub enum Processor {
     Pentium,
     Alpha,
     PowerPC,
-    MIPS,
+    Mips,
     CoProcessor,
     Other,
 }
@@ -659,7 +660,7 @@ pub enum Processor {
 pub enum SerialBusController {
     FireWireController,
     ACCESSBusController,
-    SSA,
+    Ssa,
     USBController,
     FibreChannelController,
     SMBus,

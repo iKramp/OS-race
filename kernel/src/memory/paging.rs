@@ -84,7 +84,7 @@ impl PageTableEntry {
     }
 
     pub fn set_pat(&mut self, pat_val: LiminePat) {
-        let (pat, pcd, pwt) = match pat_val {
+        let (_pat, pcd, pwt) = match pat_val {
             LiminePat::WB => (false, false, false),
             LiminePat::WT => (false, false, true),
             LiminePat::UCMinus => (false, true, false),
@@ -537,7 +537,7 @@ impl std::PageAllocator for PageTree {
     fn allocate_contigious(&mut self, num: u64, physical_address: Option<PhysAddr>) -> std::mem_utils::VirtAddr {
         unsafe {
             let level_4_table = get_at_physical_addr::<PageTable>(self.level_4_table);
-            return match physical_address {
+            match physical_address {
                 None => {
                     let addr = level_4_table.get_available_entry_pages(4, num);
                     if addr == u64::MAX {
@@ -549,7 +549,7 @@ impl std::PageAllocator for PageTree {
                     VirtAddr(addr)
                 }
                 Some(physical_address) => level_4_table.mmap_contigious_any(num, physical_address),
-            };
+            }
         }
     }
 }

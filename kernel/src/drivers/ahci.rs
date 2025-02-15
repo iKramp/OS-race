@@ -178,8 +178,7 @@ impl AhciDisk {
 
     fn get_port(&self, port: &VirtualPort) -> Port {
         let port_offset = 0x100 + (port.index as u64) * 0x80;
-        let port = self.abar.read_from_bar::<Port>(port_offset);
-        port
+        self.abar.read_from_bar::<Port>(port_offset)
     }
 
     fn init_port(port: &mut VirtualPort, is_64_bit: bool, abar: &Bar, staggered_spin_up: bool) -> bool {
@@ -221,7 +220,7 @@ impl AhciDisk {
         }
 
         println!("Port {} initialized", port.index);
-        return true;
+        true
     }
 }
 
@@ -282,7 +281,7 @@ bitfield! {
 }
 
 #[derive(Debug)]
-struct VirtualPort {
+pub struct VirtualPort {
     index: u8,
     command_list: VirtAddr,
     fis: VirtAddr,
