@@ -1,6 +1,7 @@
 use crate::mem_utils::PhysAddr;
 
 pub trait PageAllocator {
+    fn unmap(&mut self, addr: crate::mem_utils::VirtAddr);
     fn allocate(&mut self, physical_address: Option<PhysAddr>) -> crate::mem_utils::VirtAddr;
     fn allocate_set_virtual(&mut self, physical_address: Option<PhysAddr>, virtual_address: crate::mem_utils::VirtAddr);
     fn deallocate(&mut self, addr: crate::mem_utils::VirtAddr);
@@ -9,6 +10,9 @@ pub trait PageAllocator {
 
 struct DummyAllocator;
 impl PageAllocator for DummyAllocator {
+    fn unmap(&mut self, _addr: crate::mem_utils::VirtAddr) {
+        panic!("attempted to use the page allocator before setting the static variable to a working allocator");
+    }
     fn allocate(&mut self, _physical_address: Option<PhysAddr>) -> crate::mem_utils::VirtAddr {
         panic!("attempted to use the page allocator before setting the static variable to a working allocator");
     }

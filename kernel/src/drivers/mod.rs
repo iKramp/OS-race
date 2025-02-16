@@ -1,6 +1,5 @@
 use core::fmt::Debug;
 
-
 pub mod ahci;
 
 pub trait PCIDriver: Debug {

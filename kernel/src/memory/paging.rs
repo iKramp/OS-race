@@ -286,10 +286,9 @@ impl PageTable {
         }
         for i in 0..num {
             assert!(
-                !BUDDY_ALLOCATOR.is_frame_allocated(physical_address + PhysAddr(i * 4096)),
-                "memory space already allocated"
+                BUDDY_ALLOCATOR.is_frame_allocated(physical_address + PhysAddr(i * 4096)),
+                "memory space must already be allocated"
             );
-            BUDDY_ALLOCATOR.mark_addr(physical_address + PhysAddr(i * 4096), true);
             self.mmap(VirtAddr(address + i * 4096), physical_address + PhysAddr(i * 4096));
         }
         VirtAddr(address)
@@ -389,15 +388,39 @@ impl PageTable {
         let entry = &mut self.entries[(address.0 >> (3 + level * 9) & 0b111_111_111) as usize];
         debug_assert!(entry.present());
         if level == 1 {
+            entry.set_present(false);
             BUDDY_ALLOCATOR.deallocate_frame(entry.address());
             return true;
         }
         if entry.present() && entry.huge_page() {
+            entry.set_present(false);
             dealloc_huge_page(entry, level);
             return true;
         }
         let lower_level_table = get_at_physical_addr::<PageTable>(entry.address());
         let more_space = lower_level_table.deallocate(address, level - 1);
+        if !more_space {
+            return false;
+        }
+        entry.increase_available();
+        //if it was 0 before, this entry was not available but now it is
+        entry.num_of_available_pages() == 1
+    }
+
+    //returns if there was no space but now there is
+    pub unsafe fn unmap(&mut self, address: VirtAddr, level: u64) -> bool {
+        let entry = &mut self.entries[(address.0 >> (3 + level * 9) & 0b111_111_111) as usize];
+        debug_assert!(entry.present());
+        if level == 1 {
+            entry.set_present(false);
+            return true;
+        }
+        if entry.present() && entry.huge_page() {
+            entry.set_present(false);
+            return true;
+        }
+        let lower_level_table = get_at_physical_addr::<PageTable>(entry.address());
+        let more_space = lower_level_table.unmap(address, level - 1);
         if !more_space {
             return false;
         }
@@ -531,6 +554,13 @@ impl std::PageAllocator for PageTree {
         unsafe {
             let level_4_table = get_at_physical_addr::<PageTable>(self.level_4_table);
             level_4_table.deallocate(addr, 4);
+        }
+    }
+
+    fn unmap(&mut self, addr: std::mem_utils::VirtAddr) {
+        unsafe {
+            let level_4_table = get_at_physical_addr::<PageTable>(self.level_4_table);
+            level_4_table.unmap(addr, 4);
         }
     }
 

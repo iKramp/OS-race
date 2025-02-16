@@ -8,7 +8,7 @@ use std::{
     PageAllocator,
 };
 
-use crate::memory::{paging::LiminePat, PAGE_TREE_ALLOCATOR};
+use crate::memory::{paging::LiminePat, physical_allocator::BUDDY_ALLOCATOR, PAGE_TREE_ALLOCATOR};
 
 use super::port_access;
 
@@ -47,6 +47,11 @@ impl RegularPciDevice {
         }
         device.set_command(command);
         Self { device, bars }
+    }
+
+    pub fn enable_bus_mastering(&self) {
+        let command = self.device.get_command();
+        self.device.set_command(command | 0b100);
     }
 }
 
@@ -215,6 +220,9 @@ impl PciDevice {
             }
             let num = size / 4096;
             let address = unsafe { 
+                for i in 0..num {
+                    BUDDY_ALLOCATOR.mark_addr(physical_bar_addr + PhysAddr(i * 0x1000), true);
+                }
                 let address = PAGE_TREE_ALLOCATOR.allocate_contigious(num, Some(physical_bar_addr));
                 //mark caching as uncacheable, unless prefetchable, then write-through
                 for i in 0..num {

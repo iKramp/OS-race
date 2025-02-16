@@ -75,7 +75,7 @@ pub unsafe fn get_at_virtual_addr<T>(addr: VirtAddr) -> &'static mut T {
 #[inline]
 pub unsafe fn set_at_virtual_addr<T>(addr: VirtAddr, data: T) {
     let data_to_replace: *mut T = addr.0 as *mut T;
-    data_to_replace.write(data);
+    data_to_replace.write_volatile(data);
 }
 
 ///# Safety
@@ -84,6 +84,17 @@ pub unsafe fn set_at_virtual_addr<T>(addr: VirtAddr, data: T) {
 pub unsafe fn set_physical_offset(addr: PhysOffset) {
     MEM_INITIALIZED = true;
     PHYSICAL_OFFSET = addr;
+}
+
+///# Safety
+///the virtual address offset must be correct
+#[inline]
+pub unsafe fn memset_virtual_addr(addr: VirtAddr, value: u8, size: usize) {
+    let mut data = addr.0 as *mut u8;
+    for _ in 0..size {
+        data.write(value);
+        data = data.add(1);
+    }
 }
 
 pub fn translate_virt_phys_addr(addr: VirtAddr) -> Option<PhysAddr> {

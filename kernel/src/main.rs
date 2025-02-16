@@ -48,6 +48,7 @@ extern "C" fn _start() -> ! {
 
 
     pci::enumerate_devices();
+    panic!("test");
 
     vga_text::hello_message();
 
