@@ -1,8 +1,8 @@
 #![allow(non_snake_case)]
 
-use core::{arch::x86_64::_mm_setzero_ps, fmt::Debug, time::Duration, u32};
+use core::fmt::Debug;
 use std::{
-    mem_utils::{get_at_physical_addr, get_at_virtual_addr, memset_virtual_addr, set_at_virtual_addr, PhysAddr, VirtAddr},
+    mem_utils::{get_at_physical_addr, get_at_virtual_addr, memset_virtual_addr, PhysAddr, VirtAddr},
     println,
     vec::Vec,
     PageAllocator,
@@ -11,7 +11,10 @@ use std::{
 use bitfield::bitfield;
 
 use crate::{
-    disk::Disk, drivers::ahci::fis::D2HRegisterFis, memory::{paging::LiminePat, physical_allocator::BUDDY_ALLOCATOR, PAGE_TREE_ALLOCATOR}, pci::device_config::{self, Bar}
+    disk::Disk,
+    drivers::ahci::fis::D2HRegisterFis,
+    memory::{paging::LiminePat, physical_allocator::BUDDY_ALLOCATOR, PAGE_TREE_ALLOCATOR},
+    pci::device_config::{self, Bar},
 };
 
 use super::fis::{FisType, H2DRegisterFis};
@@ -112,7 +115,9 @@ impl AhciDisk {
         let mut bohc = Bohc(0);
         bohc.SetOOS(true);
         println!("bohc: {:#x?}", bohc);
-        unsafe { (&raw mut self.abar.bohc).write_volatile(bohc); }
+        unsafe {
+            (&raw mut self.abar.bohc).write_volatile(bohc);
+        }
         let start = std::time::Instant::now();
         loop {
             let bohc = unsafe { (&raw mut self.abar.bohc).read_volatile() };
@@ -222,12 +227,18 @@ impl VirtualPort {
         unsafe { (self.address as *const Port).read_volatile() }
     }
 
+    fn display_port(&self) {
+        println!("{:#x?}", self.get_port());
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    }
+
     fn init(&mut self, is_64_bit: bool, staggered_spin_up: bool) -> bool {
         self.init_cmd_list_fis(is_64_bit);
         let mut port_cmd = PortCommand(self.get_property(0x18));
         port_cmd.SetFRE(true);
         self.set_property(0x18, port_cmd.0);
-        
+        //here a register FIS is sent immediately
+
         while !port_cmd.FR() {
             unsafe { core::arch::asm!("hlt") };
             port_cmd = PortCommand(self.get_property(0x18));
@@ -268,21 +279,9 @@ impl VirtualPort {
         //enable port interrupts here
         self.set_property(0x14, 0xFF);
 
-        let mut signature = self.get_property(0x24);
-        while signature == !0 {
-            unsafe { core::arch::asm!("hlt") };
-            signature = self.get_property(0x24);
-        }
-        if signature & 0xFFF != 0x101 {
-            println!("Port {} not a SATA device", self.index);
-            return false;
-        }
-
-        self.send_identify();
-
         unsafe {
-            let register_fis = get_at_virtual_addr::<D2HRegisterFis>(self.fis);
-            println!("Register fis: {:#x?}", register_fis);
+            let register_fis = &raw const *get_at_virtual_addr::<D2HRegisterFis>(self.fis + VirtAddr(0x40));
+            println!("Register fis: {:#x?}", register_fis.read_volatile());
         }
 
         println!("Port {} initialized", self.index);
@@ -292,7 +291,7 @@ impl VirtualPort {
     fn send_identify(&self) {
         let ident_fis = H2DRegisterFis {
             fis_type: FisType::RegisterH2D as u8,
-            command: 0xEC,//identify
+            command: 0xEC, //identify
             pmport: 1,
             device: 0xA0,
             control: 0x08,
@@ -305,8 +304,6 @@ impl VirtualPort {
             count: 512,
         };
 
-
-
         let ident_fis = unsafe { core::mem::transmute::<H2DRegisterFis, [u8; 20]>(ident_fis) };
         let identify_cmd_index = self.build_command(&ident_fis, &[prdt]).unwrap();
 
@@ -317,7 +314,6 @@ impl VirtualPort {
         //}
 
         self.clean_command(identify_cmd_index);
-
 
         let data = unsafe { get_at_physical_addr::<[u8; 512]>(fis_recv_area) };
         //println!("Identify data: {:x?}", data);
@@ -331,19 +327,16 @@ impl VirtualPort {
             return None;
         }
         let index = cmd_issue.trailing_ones() as u8;
-        
+
         let cmd_table_page = if self.is_64_bit {
             unsafe { BUDDY_ALLOCATOR.allocate_frame() }
         } else {
             unsafe { BUDDY_ALLOCATOR.allocate_frame_low() }
         };
 
-        
-
-
-        let cmd_header_0 = ((prdt.len() as u32) << 14) | 
-            1 << 10 | //clear busy on complete
-            ((cfis.len() >> 2) as u32 & 0b11111); //length in dwords
+        let cmd_header_0 = ((prdt.len() as u32) << 14)
+            | 1 << 10 //clear busy on complete
+            | ((cfis.len() >> 2) as u32 & 0b11111); //length in dwords
         let cmd_header_1 = 0; //length of transferred bytes, updated by hardware
         let cmd_header_2 = cmd_table_page.0 as u32;
         let cmd_header_3 = (cmd_table_page.0 >> 32) as u32;
@@ -356,7 +349,9 @@ impl VirtualPort {
             cmd_header.add(3).write_volatile(cmd_header_3);
 
             let cmd_table_virt = PAGE_TREE_ALLOCATOR.allocate(Some(cmd_table_page));
-            PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(cmd_table_virt).set_pat(LiminePat::UC);
+            PAGE_TREE_ALLOCATOR
+                .get_page_table_entry_mut(cmd_table_virt)
+                .set_pat(LiminePat::UC);
             let cmd_table_raw = cmd_table_virt.0 as *mut u8;
             for (i, byte) in cfis.iter().enumerate() {
                 cmd_table_raw.add(i).write_volatile(*byte);
@@ -366,16 +361,13 @@ impl VirtualPort {
                 let prdt_entry = cmd_table_raw.add(0x80 + i * 16) as *mut u32;
                 prdt_entry.write_volatile(prdt.base.0 as u32);
                 prdt_entry.add(1).write_volatile((prdt.base.0 >> 32) as u32);
-                
+
                 //convert count to 0 based even number
                 let count = (prdt.count - 1) | 1;
                 prdt_entry.add(3).write_volatile(count & 0x3FFFFF);
             }
-            
-
 
             PAGE_TREE_ALLOCATOR.unmap(cmd_table_virt);
-
         }
 
         let cmd_issue = 1 << index;
@@ -393,7 +385,6 @@ impl VirtualPort {
             BUDDY_ALLOCATOR.mark_addr(PhysAddr(table * 0x1000), false);
         }
         //potentially anything else
-        
     }
 }
 
