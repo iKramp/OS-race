@@ -62,3 +62,11 @@ fn init_timer() {
     byte_to_port(0x40, (DIVISOR & 0xFF) as u8);
     byte_to_port(0x40, ((DIVISOR >> 8) & 0xFF) as u8);
 }
+
+pub fn disable_timer() {
+    //#[allow(clippy::unusual_byte_groupings)]
+    //byte_to_port(0x43, 0b00_11_000_0);
+    //byte_to_port(0x40, (1000 & 0xFF) as u8);
+    //byte_to_port(0x40, ((1000 >> 8) & 0xFF) as u8);
+    //another interrupt will be triggered after this, then it stops
+}

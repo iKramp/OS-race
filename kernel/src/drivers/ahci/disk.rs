@@ -312,11 +312,13 @@ impl VirtualPort {
         //    unsafe { core::arch::asm!("hlt") };
         //    ci = self.get_property(0x38);
         //}
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        self.display_port();
 
         self.clean_command(identify_cmd_index);
 
         let data = unsafe { get_at_physical_addr::<[u8; 512]>(fis_recv_area) };
-        //println!("Identify data: {:x?}", data);
+        println!("Identify data: {:x?}", data);
     }
 
     ///PRDT cannot be more than a bit over 900MB. Just use multiple commands

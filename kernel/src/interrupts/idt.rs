@@ -13,6 +13,19 @@ macro_rules! interrupt_message {
     }};
 }
 
+#[macro_export]
+macro_rules! apic_interrupt_vector {
+    ($num: expr) => {{
+        extern "x86-interrupt" fn wrapper(_stack_frame: ExceptionStackFrame) {
+            printlnc!((0, 0, 255), "interrupt vector {}", $num);
+            apic_eoi();
+        }
+        wrapper
+    }};
+}
+
+
+
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
 pub struct TablePointer {

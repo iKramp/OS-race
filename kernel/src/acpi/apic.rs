@@ -1,18 +1,22 @@
 #![allow(clippy::unusual_byte_groupings, static_mut_refs)]
 
 use std::{
+    printlnc,
     mem_utils::{PhysAddr, VirtAddr},
     PageAllocator,
 };
 
+use unroll::unroll_for_loops;
+
 use crate::{
-    interrupts::{handlers::*, idt::{Entry, IDT}, LEGACY_PIC_TIMER_TICKS, PIC_TIMER_FREQUENCY, TIMER_TICKS}, memory::paging::LiminePat, println, utils::byte_to_port
+    apic_interrupt_vector, interrupts::{handlers::*, idt::{Entry, IDT}, LEGACY_PIC_TIMER_TICKS, PIC_TIMER_FREQUENCY, TIMER_TICKS}, memory::paging::LiminePat, println, utils::byte_to_port
 };
 
 pub static mut LAPIC_REGISTERS: VirtAddr = VirtAddr(0);
 const USE_LEGACY_TIMER: bool = false;
 const DIVIDE_VALUE: u32 = 16; //could be 1 on real PCs but VMs don't like it
 
+#[unroll_for_loops]
 pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo, processor_id: u8) {
     let bsp = processor_id == platform_info.boot_processor.processor_id;
     if bsp {
@@ -33,6 +37,8 @@ pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo, processor
     }
 
     lapic_registers.lvt_corrected_machine_check_interrupt.bytes = 0b00000000_00000000_0_000_0_0_000_01000000_u32;
+
+    //this constantly gives interrupts??
     lapic_registers.lvt_lint0.bytes = 0b00000000_00000000_0_000_0_0_000_01000001_u32;
     lapic_registers.lvt_lint1.bytes = 0b00000000_00000000_0_000_0_0_000_01000010_u32;
     lapic_registers.lvt_error.bytes = 0b00000000_00000000_0_000_0_0_000_01000011_u32;
@@ -69,7 +75,7 @@ pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo, processor
 
     unsafe {
         for i in 38..255 {
-            IDT.set(Entry::converging(other_apic_interrupt), i);
+            IDT.set(Entry::converging(apic_interrupt_vector!(i)), i);
         }
         IDT.set(Entry::converging(apic_error), 67);
 
@@ -143,6 +149,7 @@ fn activate_timer(lapic_registers: &mut LapicRegisters) {
         unsafe { IDT.set(Entry::converging(legacy_timer_tick), 32) };
     } else {
         disable_pic_completely();
+        crate::interrupts::disable_timer();
         unsafe { IDT.set(Entry::converging(apic_timer_tick), 32) };
     }
 

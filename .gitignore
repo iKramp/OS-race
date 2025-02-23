@@ -22,3 +22,5 @@ kernel_build_files/
 iso/
 
 *.pdf
+
+result

@@ -1,7 +1,7 @@
 use crate::utils::{byte_from_port, byte_to_port};
 #[allow(unused_imports)] //they are used in macros
 use core::arch::asm;
-use std::printlnc;
+use std::{println, printlnc};
 
 #[derive(Debug)]
 #[repr(C)]
