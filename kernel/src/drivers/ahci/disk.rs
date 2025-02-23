@@ -12,7 +12,7 @@ use bitfield::bitfield;
 
 use crate::{
     disk::Disk,
-    drivers::ahci::fis::D2HRegisterFis,
+    drivers::ahci::fis::{D2HRegisterFis, IdentifyStructure, PioSetupFis},
     memory::{paging::LiminePat, physical_allocator::BUDDY_ALLOCATOR, PAGE_TREE_ALLOCATOR},
     pci::device_config::{self, Bar},
 };
@@ -23,14 +23,14 @@ use super::fis::{FisType, H2DRegisterFis};
 pub struct AhciDriver {}
 
 #[derive(Debug)]
-pub struct AhciDisk {
+pub struct AhciController {
     pub device: device_config::RegularPciDevice,
     pub abar: &'static mut GenericHostControl,
     pub ports: Vec<VirtualPort>,
     is_64_bit: bool,
 }
 
-impl Disk for AhciDisk {
+impl Disk for AhciController {
     //https://forum.osdev.org/viewtopic.php?t=40969
     fn init(&mut self) {
         self.device.enable_bus_mastering();
@@ -77,7 +77,7 @@ impl Disk for AhciDisk {
     }
 }
 
-impl AhciDisk {
+impl AhciController {
     ///Disk::init() must be called after this
     pub fn new(device: device_config::RegularPciDevice) -> Self {
         let abar = device.bars.iter().find(|bar| bar.get_index() == 5).unwrap().clone();
@@ -99,6 +99,7 @@ impl AhciDisk {
                     command_list: VirtAddr(0),
                     fis: VirtAddr(0),
                     is_64_bit,
+                    sectors: 0,
                 });
             }
         }
@@ -279,20 +280,23 @@ impl VirtualPort {
         //enable port interrupts here
         self.set_property(0x14, 0xFF);
 
+        self.send_identify();
+
         unsafe {
-            let register_fis = &raw const *get_at_virtual_addr::<D2HRegisterFis>(self.fis + VirtAddr(0x40));
-            println!("Register fis: {:#x?}", register_fis.read_volatile());
+            let _register_fis = &raw const *get_at_virtual_addr::<D2HRegisterFis>(self.fis + VirtAddr(0x40));
+            let _pio_setup_fis = &raw const *get_at_virtual_addr::<PioSetupFis>(self.fis + VirtAddr(0x20));
+            //use them?
         }
 
         println!("Port {} initialized", self.index);
         true
     }
 
-    fn send_identify(&self) {
+    fn send_identify(&mut self) {
         let ident_fis = H2DRegisterFis {
             fis_type: FisType::RegisterH2D as u8,
             command: 0xEC, //identify
-            pmport: 1,
+            pmport: 0x80,
             device: 0xA0,
             control: 0x08,
             ..Default::default()
@@ -307,18 +311,21 @@ impl VirtualPort {
         let ident_fis = unsafe { core::mem::transmute::<H2DRegisterFis, [u8; 20]>(ident_fis) };
         let identify_cmd_index = self.build_command(&ident_fis, &[prdt]).unwrap();
 
-        //let mut ci = self.get_property(0x38);
-        //while ci & (1 << identify_cmd_index) != 0 {
-        //    unsafe { core::arch::asm!("hlt") };
-        //    ci = self.get_property(0x38);
-        //}
+        let mut ci = self.get_property(0x38);
+        while ci & (1 << identify_cmd_index) != 0 {
+            unsafe { core::arch::asm!("hlt") };
+            ci = self.get_property(0x38);
+        }
+
         std::thread::sleep(std::time::Duration::from_secs(1));
-        self.display_port();
 
         self.clean_command(identify_cmd_index);
 
-        let data = unsafe { get_at_physical_addr::<[u8; 512]>(fis_recv_area) };
-        println!("Identify data: {:x?}", data);
+        unsafe {
+            let data = &raw const *get_at_physical_addr::<IdentifyStructure>(fis_recv_area);
+            let data = data.read_volatile();
+            self.sectors = data.total_usr_sectors;
+        }
     }
 
     ///PRDT cannot be more than a bit over 900MB. Just use multiple commands
@@ -336,19 +343,16 @@ impl VirtualPort {
             unsafe { BUDDY_ALLOCATOR.allocate_frame_low() }
         };
 
-        let cmd_header_0 = ((prdt.len() as u32) << 14)
-            | 1 << 10 //clear busy on complete
-            | ((cfis.len() >> 2) as u32 & 0b11111); //length in dwords
-        let cmd_header_1 = 0; //length of transferred bytes, updated by hardware
-        let cmd_header_2 = cmd_table_page.0 as u32;
-        let cmd_header_3 = (cmd_table_page.0 >> 32) as u32;
+        let mut cmd_header = CmdHeader(0);
+        cmd_header.SetCFL(cfis.len() as u128 / 4);
+        cmd_header.SetClearBusy(true);
+        cmd_header.SetPRDTL(prdt.len() as u128);
+        debug_assert!(cmd_table_page.0 & 0b1111111 == 0); //128 byte alignment
+        cmd_header.SetCTBA(cmd_table_page.0 as u128);
 
         unsafe {
-            let cmd_header = (self.command_list.0 as *mut u32).add(index as usize * 4);
-            cmd_header.write_volatile(cmd_header_0);
-            cmd_header.add(1).write_volatile(cmd_header_1);
-            cmd_header.add(2).write_volatile(cmd_header_2);
-            cmd_header.add(3).write_volatile(cmd_header_3);
+            let cmd_header_ptr = (self.command_list.0 as *mut CmdHeader).add(index as usize * 4);
+            cmd_header_ptr.write_volatile(cmd_header);
 
             let cmd_table_virt = PAGE_TREE_ALLOCATOR.allocate(Some(cmd_table_page));
             PAGE_TREE_ALLOCATOR
@@ -388,6 +392,23 @@ impl VirtualPort {
         }
         //potentially anything else
     }
+}
+
+bitfield! {
+    struct CmdHeader(u128);
+    impl Debug;
+    CFL, SetCFL: 4, 0;
+    Atapi, SetAtapi: 5;
+    Write, SetWrite: 6;
+    Prefetchable, SetPrefetchable: 7;
+    Reset, SetReset: 8;
+    Bist, SetBist: 9;
+    ClearBusy, SetClearBusy: 10;
+    PMP, SetPMP: 15, 12;
+    PRDTL, SetPRDTL: 31, 16;
+    PRDBC, SetPRDBC: 63, 32;
+    CTBA, SetCTBA: 127, 64;
+
 }
 
 struct Prdt {
@@ -482,6 +503,7 @@ pub struct VirtualPort {
     command_list: VirtAddr,
     fis: VirtAddr,
     is_64_bit: bool,
+    sectors: u64,
 }
 
 bitfield! {

@@ -29,10 +29,10 @@ fn main() {
     if uefi {
         cmd.arg("-bios").arg(ovmf_prebuilt::ovmf_pure_efi());
     } 
-    cmd.arg("-drive").arg("id=disk,format=raw,file=kernel_build_files/image.iso,if=none");
+    cmd.arg("-drive").arg("format=raw,file=kernel_build_files/image.iso");
+    cmd.arg("-drive").arg("id=test_disk,format=raw,file=ahci_disk.img,if=none");
     cmd.arg("-device").arg("ahci,id=ahci");
-    cmd.arg("-device").arg("ide-hd,drive=disk,bus=ahci.0");
-    //cmd.arg("-drive").arg("format=raw,file=kernel_build_files/image.iso");
+    cmd.arg("-device").arg("ide-hd,drive=test_disk,bus=ahci.0");
     let mut child = cmd.spawn().unwrap();
 
     if debug {
