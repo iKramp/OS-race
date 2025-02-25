@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 #![allow(clippy::identity_op)]
 
-use core::fmt::Debug;
+use core::{fmt::Debug, sync::atomic::AtomicUsize};
 use std::{
     mem_utils::{get_at_physical_addr, get_at_virtual_addr, memset_virtual_addr, PhysAddr, VirtAddr},
     println,
@@ -18,7 +18,7 @@ use crate::{
     pci::device_config::{self, Bar},
 };
 
-use super::fis::{FisType, H2DRegisterFis};
+use super::fis::{FisType, H2DRegFisPmport, H2DRegisterFis};
 
 
 //we assume 48 bit lba
@@ -108,6 +108,7 @@ impl AhciController {
                     is_64_bit,
                     sectors: 0,
                     command_depth: 0,
+                    device: 0,
                 });
             }
         }
@@ -178,6 +179,18 @@ impl AhciController {
             }
         }
     }
+}
+
+#[derive(Debug)]
+pub struct VirtualPort {
+    index: u8,
+    address: *mut u32,
+    command_list: VirtAddr,
+    fis: VirtAddr,
+    is_64_bit: bool,
+    sectors: u64,
+    command_depth: u16,
+    device: u8,
 }
 
 impl VirtualPort {
@@ -291,38 +304,41 @@ impl VirtualPort {
         self.send_identify();
 
         unsafe {
-            let _register_fis = &raw const *get_at_virtual_addr::<D2HRegisterFis>(self.fis + VirtAddr(0x40));
+            let register_fis = &raw const *get_at_virtual_addr::<D2HRegisterFis>(self.fis + VirtAddr(0x40));
             let _pio_setup_fis = &raw const *get_at_virtual_addr::<PioSetupFis>(self.fis + VirtAddr(0x20));
             self.set_property(0x10, 3);
+            self.device = register_fis.read_volatile().device;
             //use them?
         }
 
         println!("Port {} initialized", self.index);
 
         let data = self.read_sectors(0, 1);
-        println!("{:#x?}", data);
+        println!("{:x?}", data);
 
         true
     }
 
     fn send_identify(&mut self) {
+        let mut pmport = H2DRegFisPmport(0);
+        pmport.set_command(true);
         let ident_fis = H2DRegisterFis {
             fis_type: FisType::RegisterH2D as u8,
             command: 0xEC, //identify
-            pmport: 0x80,
-            device: 0xA0,
+            pmport,
+            device: 0xA0, // change depending on SATA/ATAPI
             control: 0x08,
             ..Default::default()
         };
 
         let fis_recv_area = unsafe { BUDDY_ALLOCATOR.allocate_frame() };
-        let prdt = Prdt {
+        let prdt = PrdtDescriptor {
             base: fis_recv_area,
             count: 512,
         };
 
         let ident_fis = unsafe { core::mem::transmute::<H2DRegisterFis, [u8; 20]>(ident_fis) };
-        let identify_cmd_index = self.build_command(&ident_fis, &[prdt]).unwrap();
+        let identify_cmd_index = self.build_command(false, &ident_fis, &[prdt]).unwrap();
 
         let mut ci = self.get_property(0x38);
         while ci & (1 << identify_cmd_index) != 0 {
@@ -339,13 +355,14 @@ impl VirtualPort {
             let data = data.read_volatile();
             println!("{:#x?}", data);
 
-            self.sectors = data.total_usr_sectors;
+            self.sectors = data.total_usr_sectors();
             self.command_depth = data.queue_depth;
             assert!(data.sector_bytes == 512);
         }
     }
 
-    pub fn read_sectors(&mut self, start_sec_index: usize, sec_count: usize) -> &[u8] {
+    ///Returns the virtual address of the read data and the command index used
+    pub fn read_sectors(&mut self, start_sec_index: usize, sec_count: usize) -> Option<(VirtAddr, u8)> {
         let prdt_entries = (sec_count  + 7) / 8; //8 sectors in one physical frame
         let mut phys_addresses = Vec::new();
         for _ in 0..prdt_entries {
@@ -362,21 +379,24 @@ impl VirtualPort {
         };
 
         let prdt = phys_addresses.iter().enumerate().map(|(i, addr)| {
-            Prdt {
+            PrdtDescriptor {
                 base: *addr,
                 count: if i == prdt_entries - 1 {
-                    (sec_count as u32 % 8) * 512
+                    (((sec_count + 1) as u32 % 8) - 1) * 512
                 } else {
+                    //4K byte regions
                     8 * 512
                 },
             }
         }).collect::<Vec<_>>();
 
+        let mut pmport = H2DRegFisPmport(0);
+        pmport.set_command(true);
+
         let cfis = H2DRegisterFis { 
-            fis_type: FisType::RegisterH2D as u8,
-            pmport: 1,
+            pmport,
             command: READ_DMA,
-            device: 0xA0 | (1 << 6),
+            device: self.device | (1 << 6),
             countl: sec_count as u8,
             counth: (sec_count >> 8) as u8,
             lba0: (start_sec_index >> 0) as u8,
@@ -388,15 +408,22 @@ impl VirtualPort {
             ..H2DRegisterFis::default()
         };
 
-        self.build_command((&cfis).into(), &prdt);
+        let read_cmd_index = self.build_command(false, (&cfis).into(), &prdt).unwrap();
+
+        //let mut ci = self.get_property(0x38);
+        //while ci & (1 << identify_cmd_index) != 0 {
+        //    unsafe { core::arch::asm!("hlt") };
+        //    ci = self.get_property(0x38);
+        //}
 
         std::thread::sleep(std::time::Duration::from_secs(1));
 
-        unsafe { core::slice::from_raw_parts(virt_addr.0 as *const u8, sec_count * 512) }
+        //unsafe { core::slice::from_raw_parts(virt_addr.0 as *const u8, sec_count * 512) }
+        Some((virt_addr, read_cmd_index))
     }
 
     ///PRDT cannot be more than a bit over 900MB. Just use multiple commands
-    fn build_command(&self, cfis: &[u8], prdt: &[Prdt]) -> Option<u8> {
+    fn build_command(&self, write: bool, cfis: &[u8], prdt: &[PrdtDescriptor]) -> Option<u8> {
         assert!(prdt.len() <= 248); //i don't want to deal with contiguous allocation
         let cmd_issue = self.get_property(0x38);
         if cmd_issue == !0 {
@@ -411,6 +438,7 @@ impl VirtualPort {
         };
 
         let mut cmd_header = CmdHeader(0);
+        cmd_header.SetWrite(write);
         cmd_header.SetCFL(cfis.len() as u128 / 4);
         cmd_header.SetClearBusy(true);
         cmd_header.SetPRDTL(prdt.len() as u128);
@@ -431,19 +459,19 @@ impl VirtualPort {
             }
 
             for (i, prdt) in prdt.iter().enumerate() {
-                let prdt_entry = cmd_table_raw.add(0x80 + i * 16) as *mut u32;
-                prdt_entry.write_volatile(prdt.base.0 as u32);
-                prdt_entry.add(1).write_volatile((prdt.base.0 >> 32) as u32);
-
-                //convert count to 0 based even number
-                let count = (prdt.count - 1) | 1;
-                prdt_entry.add(3).write_volatile(count & 0x3FFFFF);
+                let prdt_entry_ptr = cmd_table_raw.add(0x80 + i * 16) as *mut PrdtEntry;
+                let mut prdt_entry = PrdtEntry(0);
+                prdt_entry.SetInt(true);
+                prdt_entry.SetDBA(prdt.base.0.into());
+                prdt_entry.SetDBC(prdt.count as u128 - 1);
+                prdt_entry_ptr.write_volatile(prdt_entry);
             }
 
             PAGE_TREE_ALLOCATOR.unmap(cmd_table_virt);
         }
 
         let cmd_issue = 1 << index;
+        println!("Command issued: {:#x?}", index);
 
         //spin on busy
         let mut port_cmd = TaskFileData(self.get_property(0x20));
@@ -487,9 +515,17 @@ bitfield! {
 
 }
 
-struct Prdt {
+struct PrdtDescriptor {
     base: PhysAddr,
     count: u32,
+}
+
+bitfield! {
+    struct PrdtEntry(u128);
+    impl Debug;
+    DBA, SetDBA: 63, 0;
+    DBC, SetDBC: 117, 96;
+    Int, SetInt: 127;
 }
 
 #[derive(Debug)]
@@ -570,17 +606,6 @@ bitfield! {
     SOOE, SetSOOE: 2;
     OOS, SetOOS: 1;
     BOS, SetBOS: 0;
-}
-
-#[derive(Debug)]
-pub struct VirtualPort {
-    index: u8,
-    address: *mut u32,
-    command_list: VirtAddr,
-    fis: VirtAddr,
-    is_64_bit: bool,
-    sectors: u64,
-    command_depth: u16,
 }
 
 bitfield! {

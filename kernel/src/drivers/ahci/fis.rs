@@ -23,12 +23,12 @@ struct DataFis {
     data: [u8],
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 #[repr(C)]
 pub struct H2DRegisterFis {
     pub fis_type: u8,
     ///set to 1 for command, 0 for control
-    pub pmport: u8,
+    pub pmport: H2DRegFisPmport,
     pub command: u8,
     pub featurel: u8,
 
@@ -54,6 +54,38 @@ impl From<&H2DRegisterFis> for &[u8] {
     fn from(fis: &H2DRegisterFis) -> Self {
         unsafe { core::slice::from_raw_parts(fis as *const H2DRegisterFis as *const u8, core::mem::size_of::<H2DRegisterFis>()) }
     }
+}
+
+impl Default for H2DRegisterFis {
+    fn default() -> Self {
+        H2DRegisterFis {
+            fis_type: FisType::RegisterH2D as u8,
+            pmport: H2DRegFisPmport(0),
+            command: 0,
+            featurel: 0,
+            lba0: 0,
+            lba1: 0,
+            lba2: 0,
+            device: 0,
+            lba3: 0,
+            lba4: 0,
+            lba5: 0,
+            featureh: 0,
+            countl: 0,
+            counth: 0,
+            icc: 0,
+            control: 0,
+            reserved: [0; 4],
+        }
+    }
+}
+
+bitfield! {
+    pub struct H2DRegFisPmport(u8);
+    impl Debug;
+    pub pmport, set_pmport: 3, 0;
+    //reserved 6, 3
+    pub command, set_command: 7;
 }
 
 #[derive(Debug)]
@@ -214,13 +246,13 @@ pub struct IdentifyStructure {
     pub transfer_time_dma: u16,
     pub access_latency: u16,
     pub perf_granularity: u32,
-    pub total_usr_sectors: u64,
+    total_usr_sectors: [u32; 2],
     pub transfer_time_pio: u16,
     pub reserved105: u16,
     pub sector_sz: u16,
     pub inter_seek_delay: u16,
     pub words108_116: [u16; 9],
-    pub words_per_sector: u16,
+    words_per_sector: [u16; 2],
     pub supported_settings: u16,
     pub command_set_3: u16,
     pub words121_126: [u16; 6],
@@ -254,16 +286,27 @@ pub struct IdentifyStructure {
     pub integrity: u16,
 }
 
+impl IdentifyStructure {
+    pub fn words_per_sector(&self) -> u32 {
+        (self.words_per_sector[1] as u32) << 16 | self.words_per_sector[0] as u32
+    }
+
+    pub fn total_usr_sectors(&self) -> u64 {
+        (self.total_usr_sectors[1] as u64) << 32 | self.total_usr_sectors[0] as u64
+    }
+}
+
 impl Debug for IdentifyStructure {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("IdentifyStructure")
             .field("track_bytes", &self.track_bytes)
             .field("sector_bytes", &self.sector_bytes)
-            .field("sectors", &self.sectors)
-            .field("total_usr_sectors", &self.total_usr_sectors)
+            .field("sectors per track", &self.sectors)
+            .field("total_usr_sectors", &self.total_usr_sectors())
             .field("sector_sz", &self.sector_sz)
-            .field("words_per_sector", &self.words_per_sector)
+            .field("words_per_sector", &self.words_per_sector())
             .field("lba_capacity", &self.lba_capacity) //sectors??
+            .field("queue_depth", &self.queue_depth)
             .finish_non_exhaustive()
     }
 }
@@ -287,3 +330,4 @@ bitfield! {
     read_look_ahead, _: 1;
     write_cache, _: 0;
 }
+
