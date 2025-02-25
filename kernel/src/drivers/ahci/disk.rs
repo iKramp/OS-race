@@ -410,15 +410,12 @@ impl VirtualPort {
 
         let read_cmd_index = self.build_command(false, (&cfis).into(), &prdt).unwrap();
 
-        //let mut ci = self.get_property(0x38);
-        //while ci & (1 << identify_cmd_index) != 0 {
-        //    unsafe { core::arch::asm!("hlt") };
-        //    ci = self.get_property(0x38);
-        //}
+        let mut ci = self.get_property(0x38);
+        while ci & (1 << read_cmd_index) != 0 {
+            unsafe { core::arch::asm!("hlt") };
+            ci = self.get_property(0x38);
+        }
 
-        std::thread::sleep(std::time::Duration::from_secs(1));
-
-        //unsafe { core::slice::from_raw_parts(virt_addr.0 as *const u8, sec_count * 512) }
         Some((virt_addr, read_cmd_index))
     }
 
