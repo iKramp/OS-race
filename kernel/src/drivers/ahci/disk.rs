@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 #![allow(clippy::identity_op)]
 
-use core::{fmt::Debug, sync::atomic::AtomicUsize};
+use core::fmt::Debug;
 use std::{
     mem_utils::{get_at_physical_addr, get_at_virtual_addr, memset_virtual_addr, PhysAddr, VirtAddr},
     println,
@@ -20,11 +20,9 @@ use crate::{
 
 use super::fis::{FisType, H2DRegFisPmport, H2DRegisterFis};
 
-
 //we assume 48 bit lba
 const READ_DMA: u8 = 0x25;
 const WRITE_DMA: u8 = 0x35;
-
 
 #[derive(Debug, Clone)]
 pub struct AhciDriver {}
@@ -313,8 +311,17 @@ impl VirtualPort {
 
         println!("Port {} initialized", self.index);
 
-        let data = self.read_sectors(0, 1);
-        println!("{:x?}", data);
+        let zeroed_data: [u8; 512] = [0; 512];
+        let command_index = self.write_sectors(1, 1, VirtAddr(&zeroed_data as *const _ as u64));
+        self.clean_command(command_index.unwrap());
+
+        const SEC_NUM: usize = 3;
+        let data = self.read_sectors(0, SEC_NUM).unwrap();
+
+        self.clean_command(data.1);
+
+        let data = unsafe { &raw const *get_at_virtual_addr::<[u8; SEC_NUM * 512]>(data.0) };
+        unsafe { println!("{:x?}", data.read_volatile()) };
 
         true
     }
@@ -363,7 +370,8 @@ impl VirtualPort {
 
     ///Returns the virtual address of the read data and the command index used
     pub fn read_sectors(&mut self, start_sec_index: usize, sec_count: usize) -> Option<(VirtAddr, u8)> {
-        let prdt_entries = (sec_count  + 7) / 8; //8 sectors in one physical frame
+        assert!(sec_count <= self.sectors as usize);
+        let prdt_entries = (sec_count + 7) / 8; //8 sectors in one physical frame
         let mut phys_addresses = Vec::new();
         for _ in 0..prdt_entries {
             let frame = if self.is_64_bit {
@@ -374,26 +382,28 @@ impl VirtualPort {
             phys_addresses.push(frame);
         }
 
-        let virt_addr = unsafe {
-            PAGE_ALLOCATOR.mmap_contigious(&phys_addresses)
-        };
+        let virt_addr = unsafe { PAGE_ALLOCATOR.mmap_contigious(&phys_addresses) };
 
-        let prdt = phys_addresses.iter().enumerate().map(|(i, addr)| {
-            PrdtDescriptor {
-                base: *addr,
-                count: if i == prdt_entries - 1 {
-                    (((sec_count + 1) as u32 % 8) - 1) * 512
-                } else {
-                    //4K byte regions
-                    8 * 512
-                },
-            }
-        }).collect::<Vec<_>>();
+        let prdt = phys_addresses
+            .iter()
+            .enumerate()
+            .map(|(i, addr)| {
+                PrdtDescriptor {
+                    base: *addr,
+                    count: if i == prdt_entries - 1 {
+                        (((sec_count - 1) as u32 % 8) + 1) * 512
+                    } else {
+                        //4K byte regions
+                        8 * 512
+                    },
+                }
+            })
+            .collect::<Vec<_>>();
 
         let mut pmport = H2DRegFisPmport(0);
         pmport.set_command(true);
 
-        let cfis = H2DRegisterFis { 
+        let cfis = H2DRegisterFis {
             pmport,
             command: READ_DMA,
             device: self.device | (1 << 6),
@@ -417,6 +427,64 @@ impl VirtualPort {
         }
 
         Some((virt_addr, read_cmd_index))
+    }
+
+    ///Returns the virtual address of the read data and the command index used
+    pub fn write_sectors(&mut self, start_sec_index: usize, sec_count: usize, buffer: VirtAddr) -> Option<u8> {
+        assert!(sec_count <= self.sectors as usize);
+        let prdt_entries = (sec_count + 7) / 8; //8 sectors in one physical frame
+        let mut phys_addresses = Vec::new();
+
+        //here we pray that either AHCI supports 64 bit addressing or we are in low memory
+        for _ in 0..prdt_entries {
+            let virt_addr = buffer + VirtAddr(phys_addresses.len() as u64 * 4096);
+            let physical_addr = std::mem_utils::translate_virt_phys_addr(virt_addr).unwrap();
+            phys_addresses.push(physical_addr);
+        }
+
+        let prdt = phys_addresses
+            .iter()
+            .enumerate()
+            .map(|(i, addr)| {
+                PrdtDescriptor {
+                    base: *addr,
+                    count: if i == prdt_entries - 1 {
+                        (((sec_count - 1) as u32 % 8) + 1) * 512
+                    } else {
+                        //4K byte regions
+                        8 * 512
+                    },
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let mut pmport = H2DRegFisPmport(0);
+        pmport.set_command(true);
+
+        let cfis = H2DRegisterFis {
+            pmport,
+            command: WRITE_DMA,
+            device: self.device | (1 << 6),
+            countl: sec_count as u8,
+            counth: (sec_count >> 8) as u8,
+            lba0: (start_sec_index >> 0) as u8,
+            lba1: (start_sec_index >> 8) as u8,
+            lba2: (start_sec_index >> 16) as u8,
+            lba3: (start_sec_index >> 24) as u8,
+            lba4: (start_sec_index >> 32) as u8,
+            lba5: (start_sec_index >> 40) as u8,
+            ..H2DRegisterFis::default()
+        };
+
+        let write_cmd_index = self.build_command(true, (&cfis).into(), &prdt).unwrap();
+
+        let mut ci = self.get_property(0x38);
+        while ci & (1 << write_cmd_index) != 0 {
+            unsafe { core::arch::asm!("hlt") };
+            ci = self.get_property(0x38);
+        }
+
+        Some(write_cmd_index)
     }
 
     ///PRDT cannot be more than a bit over 900MB. Just use multiple commands
@@ -476,7 +544,6 @@ impl VirtualPort {
             unsafe { core::arch::asm!("hlt") };
             port_cmd = TaskFileData(self.get_property(0x20));
         }
-
 
         self.set_property(0x38, cmd_issue);
 

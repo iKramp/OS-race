@@ -30,7 +30,7 @@ fn main() {
         cmd.arg("-bios").arg(ovmf_prebuilt::ovmf_pure_efi());
     } 
     cmd.arg("-drive").arg("format=raw,file=kernel_build_files/image.iso");
-    cmd.arg("-drive").arg("id=test_disk,format=raw,file=ahci_disk.img,if=none");
+    cmd.arg("-drive").arg("id=test_disk,format=raw,file=ahci_disk.img,if=none,snapshot=on");
     cmd.arg("-device").arg("ahci,id=ahci");
     cmd.arg("-device").arg("ide-hd,drive=test_disk,bus=ahci.0");
     let mut child = cmd.spawn().unwrap();
