@@ -439,6 +439,9 @@ impl VirtualPort {
         for _ in 0..prdt_entries {
             let virt_addr = buffer + VirtAddr(phys_addresses.len() as u64 * 4096);
             let physical_addr = std::mem_utils::translate_virt_phys_addr(virt_addr).unwrap();
+            if physical_addr.0 > u32::MAX as u64 && !self.is_64_bit {
+                panic!("AHCI controller does not support 64 bit addressing");
+            }
             phys_addresses.push(physical_addr);
         }
 
