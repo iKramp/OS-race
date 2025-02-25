@@ -1,11 +1,12 @@
 #![allow(non_snake_case)]
+#![allow(clippy::identity_op)]
 
 use core::fmt::Debug;
 use std::{
     mem_utils::{get_at_physical_addr, get_at_virtual_addr, memset_virtual_addr, PhysAddr, VirtAddr},
     println,
     vec::Vec,
-    PageAllocator,
+    PageAllocator, PAGE_ALLOCATOR,
 };
 
 use bitfield::bitfield;
@@ -18,6 +19,12 @@ use crate::{
 };
 
 use super::fis::{FisType, H2DRegisterFis};
+
+
+//we assume 48 bit lba
+const READ_DMA: u8 = 0x25;
+const WRITE_DMA: u8 = 0x35;
+
 
 #[derive(Debug, Clone)]
 pub struct AhciDriver {}
@@ -100,6 +107,7 @@ impl AhciController {
                     fis: VirtAddr(0),
                     is_64_bit,
                     sectors: 0,
+                    command_depth: 0,
                 });
             }
         }
@@ -278,17 +286,22 @@ impl VirtualPort {
         //clear interrupt status
         self.set_property(0x10, 0xFFFFFFFF);
         //enable port interrupts here
-        self.set_property(0x14, 0xFF);
+        self.set_property(0x14, 0xFFFFFFFF);
 
         self.send_identify();
 
         unsafe {
             let _register_fis = &raw const *get_at_virtual_addr::<D2HRegisterFis>(self.fis + VirtAddr(0x40));
             let _pio_setup_fis = &raw const *get_at_virtual_addr::<PioSetupFis>(self.fis + VirtAddr(0x20));
+            self.set_property(0x10, 3);
             //use them?
         }
 
         println!("Port {} initialized", self.index);
+
+        let data = self.read_sectors(0, 1);
+        println!("{:#x?}", data);
+
         true
     }
 
@@ -324,8 +337,62 @@ impl VirtualPort {
         unsafe {
             let data = &raw const *get_at_physical_addr::<IdentifyStructure>(fis_recv_area);
             let data = data.read_volatile();
+            println!("{:#x?}", data);
+
             self.sectors = data.total_usr_sectors;
+            self.command_depth = data.queue_depth;
+            assert!(data.sector_bytes == 512);
         }
+    }
+
+    pub fn read_sectors(&mut self, start_sec_index: usize, sec_count: usize) -> &[u8] {
+        let prdt_entries = (sec_count  + 7) / 8; //8 sectors in one physical frame
+        let mut phys_addresses = Vec::new();
+        for _ in 0..prdt_entries {
+            let frame = if self.is_64_bit {
+                unsafe { BUDDY_ALLOCATOR.allocate_frame() }
+            } else {
+                unsafe { BUDDY_ALLOCATOR.allocate_frame_low() }
+            };
+            phys_addresses.push(frame);
+        }
+
+        let virt_addr = unsafe {
+            PAGE_ALLOCATOR.mmap_contigious(&phys_addresses)
+        };
+
+        let prdt = phys_addresses.iter().enumerate().map(|(i, addr)| {
+            Prdt {
+                base: *addr,
+                count: if i == prdt_entries - 1 {
+                    (sec_count as u32 % 8) * 512
+                } else {
+                    8 * 512
+                },
+            }
+        }).collect::<Vec<_>>();
+
+        let cfis = H2DRegisterFis { 
+            fis_type: FisType::RegisterH2D as u8,
+            pmport: 1,
+            command: READ_DMA,
+            device: 0xA0 | (1 << 6),
+            countl: sec_count as u8,
+            counth: (sec_count >> 8) as u8,
+            lba0: (start_sec_index >> 0) as u8,
+            lba1: (start_sec_index >> 8) as u8,
+            lba2: (start_sec_index >> 16) as u8,
+            lba3: (start_sec_index >> 24) as u8,
+            lba4: (start_sec_index >> 32) as u8,
+            lba5: (start_sec_index >> 40) as u8,
+            ..H2DRegisterFis::default()
+        };
+
+        self.build_command((&cfis).into(), &prdt);
+
+        std::thread::sleep(std::time::Duration::from_secs(1));
+
+        unsafe { core::slice::from_raw_parts(virt_addr.0 as *const u8, sec_count * 512) }
     }
 
     ///PRDT cannot be more than a bit over 900MB. Just use multiple commands
@@ -377,6 +444,15 @@ impl VirtualPort {
         }
 
         let cmd_issue = 1 << index;
+
+        //spin on busy
+        let mut port_cmd = TaskFileData(self.get_property(0x20));
+        while port_cmd.STS_BSY() {
+            unsafe { core::arch::asm!("hlt") };
+            port_cmd = TaskFileData(self.get_property(0x20));
+        }
+
+
         self.set_property(0x38, cmd_issue);
 
         Some(index)
@@ -504,6 +580,7 @@ pub struct VirtualPort {
     fis: VirtAddr,
     is_64_bit: bool,
     sectors: u64,
+    command_depth: u16,
 }
 
 bitfield! {

@@ -8,6 +8,9 @@ build = "build.rs"
 dead_code = "allow"
 static_mut_refs = "allow"
 
+[lints.clippy]
+needless_range_loops = "allow"
+
 [[bin]]
 name = "kernel"
 path = "src/main.rs"

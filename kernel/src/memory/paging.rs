@@ -582,4 +582,15 @@ impl std::PageAllocator for PageTree {
             }
         }
     }
+
+    fn mmap_contigious(&mut self, physical_addresses: &[PhysAddr]) -> std::mem_utils::VirtAddr {
+        unsafe {
+            let level_4_table = get_at_physical_addr::<PageTable>(self.level_4_table);
+            let addr = level_4_table.get_available_entry_pages(4, physical_addresses.len() as u64);
+            for i in 0..physical_addresses.len() {
+                level_4_table.mmap(VirtAddr(addr + i as u64 * 4096), physical_addresses[i]);
+            }
+            VirtAddr(addr)
+        }
+    }
 }

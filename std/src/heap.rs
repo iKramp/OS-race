@@ -232,7 +232,15 @@ impl Heap {
         } else if size > 1024 {
             //allocate whole page/pages
             let n_of_pages = (size + 4095 + crate::mem::size_of::<MultiPageObjectMetadata>() as u64) / 4096;
-            unsafe { crate::PAGE_ALLOCATOR.allocate_contigious(n_of_pages, None) }
+            let virt_start = unsafe { crate::PAGE_ALLOCATOR.allocate_contigious(n_of_pages, None) };
+            let metadata = MultiPageObjectMetadata {
+                type_of_heap: TypeOfHeap::ObjectOverPages,
+                pages_allocated: n_of_pages as u32,
+            };
+            unsafe {
+                set_at_virtual_addr(virt_start, metadata);
+            }
+            virt_start + VirtAddr(crate::mem::size_of::<MultiPageObjectMetadata>() as u64)
         } else {
             let size_order = log2_rounded_up(size);
             let index = u64::max(4, size_order) - 4;
@@ -250,8 +258,9 @@ impl Heap {
             let heap_type = get_at_virtual_addr::<TypeOfHeap>(page_addr);
             if *heap_type == TypeOfHeap::ObjectOverPages {
                 let metadata = get_at_virtual_addr::<MultiPageObjectMetadata>(page_addr);
-                println!("metadata: {metadata:#x?}");
-                todo!("dealloc pages");
+                for i in 0..metadata.pages_allocated {
+                    crate::PAGE_ALLOCATOR.deallocate(page_addr + VirtAddr(i as u64 * 4096));
+                }
             } else {
                 let metadata = get_at_virtual_addr::<HeapPageMetadata>(page_addr);
                 debug_assert!(

@@ -50,6 +50,12 @@ pub struct H2DRegisterFis {
     pub reserved: [u8; 4],
 }
 
+impl From<&H2DRegisterFis> for &[u8] {
+    fn from(fis: &H2DRegisterFis) -> Self {
+        unsafe { core::slice::from_raw_parts(fis as *const H2DRegisterFis as *const u8, core::mem::size_of::<H2DRegisterFis>()) }
+    }
+}
+
 #[derive(Debug)]
 #[repr(C)]
 pub struct D2HRegisterFis {
@@ -100,6 +106,42 @@ pub struct PioSetupFis {
 
     pub transfer_count: u16,
     pub reserved3: [u8; 2],
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct DmaSetupFis {
+    pub fis_type: u8,
+    pub pmport: DmaPmport,
+    pub reserved: [u8; 2],
+    pub buffer_id: u64,
+    pub reserved2: [u8; 4],
+    pub byte_count: u32,
+    pub reserved3: [u8; 4],
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct SetDeviceBits {
+    pub fis_type: u8,
+    pub flags: u8,
+    pub reserved: [u8; 2],
+    pub control: u32,
+}
+
+bitfield! {
+    pub struct SetDeviceBitsFlags(u8);
+    impl Debug;
+
+}
+
+bitfield! { 
+    pub struct DmaPmport(u8);
+    impl Debug;
+    pmport, set_pmport: 3, 0;
+    dir, set_dir: 5;
+    interrupt, set_interrupt: 6;
+    auto_activate, set_auto_activate: 7;
 }
 
 //not really a fis, it's a structure returned by IDENTIFY command
@@ -221,6 +263,7 @@ impl Debug for IdentifyStructure {
             .field("total_usr_sectors", &self.total_usr_sectors)
             .field("sector_sz", &self.sector_sz)
             .field("words_per_sector", &self.words_per_sector)
+            .field("lba_capacity", &self.lba_capacity) //sectors??
             .finish_non_exhaustive()
     }
 }
