@@ -13,7 +13,7 @@ use bitfield::bitfield;
 
 use crate::{
     disk::Disk,
-    drivers::ahci::fis::{D2HRegisterFis, IdentifyStructure, PioSetupFis},
+    drivers::{ahci::fis::{D2HRegisterFis, IdentifyStructure, PioSetupFis}, gpt::GPTDriver, DiskDriver, PartitionSchemeDriver},
     memory::{paging::LiminePat, physical_allocator::BUDDY_ALLOCATOR, PAGE_TREE_ALLOCATOR},
     pci::device_config::{self, Bar},
 };
@@ -66,6 +66,7 @@ impl Disk for AhciController {
 
         //enable AHCI again after reset
         ghc.ghc.SetAE(true);
+        ghc.ghc.SetIE(true);
         unsafe { (&raw mut self.abar.ghc).write_volatile(GlobalHBAControl(ghc.ghc.0)) };
 
         let staggered_spin_up = ghc.cap.SSS();
@@ -79,6 +80,9 @@ impl Disk for AhciController {
         }
 
         self.ports.retain(|port| active_ports.contains(&port.index));
+
+        let gpt_driver = GPTDriver {};
+        gpt_driver.partitions(self.ports.first_mut().unwrap());
     }
 }
 
@@ -107,6 +111,7 @@ impl AhciController {
                     sectors: 0,
                     command_depth: 0,
                     device: 0,
+                    command_metadata: [CommandMetadata { issued: false, }; 32],
                 });
             }
         }
@@ -189,6 +194,12 @@ pub struct VirtualPort {
     sectors: u64,
     command_depth: u16,
     device: u8,
+    command_metadata: [CommandMetadata; 32],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct CommandMetadata {
+    issued: bool,
 }
 
 impl VirtualPort {
@@ -311,18 +322,6 @@ impl VirtualPort {
 
         println!("Port {} initialized", self.index);
 
-        let zeroed_data: [u8; 512] = [0; 512];
-        let command_index = self.write_sectors(1, 1, VirtAddr(&zeroed_data as *const _ as u64));
-        self.clean_command(command_index.unwrap());
-
-        const SEC_NUM: usize = 3;
-        let data = self.read_sectors(0, SEC_NUM).unwrap();
-
-        self.clean_command(data.1);
-
-        let data = unsafe { &raw const *get_at_virtual_addr::<[u8; SEC_NUM * 512]>(data.0) };
-        unsafe { println!("{:x?}", data.read_volatile()) };
-
         true
     }
 
@@ -360,7 +359,6 @@ impl VirtualPort {
         unsafe {
             let data = &raw const *get_at_physical_addr::<IdentifyStructure>(fis_recv_area);
             let data = data.read_volatile();
-            println!("{:#x?}", data);
 
             self.sectors = data.total_usr_sectors();
             self.command_depth = data.queue_depth;
@@ -368,21 +366,94 @@ impl VirtualPort {
         }
     }
 
+    ///PRDT cannot be more than a bit over 900MB. Just use multiple commands
+    fn build_command(&mut self, write: bool, cfis: &[u8], prdt: &[PrdtDescriptor]) -> Option<u8> {
+        assert!(prdt.len() <= 248); //i don't want to deal with contiguous allocation
+        let cmd_issue = self.get_property(0x38);
+        if cmd_issue == !0 {
+            return None;
+        }
+        let index = cmd_issue.trailing_ones() as u8;
+
+        let cmd_table_page = if self.is_64_bit {
+            unsafe { BUDDY_ALLOCATOR.allocate_frame() }
+        } else {
+            unsafe { BUDDY_ALLOCATOR.allocate_frame_low() }
+        };
+
+        let mut cmd_header = CmdHeader(0);
+        cmd_header.SetWrite(write);
+        cmd_header.SetCFL(cfis.len() as u128 / 4);
+        cmd_header.SetClearBusy(true);
+        cmd_header.SetPRDTL(prdt.len() as u128);
+        debug_assert!(cmd_table_page.0 & 0b1111111 == 0); //128 byte alignment
+        cmd_header.SetCTBA(cmd_table_page.0 as u128);
+
+        unsafe {
+            let cmd_header_ptr = (self.command_list.0 as *mut CmdHeader).add(index as usize * 4);
+            cmd_header_ptr.write_volatile(cmd_header);
+
+            let cmd_table_virt = PAGE_TREE_ALLOCATOR.allocate(Some(cmd_table_page));
+            PAGE_TREE_ALLOCATOR
+                .get_page_table_entry_mut(cmd_table_virt)
+                .set_pat(LiminePat::UC);
+            let cmd_table_raw = cmd_table_virt.0 as *mut u8;
+            for (i, byte) in cfis.iter().enumerate() {
+                cmd_table_raw.add(i).write_volatile(*byte);
+            }
+
+            for (i, prdt) in prdt.iter().enumerate() {
+                let prdt_entry_ptr = cmd_table_raw.add(0x80 + i * 16) as *mut PrdtEntry;
+                let mut prdt_entry = PrdtEntry(0);
+                prdt_entry.SetInt(true);
+                prdt_entry.SetDBA(prdt.base.0.into());
+                prdt_entry.SetDBC(prdt.count as u128 - 1);
+                prdt_entry_ptr.write_volatile(PrdtEntry(prdt_entry.0));
+                println!("PRDT: {:#x?}", prdt_entry);
+            }
+
+            PAGE_TREE_ALLOCATOR.unmap(cmd_table_virt);
+        }
+
+        let cmd_issue = 1 << index;
+        println!("Command issued: {:#x?}", index);
+
+        //spin on busy
+        let mut port_cmd = TaskFileData(self.get_property(0x20));
+        while port_cmd.STS_BSY() {
+            unsafe { core::arch::asm!("hlt") };
+            port_cmd = TaskFileData(self.get_property(0x20));
+        }
+
+        self.set_property(0x38, cmd_issue);
+        self.command_metadata[index as usize].issued = true;
+
+        Some(index)
+    }
+
+    ///frees command header memory. Does not free regions pointed to by PRDT
+    fn clean_command(&self, index: u8) {
+        unsafe {
+            let cmd_header = (self.command_list.0 as *mut u32).add(index as usize * 4);
+            let table_lower = cmd_header.add(2).read_volatile();
+            let table_upper = cmd_header.add(3).read_volatile();
+            let table = (table_upper as u64) << 32 | table_lower as u64;
+            BUDDY_ALLOCATOR.mark_addr(PhysAddr(table), false);
+        }
+        //potentially anything else
+    }
+}
+
+impl DiskDriver for VirtualPort {
     ///Returns the virtual address of the read data and the command index used
-    pub fn read_sectors(&mut self, start_sec_index: usize, sec_count: usize) -> Option<(VirtAddr, u8)> {
+    fn read(&mut self, start_sec_index: usize, sec_count: usize, addr: VirtAddr) -> u64 {
         assert!(sec_count <= self.sectors as usize);
         let prdt_entries = (sec_count + 7) / 8; //8 sectors in one physical frame
         let mut phys_addresses = Vec::new();
-        for _ in 0..prdt_entries {
-            let frame = if self.is_64_bit {
-                unsafe { BUDDY_ALLOCATOR.allocate_frame() }
-            } else {
-                unsafe { BUDDY_ALLOCATOR.allocate_frame_low() }
-            };
+        for i in 0..prdt_entries {
+            let frame = std::mem_utils::translate_virt_phys_addr(addr + VirtAddr(i as u64 * 4096)).unwrap();
             phys_addresses.push(frame);
         }
-
-        let virt_addr = unsafe { PAGE_ALLOCATOR.mmap_contigious(&phys_addresses) };
 
         let prdt = phys_addresses
             .iter()
@@ -420,17 +491,18 @@ impl VirtualPort {
 
         let read_cmd_index = self.build_command(false, (&cfis).into(), &prdt).unwrap();
 
+        //for now synchronous
         let mut ci = self.get_property(0x38);
         while ci & (1 << read_cmd_index) != 0 {
             unsafe { core::arch::asm!("hlt") };
             ci = self.get_property(0x38);
         }
 
-        Some((virt_addr, read_cmd_index))
+        read_cmd_index as u64
     }
 
     ///Returns the virtual address of the read data and the command index used
-    pub fn write_sectors(&mut self, start_sec_index: usize, sec_count: usize, buffer: VirtAddr) -> Option<u8> {
+    fn write(&mut self, start_sec_index: usize, sec_count: usize, buffer: VirtAddr) -> u64 {
         assert!(sec_count <= self.sectors as usize);
         let prdt_entries = (sec_count + 7) / 8; //8 sectors in one physical frame
         let mut phys_addresses = Vec::new();
@@ -481,87 +553,22 @@ impl VirtualPort {
 
         let write_cmd_index = self.build_command(true, (&cfis).into(), &prdt).unwrap();
 
+        //for now synchronous
         let mut ci = self.get_property(0x38);
         while ci & (1 << write_cmd_index) != 0 {
             unsafe { core::arch::asm!("hlt") };
             ci = self.get_property(0x38);
         }
 
-        Some(write_cmd_index)
+        write_cmd_index as u64
     }
 
-    ///PRDT cannot be more than a bit over 900MB. Just use multiple commands
-    fn build_command(&self, write: bool, cfis: &[u8], prdt: &[PrdtDescriptor]) -> Option<u8> {
-        assert!(prdt.len() <= 248); //i don't want to deal with contiguous allocation
-        let cmd_issue = self.get_property(0x38);
-        if cmd_issue == !0 {
-            return None;
-        }
-        let index = cmd_issue.trailing_ones() as u8;
-
-        let cmd_table_page = if self.is_64_bit {
-            unsafe { BUDDY_ALLOCATOR.allocate_frame() }
-        } else {
-            unsafe { BUDDY_ALLOCATOR.allocate_frame_low() }
-        };
-
-        let mut cmd_header = CmdHeader(0);
-        cmd_header.SetWrite(write);
-        cmd_header.SetCFL(cfis.len() as u128 / 4);
-        cmd_header.SetClearBusy(true);
-        cmd_header.SetPRDTL(prdt.len() as u128);
-        debug_assert!(cmd_table_page.0 & 0b1111111 == 0); //128 byte alignment
-        cmd_header.SetCTBA(cmd_table_page.0 as u128);
-
-        unsafe {
-            let cmd_header_ptr = (self.command_list.0 as *mut CmdHeader).add(index as usize * 4);
-            cmd_header_ptr.write_volatile(cmd_header);
-
-            let cmd_table_virt = PAGE_TREE_ALLOCATOR.allocate(Some(cmd_table_page));
-            PAGE_TREE_ALLOCATOR
-                .get_page_table_entry_mut(cmd_table_virt)
-                .set_pat(LiminePat::UC);
-            let cmd_table_raw = cmd_table_virt.0 as *mut u8;
-            for (i, byte) in cfis.iter().enumerate() {
-                cmd_table_raw.add(i).write_volatile(*byte);
-            }
-
-            for (i, prdt) in prdt.iter().enumerate() {
-                let prdt_entry_ptr = cmd_table_raw.add(0x80 + i * 16) as *mut PrdtEntry;
-                let mut prdt_entry = PrdtEntry(0);
-                prdt_entry.SetInt(true);
-                prdt_entry.SetDBA(prdt.base.0.into());
-                prdt_entry.SetDBC(prdt.count as u128 - 1);
-                prdt_entry_ptr.write_volatile(prdt_entry);
-            }
-
-            PAGE_TREE_ALLOCATOR.unmap(cmd_table_virt);
-        }
-
-        let cmd_issue = 1 << index;
-        println!("Command issued: {:#x?}", index);
-
-        //spin on busy
-        let mut port_cmd = TaskFileData(self.get_property(0x20));
-        while port_cmd.STS_BSY() {
-            unsafe { core::arch::asm!("hlt") };
-            port_cmd = TaskFileData(self.get_property(0x20));
-        }
-
-        self.set_property(0x38, cmd_issue);
-
-        Some(index)
+    fn clean_after_read(&mut self, metadata: u64) {
+        self.clean_command(metadata as u8);
     }
 
-    fn clean_command(&self, index: u8) {
-        unsafe {
-            let cmd_header = (self.command_list.0 as *mut u32).add(index as usize * 4);
-            let table_lower = cmd_header.add(2).read_volatile();
-            let table_upper = cmd_header.add(3).read_volatile();
-            let table = (table_upper as u64) << 32 | table_lower as u64;
-            BUDDY_ALLOCATOR.mark_addr(PhysAddr(table * 0x1000), false);
-        }
-        //potentially anything else
+    fn clean_after_write(&mut self, metadata: u64) {
+        self.clean_command(metadata as u8);
     }
 }
 

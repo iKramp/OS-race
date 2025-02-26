@@ -38,7 +38,7 @@ pub static mut IDT_POINTER: TablePointer = TablePointer { limit: 0, base: 0 };
 
 const IDT_SIZE: usize = 256;
 
-pub static mut CUSTOM_INTERRUPT_VECTOR: u64 = 0;
+pub static mut CUSTOM_INTERRUPT_VECTOR: u8 = 0;
 
 pub struct Idt {
     entry_table: [Entry; IDT_SIZE],

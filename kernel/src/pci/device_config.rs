@@ -106,7 +106,7 @@ impl Bar {
         }
         unsafe { core::ptr::read(data.as_ptr() as *const T) }
     }
-    
+
     pub fn get_index(&self) -> u8 {
         match self {
             Bar::Memory(index, _, _) => *index,
@@ -219,7 +219,7 @@ impl PciDevice {
                 size = self.get_bar_size(index, 0xF) as u64;
             }
             let num = size / 4096;
-            let address = unsafe { 
+            let address = unsafe {
                 for i in 0..num {
                     BUDDY_ALLOCATOR.mark_addr(physical_bar_addr + PhysAddr(i * 0x1000), true);
                 }
@@ -278,14 +278,7 @@ impl PciDevice {
     }
 
     //MSI functions
-    //
-    pub fn get_msi_64_bit(&self) -> bool {
-        let capabilities = &self.capabilities;
-        let msi_cap = capabilities.iter().find(|cap| cap.id == 5).cloned();
-        let Some(msi_cap) = msi_cap else {
-            panic!("Device does not support MSI");
-        };
-
+    pub fn get_msi_64_bit(&self, msi_cap: &Capability) -> bool {
         let dword = self.get_dword(msi_cap.pointer) >> 16;
         (dword & 0x80) != 0
     }
@@ -294,18 +287,17 @@ impl PciDevice {
         //disable INTx# interrupts (pins?)
         let command = self.get_command();
         self.set_command(command & !0x400);
+        println!("command: {:b}", command);
 
-        let is_64_capable = self.get_msi_64_bit();
         let capabilities = &self.capabilities;
         let msi_cap = capabilities
             .iter()
             .find(|cap| cap.id == 5)
             .cloned()
             .expect("Device does not support MSI");
+        let is_64_capable = self.get_msi_64_bit(&msi_cap);
         let first_dword = self.get_dword(msi_cap.pointer);
         let mut message_control = (first_dword >> 16) as u16;
-
-        self.set_msi_address(&msi_cap);
 
         //get number of requested interrupts, and allow max...?
         let requested_interrupts_power = u16::min((message_control & 0b1110) >> 1, 5);
@@ -319,6 +311,7 @@ impl PciDevice {
         let mut current_free_irq = unsafe { crate::interrupts::idt::CUSTOM_INTERRUPT_VECTOR };
         current_free_irq += requested_interrupts - 1;
         current_free_irq &= !(requested_interrupts - 1);
+        self.set_msi_address(&msi_cap, is_64_capable);
 
         let data_dword_offset = if is_64_capable { 0xC } else { 0x8 };
         let data_dword = self.get_dword(msi_cap.pointer + data_dword_offset);
@@ -337,7 +330,7 @@ impl PciDevice {
         self.set_dword(msi_cap.pointer, (message_control as u32) << 16 | (first_dword & 0xFFFF));
     }
 
-    fn set_msi_address(&self, msi_cap: &Capability) {
+    fn set_msi_address(&self, msi_cap: &Capability, is_64_bit: bool) {
         let platform_info = crate::acpi::get_platform_info();
         let destination_mode = 0;
         let destination_id = platform_info.boot_processor.apic_id as u32;
@@ -348,7 +341,9 @@ impl PciDevice {
         let high_address = 0;
 
         self.set_dword(msi_cap.pointer + 4, low_address);
-        self.set_dword(msi_cap.pointer + 8, high_address);
+        if is_64_bit {
+            self.set_dword(msi_cap.pointer + 8, high_address);
+        }
     }
 }
 

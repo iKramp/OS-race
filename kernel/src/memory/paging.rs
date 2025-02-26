@@ -1,3 +1,5 @@
+use std::PageAllocator;
+
 use super::mem_utils::*;
 use super::physical_allocator::BUDDY_ALLOCATOR;
 
@@ -592,5 +594,10 @@ impl std::PageAllocator for PageTree {
             }
             VirtAddr(addr)
         }
+    }
+
+    fn find_contigious_pages(&mut self, n_pages: usize) -> std::mem_utils::VirtAddr {
+        let level_4_table = unsafe { get_at_physical_addr::<PageTable>(self.level_4_table) };
+        unsafe { VirtAddr(level_4_table.get_available_entry_pages(4, n_pages as u64)) }
     }
 }
