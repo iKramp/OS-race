@@ -7,7 +7,7 @@ use crate::{
     msr::{get_msr, get_mtrr_cap, get_mtrr_def_type},
     println,
 };
-use core::{sync::atomic::{AtomicBool, AtomicU8}};
+use core::sync::atomic::{AtomicBool, AtomicU8};
 use std::{
     mem_utils::{get_at_virtual_addr, VirtAddr},
     PageAllocator,
@@ -37,7 +37,6 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
         let bsp_local_ptr = add_cpu_locals(bsp_local);
         crate::msr::set_msr(0xC0000101, bsp_local_ptr.0);
 
-
         let destination = crate::memory::TRAMPOLINE_RESERVED.0 as *mut u8;
         let comm_lock = destination.add(56);
         for cpu in platform_info.application_processors.iter().enumerate() {
@@ -59,7 +58,7 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
 
             send_mtrrs(comm_lock);
             send_cr_registers(comm_lock);
-            
+
             let ap_local = super::cpu_locals::CpuLocals::new(
                 stack_addr.0,
                 STACK_SIZE_PAGES as u64 * 0x1000,

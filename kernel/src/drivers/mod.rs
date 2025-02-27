@@ -1,6 +1,8 @@
 use core::fmt::Debug;
 use std::{mem_utils::VirtAddr, string::String, vec::Vec};
 
+use crate::disk::Partition;
+
 pub mod ahci;
 pub mod gpt;
 
@@ -14,7 +16,7 @@ pub trait PCIDriver: Debug {
     }
 }
 
-pub trait DiskDriver {
+pub trait Disk: Debug {
     fn read(&mut self, sector: usize, sec_count: usize, buffer: VirtAddr) -> u64;
     fn write(&mut self, sector: usize, sec_count: usize, buffer: VirtAddr) -> u64;
     fn clean_after_read(&mut self, metadata: u64);
@@ -22,11 +24,6 @@ pub trait DiskDriver {
 }
 
 pub trait PartitionSchemeDriver {
-    fn partitions(&self, disk: &mut dyn DiskDriver) -> Vec<Partition>;
-}
-
-pub struct Partition {
-    pub start_sector: usize,
-    pub size_sectors: usize,
-    pub name: String,
+    fn guid(&self, disk: &mut dyn Disk) -> u128;
+    fn partitions(&self, disk: &mut dyn Disk) -> Vec<(u128, Partition)>;
 }

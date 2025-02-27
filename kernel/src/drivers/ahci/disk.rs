@@ -6,14 +6,13 @@ use std::{
     mem_utils::{get_at_physical_addr, get_at_virtual_addr, memset_virtual_addr, PhysAddr, VirtAddr},
     println,
     vec::Vec,
-    PageAllocator, PAGE_ALLOCATOR,
+    PageAllocator,
 };
 
 use bitfield::bitfield;
 
 use crate::{
-    disk::Disk,
-    drivers::{ahci::fis::{D2HRegisterFis, IdentifyStructure, PioSetupFis}, gpt::GPTDriver, DiskDriver, PartitionSchemeDriver},
+    drivers::{ahci::fis::{D2HRegisterFis, IdentifyStructure, PioSetupFis}, gpt::GPTDriver, Disk, PartitionSchemeDriver},
     memory::{paging::LiminePat, physical_allocator::BUDDY_ALLOCATOR, PAGE_TREE_ALLOCATOR},
     pci::device_config::{self, Bar},
 };
@@ -35,9 +34,9 @@ pub struct AhciController {
     is_64_bit: bool,
 }
 
-impl Disk for AhciController {
+impl AhciController {
     //https://forum.osdev.org/viewtopic.php?t=40969
-    fn init(&mut self) {
+    pub fn init(&mut self) -> Vec<VirtualPort> {
         self.device.enable_bus_mastering();
         let ghc = unsafe { (&raw const self.abar).read_volatile() };
 
@@ -81,13 +80,11 @@ impl Disk for AhciController {
 
         self.ports.retain(|port| active_ports.contains(&port.index));
 
-        let gpt_driver = GPTDriver {};
-        gpt_driver.partitions(self.ports.first_mut().unwrap());
+        self.ports.clone()
     }
 }
 
 impl AhciController {
-    ///Disk::init() must be called after this
     pub fn new(device: device_config::RegularPciDevice) -> Self {
         let abar = device.bars.iter().find(|bar| bar.get_index() == 5).unwrap().clone();
         let Bar::Memory(_, addr, _) = abar else {
@@ -184,7 +181,7 @@ impl AhciController {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VirtualPort {
     index: u8,
     address: *mut u32,
@@ -409,14 +406,12 @@ impl VirtualPort {
                 prdt_entry.SetDBA(prdt.base.0.into());
                 prdt_entry.SetDBC(prdt.count as u128 - 1);
                 prdt_entry_ptr.write_volatile(PrdtEntry(prdt_entry.0));
-                println!("PRDT: {:#x?}", prdt_entry);
             }
 
             PAGE_TREE_ALLOCATOR.unmap(cmd_table_virt);
         }
 
         let cmd_issue = 1 << index;
-        println!("Command issued: {:#x?}", index);
 
         //spin on busy
         let mut port_cmd = TaskFileData(self.get_property(0x20));
@@ -444,7 +439,7 @@ impl VirtualPort {
     }
 }
 
-impl DiskDriver for VirtualPort {
+impl Disk for VirtualPort {
     ///Returns the virtual address of the read data and the command index used
     fn read(&mut self, start_sec_index: usize, sec_count: usize, addr: VirtAddr) -> u64 {
         assert!(sec_count <= self.sectors as usize);
@@ -565,10 +560,12 @@ impl DiskDriver for VirtualPort {
 
     fn clean_after_read(&mut self, metadata: u64) {
         self.clean_command(metadata as u8);
+        self.command_metadata[metadata as usize].issued = false;
     }
 
     fn clean_after_write(&mut self, metadata: u64) {
         self.clean_command(metadata as u8);
+        self.command_metadata[metadata as usize].issued = false;
     }
 }
 

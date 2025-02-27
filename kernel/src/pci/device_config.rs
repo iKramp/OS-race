@@ -287,7 +287,6 @@ impl PciDevice {
         //disable INTx# interrupts (pins?)
         let command = self.get_command();
         self.set_command(command & !0x400);
-        println!("command: {:b}", command);
 
         let capabilities = &self.capabilities;
         let msi_cap = capabilities

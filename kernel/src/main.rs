@@ -4,6 +4,7 @@
 #![feature(abi_x86_interrupt)]
 #![feature(stmt_expr_attributes)]
 #![feature(box_into_inner)]
+#![feature(string_remove_matches)]
 
 use std::{println, printlnc};
 

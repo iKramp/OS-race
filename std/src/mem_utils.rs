@@ -64,6 +64,9 @@ pub fn get_physical_offset() -> PhysOffset {
 
 ///# Safety
 ///the address must be valid and there are no other references to the data
+///This can be used as is if all the data has been written before using the function,
+///becasue rust cannot rearrange memory reads when it comes to pointers (which are used)
+///If data changes after this function is called, a read_volatile needs to be used
 #[inline]
 pub unsafe fn get_at_virtual_addr<T>(addr: VirtAddr) -> &'static mut T {
     let data: *mut T = addr.0 as *mut T;
