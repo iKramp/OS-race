@@ -14,6 +14,8 @@ impl PartitionSchemeDriver for GPTDriver {
         disk.clean_after_read(command_slot);
         let header: &GptHeader = unsafe { &*(first_lba_ptr as *const GptHeader) };
 
+        assert_eq!(header.signature, *b"EFI PART", "Not a GPT disk");
+
         let start_entries = header.partition_entry_lba as usize;
         let num_entries = header.num_partition_entries as usize;
         let entry_size = header.size_partition_entry as usize;
