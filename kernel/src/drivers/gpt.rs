@@ -1,13 +1,12 @@
 use std::{boxed::Box, mem_utils::VirtAddr, string::String, vec::Vec, PAGE_ALLOCATOR};
 
-use crate::disk::Partition;
+use super::disk::{Disk, Partition, PartitionSchemeDriver};
 
-use super::PartitionSchemeDriver;
 
 pub struct GPTDriver {}
 
 impl PartitionSchemeDriver for GPTDriver {
-    fn partitions(&self, disk: &mut dyn super::Disk) -> Vec<(u128, super::Partition)> {
+    fn partitions(&self, disk: &mut dyn Disk) -> Vec<(u128, Partition)> {
         let first_lba = Box::new([0u8; 512]);
         let first_lba_ptr = &*first_lba as *const [u8; 512] as *const u8;
         let command_slot = disk.read(1, 1, VirtAddr(first_lba_ptr as u64));
@@ -59,7 +58,7 @@ impl PartitionSchemeDriver for GPTDriver {
         partitions
     }
 
-    fn guid(&self, disk: &mut dyn super::Disk) -> u128 {
+    fn guid(&self, disk: &mut dyn Disk) -> u128 {
         let first_lba = Box::new([0u8; 512]);
         let first_lba_ptr = &*first_lba as *const [u8; 512];
         let command_slot = disk.read(1, 1, VirtAddr(first_lba_ptr as u64));

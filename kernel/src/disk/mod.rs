@@ -1,10 +1,15 @@
-use std::{boxed::Box, collections::btree_map::BTreeMap, println, string::String};
-
-use crate::drivers::{gpt::GPTDriver, Disk, PartitionSchemeDriver};
-
+use std::{boxed::Box, collections::btree_map::BTreeMap, println};
+use crate::drivers::{disk::{Disk, FileSystem, Partition, PartitionSchemeDriver}, gpt::GPTDriver, rfs::Rfs};
 
 static mut DISKS: BTreeMap<u128, Box<dyn Disk>> = BTreeMap::new();
 static mut PARTITIONS: BTreeMap<u128, Partition> = BTreeMap::new();
+static mut FILESYSTEM_DRIVERS: BTreeMap<u128, Box<dyn FileSystem>> = BTreeMap::new();
+
+pub fn init() {
+    unsafe {
+        FILESYSTEM_DRIVERS.insert(Rfs {}.guid(), Box::new(Rfs {}));
+    }
+}
 
 pub fn add_disk(mut disk: Box<dyn Disk>) {
     //for now only GPT
@@ -34,12 +39,4 @@ pub fn print_partitions() {
             println!("Partition: {:#x?}", partition);
         }
     }
-}
-
-#[derive(Debug)]
-pub struct Partition {
-    pub start_sector: usize,
-    pub size_sectors: usize,
-    pub name: String,
-    pub disk: u128,
 }

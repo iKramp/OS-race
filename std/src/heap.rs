@@ -1,5 +1,3 @@
-use crate::println;
-
 use crate::mem_utils;
 use mem_utils::*;
 
@@ -13,25 +11,10 @@ use mem_utils::*;
 //1024
 //above that we allocate whole pages
 
-#[derive(Eq, PartialEq, Clone, Copy, Debug)]
-enum TypeOfHeap {
-    ObjectsInPage,
-    ObjectOverPages,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug)]
-struct MultiPageObjectMetadata {
-    //should ALWAYS be ObjectOverPages
-    type_of_heap: TypeOfHeap,
-    pages_allocated: u32,
-}
-
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 struct HeapPageMetadata {
     //should ALWAYS be ObjectsInPage
-    type_of_heap: TypeOfHeap,
     size_order_of_objects: u8,
     number_of_allocations: u8,
     max_allocations: u8,
@@ -100,7 +83,6 @@ impl HeapAllocationData {
             if self.free_objects == 0 {
                 let new_page = crate::PAGE_ALLOCATOR.allocate(None);
                 let mut metadata = HeapPageMetadata {
-                    type_of_heap: TypeOfHeap::ObjectsInPage,
                     size_order_of_objects: self.size_order_of_objects,
                     number_of_allocations: 0,
                     max_allocations: ((4096 - crate::mem::size_of::<HeapPageMetadata>()) as u64
@@ -231,16 +213,9 @@ impl Heap {
             VirtAddr(self as *const Heap as u64)
         } else if size > 1024 {
             //allocate whole page/pages
-            let n_of_pages = (size + 4095 + crate::mem::size_of::<MultiPageObjectMetadata>() as u64) / 4096;
+            let n_of_pages = (size + 4095) / 4096;
             let virt_start = unsafe { crate::PAGE_ALLOCATOR.allocate_contigious(n_of_pages, None) };
-            let metadata = MultiPageObjectMetadata {
-                type_of_heap: TypeOfHeap::ObjectOverPages,
-                pages_allocated: n_of_pages as u32,
-            };
-            unsafe {
-                set_at_virtual_addr(virt_start, metadata);
-            }
-            virt_start + VirtAddr(crate::mem::size_of::<MultiPageObjectMetadata>() as u64)
+            virt_start
         } else {
             let size_order = log2_rounded_up(size);
             let index = u64::max(4, size_order) - 4;
@@ -248,17 +223,16 @@ impl Heap {
         }
     }
 
-    pub fn deallocate(&mut self, addr: VirtAddr) {
-        if addr.0 == self as *const Heap as u64 {
+    pub fn deallocate(&mut self, addr: VirtAddr, size: u64) {
+        if size == 0 {
             return;
         }
 
         let page_addr = VirtAddr(addr.0 & !0xFFF);
         unsafe {
-            let heap_type = get_at_virtual_addr::<TypeOfHeap>(page_addr);
-            if *heap_type == TypeOfHeap::ObjectOverPages {
-                let metadata = get_at_virtual_addr::<MultiPageObjectMetadata>(page_addr);
-                for i in 0..metadata.pages_allocated {
+            if size > 1024 {
+                let pages_allocated = (size + 4095) / 4096;
+                for i in 0..pages_allocated {
                     crate::PAGE_ALLOCATOR.deallocate(page_addr + VirtAddr(i as u64 * 4096));
                 }
             } else {
@@ -292,8 +266,8 @@ unsafe impl core::alloc::GlobalAlloc for Heap {
         addr.0 as *mut u8
     }
 
-    unsafe fn dealloc(&self, ptr: *mut u8, _layout: core::alloc::Layout) {
-        HEAP.deallocate(VirtAddr(ptr as u64));
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: core::alloc::Layout) {
+        HEAP.deallocate(VirtAddr(ptr as u64), layout.size() as u64);
     }
 }
 

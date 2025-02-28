@@ -33,7 +33,7 @@ impl<T: crate::fmt::Debug> Drop for Rc<T> {
     fn drop(&mut self) {
         self.inner.count -= 1;
         if self.inner.count == 0 {
-            unsafe { crate::HEAP.deallocate(crate::mem_utils::VirtAddr(self.inner as *const _ as u64)) }
+            unsafe { crate::HEAP.deallocate(crate::mem_utils::VirtAddr(self.inner as *const _ as u64), core::mem::size_of::<T>() as u64) }
         }
     }
 }

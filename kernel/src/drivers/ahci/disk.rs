@@ -12,7 +12,7 @@ use std::{
 use bitfield::bitfield;
 
 use crate::{
-    drivers::{ahci::fis::{D2HRegisterFis, IdentifyStructure, PioSetupFis}, gpt::GPTDriver, Disk, PartitionSchemeDriver},
+    drivers::{ahci::fis::{D2HRegisterFis, IdentifyStructure, PioSetupFis}, disk::Disk},
     memory::{paging::LiminePat, physical_allocator::BUDDY_ALLOCATOR, PAGE_TREE_ALLOCATOR},
     pci::device_config::{self, Bar},
 };
@@ -108,7 +108,7 @@ impl AhciController {
                     sectors: 0,
                     command_depth: 0,
                     device: 0,
-                    command_metadata: [CommandMetadata { issued: false, }; 32],
+                    command_metadata: [CommandMetadata { issued: false }; 32],
                 });
             }
         }
