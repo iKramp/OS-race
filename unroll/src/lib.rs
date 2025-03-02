@@ -49,7 +49,7 @@ pub fn unroll_for_loops(_meta: TokenStream, input: TokenStream) -> TokenStream {
     if let Item::Fn(item_fn) = item {
         let new_block = {
             let ItemFn {
-                block: ref box_block,
+                block: box_block,
                 ..
             } = &item_fn;
             unroll_in_block(box_block)
@@ -67,8 +67,8 @@ pub fn unroll_for_loops(_meta: TokenStream, input: TokenStream) -> TokenStream {
 /// Routine to unroll for loops within a block
 fn unroll_in_block(block: &Block) -> Block {
     let Block {
-        ref brace_token,
-        ref stmts,
+        brace_token,
+        stmts,
     } = block;
     let mut new_stmts = Vec::new();
     for stmt in stmts.iter() {
@@ -88,7 +88,7 @@ fn unroll_in_block(block: &Block) -> Block {
 /// loop.
 fn unroll(expr: &Expr) -> Expr {
     // impose a scope that we can break out of so we can return stmt without copying it.
-    if let Expr::ForLoop(ref for_loop) = expr {
+    if let Expr::ForLoop(for_loop) = expr {
         let ExprForLoop {
             ref attrs,
             ref label,
@@ -188,7 +188,7 @@ fn unroll(expr: &Expr) -> Expr {
         } else {
             forloop_with_body(new_body)
         }
-    } else if let Expr::If(ref if_expr) = expr {
+    } else if let Expr::If(if_expr) = expr {
         let ExprIf {
             ref cond,
             ref then_branch,
@@ -201,7 +201,7 @@ fn unroll(expr: &Expr) -> Expr {
             else_branch: else_branch.as_ref().map(|x| (x.0, Box::new(unroll(&x.1)))),
             ..(*if_expr).clone()
         })
-    } else if let Expr::Let(ref let_expr) = expr {
+    } else if let Expr::Let(let_expr) = expr {
         let ExprLet {
             ref expr,
             ..
@@ -210,13 +210,13 @@ fn unroll(expr: &Expr) -> Expr {
             expr: Box::new(unroll(expr)),
             ..(*let_expr).clone()
         })
-    } else if let Expr::Block(ref expr_block) = expr {
+    } else if let Expr::Block(expr_block) = expr {
         let ExprBlock { ref block, .. } = *expr_block;
         Expr::Block(ExprBlock {
             block: unroll_in_block(block),
             ..(*expr_block).clone()
         })
-    } else if let Expr::Unsafe(ref unsafe_block) = expr {
+    } else if let Expr::Unsafe(unsafe_block) = expr {
         let ExprUnsafe { ref block, .. } = *unsafe_block;
         Expr::Unsafe(ExprUnsafe {
             block: unroll_in_block(block),

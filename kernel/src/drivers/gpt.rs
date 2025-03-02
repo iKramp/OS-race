@@ -25,6 +25,8 @@ impl PartitionSchemeDriver for GPTDriver {
 
         let mut partitions = Vec::new();
 
+        let disk_guid = self.guid(disk);
+
         for i in 0..num_entries {
             unsafe {
                 let ptr = (buffer.0 as *const u8).add(i * entry_size);
@@ -42,7 +44,7 @@ impl PartitionSchemeDriver for GPTDriver {
                         start_sector: entry.starting_lba as usize,
                         size_sectors: (entry.ending_lba - entry.starting_lba + 1) as usize,
                         name,
-                        disk: self.guid(disk),
+                        disk: disk_guid,
                     },
                 ))
             }

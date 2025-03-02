@@ -2,7 +2,7 @@ use std::{boxed::Box, println, printlnc};
 
 use device_config::{MassStorageController, RegularPciDevice};
 
-use crate::{disk::{print_disks, print_partitions}, drivers::ahci::disk::AhciController, interrupts::handlers::{apic_eoi, ExceptionStackFrame}};
+use crate::{vfs::print_partitions, drivers::ahci::disk::AhciController, interrupts::handlers::{apic_eoi, ExceptionStackFrame}};
 
 pub mod device_config;
 mod port_access;
@@ -27,7 +27,7 @@ pub fn enumerate_devices() {
             let mut ahci_disk = AhciController::new(device);
             let ports = ahci_disk.init();
             for port in ports {
-                crate::disk::add_disk(Box::new(port));
+                crate::vfs::add_disk(Box::new(port));
             }
         }
         printlnc!((51, 153, 10), "Device configured");

@@ -1,5 +1,5 @@
 use core::fmt::Debug;
-use std::{mem_utils::VirtAddr, string::String, vec::Vec};
+use std::{boxed::Box, mem_utils::VirtAddr, string::String, vec::Vec};
 
 
 
@@ -15,8 +15,13 @@ pub trait PartitionSchemeDriver {
     fn partitions(&self, disk: &mut dyn Disk) -> Vec<(u128, Partition)>;
 }
 
-pub trait FileSystem {
+pub trait FileSystemFactory {
     fn guid(&self) -> u128;
+    fn create(&self, disk: &'static mut dyn Disk) -> Box<dyn FileSystem>;
+}
+
+pub trait FileSystem {
+    //TODO:
 }
 
 #[derive(Debug)]

@@ -5,6 +5,8 @@
 #![feature(stmt_expr_attributes)]
 #![feature(box_into_inner)]
 #![feature(string_remove_matches)]
+#![feature(arbitrary_self_types)]
+#![feature(arbitrary_self_types_pointers)]
 
 use std::{println, printlnc};
 
@@ -21,14 +23,14 @@ mod utils;
 mod vga;
 mod pci;
 mod drivers;
-mod disk;
+mod vfs;
 use limine::LIMINE_BOOTLOADER_REQUESTS;
 use vga::vga_text;
 
 pub struct BootInfo {}
 
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn _start() -> ! {
     let stack_pointer: *const u64;
     unsafe {

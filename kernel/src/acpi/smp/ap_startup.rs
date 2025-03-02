@@ -11,11 +11,11 @@ use crate::{
 };
 
 #[link(name = "trampoline", kind = "static")]
-extern "C" {
+unsafe extern "C" {
     pub fn ap_startup() -> !;
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn ap_started_wait_loop() -> ! {
     let comm_lock: *mut u8;
     unsafe {

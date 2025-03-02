@@ -47,7 +47,7 @@ pub fn derive_enum_new(input: TokenStream) -> TokenStream {
         })
         .collect::<Vec<_>>();
 
-    let gen = quote::quote! {
+    let r#gen = quote::quote! {
         impl #impl_generics AmlNew for #name #ty_generics #where_clause {
             fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
                 #(#variant_arms)*
@@ -55,7 +55,7 @@ pub fn derive_enum_new(input: TokenStream) -> TokenStream {
             }
         }
     };
-    gen.into()
+    r#gen.into()
 }
 
 #[proc_macro_attribute]
@@ -144,7 +144,7 @@ pub fn derive_struct_new(input: TokenStream) -> TokenStream {
         }
     };
 
-    let gen = quote::quote! {
+    let r#gen = quote::quote! {
         impl #impl_generics AmlNew for #name #ty_generics #where_clause {
             fn aml_new(data: &[u8]) -> Option<(Self, usize)> {
                 #prefix_check
@@ -160,5 +160,5 @@ pub fn derive_struct_new(input: TokenStream) -> TokenStream {
             }
         }
     };
-    gen.into()
+    r#gen.into()
 }
