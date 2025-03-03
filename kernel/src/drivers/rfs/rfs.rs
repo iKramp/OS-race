@@ -54,6 +54,10 @@ impl Rfs {
         unimplemented!()
     }
 
+    pub fn free_block(&mut self, block: u32) {
+        unimplemented!()
+    }
+
     pub fn get_node(&mut self, node_addr: u32) -> &mut (bool, *mut BtreeNode) {
         if let std::collections::btree_map::Entry::Vacant(e) = self.inode_tree_cache.entry(node_addr) {
             let data = BtreeNode::read_from_disk(self.disk, node_addr);
@@ -65,6 +69,10 @@ impl Rfs {
 
     pub fn add_node(&mut self, node_addr: u32, node: *mut BtreeNode) {
         self.inode_tree_cache.insert(node_addr, (true, node));
+    }
+
+    pub fn remove_node(&mut self, node_addr: u32) {
+        self.inode_tree_cache.remove(&node_addr);
     }
 }
 

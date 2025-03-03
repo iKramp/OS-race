@@ -1,4 +1,4 @@
-use crate::mem_utils;
+use crate::{mem_utils, sync::mutex::Mutex};
 use mem_utils::*;
 
 //min allocation is 16 bytes
@@ -190,8 +190,21 @@ pub struct Heap {
     allocation_data: [HeapAllocationData; 7],
 }
 
+pub struct HeapWrapper {
+    heap: Mutex<Heap>,
+}
+
+impl HeapWrapper {
+    pub const fn new() -> Self {
+        Self {
+            heap: Mutex::new(Heap::new()),
+        }
+    }
+}
+
+
 #[global_allocator]
-pub static mut HEAP: Heap = Heap::new();
+pub static HEAP: HeapWrapper = HeapWrapper::new();
 
 impl Heap {
     pub const fn new() -> Self {
@@ -213,9 +226,9 @@ impl Heap {
             VirtAddr(self as *const Heap as u64)
         } else if size > 1024 {
             //allocate whole page/pages
-            let n_of_pages = (size + 4095) / 4096;
-            let virt_start = unsafe { crate::PAGE_ALLOCATOR.allocate_contigious(n_of_pages, None) };
-            virt_start
+            let n_of_pages = size.div_ceil(4096);
+            
+            unsafe { crate::PAGE_ALLOCATOR.allocate_contigious(n_of_pages, None) }
         } else {
             let size_order = log2_rounded_up(size);
             let index = u64::max(4, size_order) - 4;
@@ -231,9 +244,9 @@ impl Heap {
         let page_addr = VirtAddr(addr.0 & !0xFFF);
         unsafe {
             if size > 1024 {
-                let pages_allocated = (size + 4095) / 4096;
+                let pages_allocated = size.div_ceil(4096);
                 for i in 0..pages_allocated {
-                    crate::PAGE_ALLOCATOR.deallocate(page_addr + VirtAddr(i as u64 * 4096));
+                    crate::PAGE_ALLOCATOR.deallocate(page_addr + VirtAddr(i * 4096));
                 }
             } else {
                 let metadata = get_at_virtual_addr::<HeapPageMetadata>(page_addr);
@@ -256,18 +269,18 @@ impl Default for Heap {
 }
 
 //TODO: implement layout guarantees
-unsafe impl core::alloc::GlobalAlloc for Heap {
+unsafe impl core::alloc::GlobalAlloc for HeapWrapper {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
         if layout.align() > layout.size() {
             panic!("alignment is greater than size, not yet supported");
         }
         let size = layout.size() as u64;
-        let addr = HEAP.allocate(size);
+        let addr = self.heap.lock().allocate(size);
         addr.0 as *mut u8
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: core::alloc::Layout) {
-        HEAP.deallocate(VirtAddr(ptr as u64), layout.size() as u64);
+        self.heap.lock().deallocate(VirtAddr(ptr as u64), layout.size() as u64);
     }
 }
 

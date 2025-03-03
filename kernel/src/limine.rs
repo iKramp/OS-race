@@ -46,7 +46,6 @@ pub static mut LIMINE_BOOTLOADER_REQUESTS: BootloaderRequests = BootloaderReques
         min_mode: 0,
         max_mode: 0,
     },
-    //smp_request: todo!(),
     memory_map_request: MemoryMapRequest {
         magic: [0xc7b1dd30df4c8b88, 0x0a82e883a194f07b, 0x67cf3d9d378a806f, 0xe304acdfc50c3c62],
         revision: 0,

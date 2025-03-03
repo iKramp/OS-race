@@ -10,6 +10,7 @@ static_mut_refs = "allow"
 
 [lints.clippy]
 needless_range_loops = "allow"
+comparison_chain = "allow"
 
 [[bin]]
 name = "kernel"
