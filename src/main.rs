@@ -10,6 +10,7 @@ fn main() {
     //chose whether to debug with GDB
     let debug = true;
     let uefi = false;
+    let snapshot = false;
 
     let mut cmd = std::process::Command::new("qemu-system-x86_64");
     cmd.arg("-d").arg("int,cpu_reset").arg("-D").arg("./log.txt").arg("-no-reboot");
@@ -30,7 +31,11 @@ fn main() {
         cmd.arg("-bios").arg(ovmf_prebuilt::ovmf_pure_efi());
     } 
     cmd.arg("-drive").arg("format=raw,file=kernel_build_files/image.iso");
-    cmd.arg("-drive").arg("id=test_disk,format=raw,file=ahci_disk.img,if=none,snapshot=on");
+    if snapshot {
+        cmd.arg("-drive").arg("id=test_disk,format=raw,file=ahci_disk.img,if=none,snapshot=on");
+    } else {
+        cmd.arg("-drive").arg("id=test_disk,format=raw,file=ahci_disk.img,if=none");
+    }
     cmd.arg("-device").arg("ahci,id=ahci");
     cmd.arg("-device").arg("ide-hd,drive=test_disk,bus=ahci.0");
     let mut child = cmd.spawn().unwrap();

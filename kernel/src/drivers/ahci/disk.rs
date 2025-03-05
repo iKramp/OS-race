@@ -441,16 +441,11 @@ impl VirtualPort {
 
 impl Disk for VirtualPort {
     ///Returns the virtual address of the read data and the command index used
-    fn read(&mut self, start_sec_index: usize, sec_count: usize, addr: VirtAddr) -> u64 {
+    fn read(&mut self, start_sec_index: usize, sec_count: usize, buffer: Vec<PhysAddr>) -> u64 {
         assert!(sec_count <= self.sectors as usize);
         let prdt_entries = (sec_count + 7) / 8; //8 sectors in one physical frame
-        let mut phys_addresses = Vec::new();
-        for i in 0..prdt_entries {
-            let frame = std::mem_utils::translate_virt_phys_addr(addr + VirtAddr(i as u64 * 4096)).unwrap();
-            phys_addresses.push(frame);
-        }
 
-        let prdt = phys_addresses
+        let prdt = buffer
             .iter()
             .enumerate()
             .map(|(i, addr)| {
@@ -497,22 +492,11 @@ impl Disk for VirtualPort {
     }
 
     ///Returns the virtual address of the read data and the command index used
-    fn write(&mut self, start_sec_index: usize, sec_count: usize, buffer: VirtAddr) -> u64 {
+    fn write(&mut self, start_sec_index: usize, sec_count: usize, buffer: Vec<PhysAddr>) -> u64 {
         assert!(sec_count <= self.sectors as usize);
         let prdt_entries = (sec_count + 7) / 8; //8 sectors in one physical frame
-        let mut phys_addresses = Vec::new();
 
-        //here we pray that either AHCI supports 64 bit addressing or we are in low memory
-        for _ in 0..prdt_entries {
-            let virt_addr = buffer + VirtAddr(phys_addresses.len() as u64 * 4096);
-            let physical_addr = std::mem_utils::translate_virt_phys_addr(virt_addr).unwrap();
-            if physical_addr.0 > u32::MAX as u64 && !self.is_64_bit {
-                panic!("AHCI controller does not support 64 bit addressing");
-            }
-            phys_addresses.push(physical_addr);
-        }
-
-        let prdt = phys_addresses
+        let prdt = buffer
             .iter()
             .enumerate()
             .map(|(i, addr)| {

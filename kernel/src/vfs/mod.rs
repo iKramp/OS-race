@@ -1,19 +1,18 @@
 use bitfield::bitfield;
-use std::{boxed::Box, collections::btree_map::BTreeMap, println, vec::Vec};
+use std::{boxed::Box, collections::btree_map::BTreeMap, vec::Vec};
 
 use crate::drivers::{
-    disk::{Disk, FileSystem, FileSystemFactory, Partition, PartitionSchemeDriver},
+    disk::{Disk, FileSystem, FileSystemFactory, PartitionSchemeDriver},
     gpt::GPTDriver,
     rfs::RfsFactory,
 };
 
 ///Map from disk guid to disk object (driver) and a list of partition guids
 static mut DISKS: BTreeMap<u128, (Box<dyn Disk>, Vec<u128>)> = BTreeMap::new();
-static mut PARTITIONS: BTreeMap<u128, Partition> = BTreeMap::new();
 ///maps from filesystem type guid to filesystem driver factory
 static mut FILESYSTEM_DRIVER_FACTORIES: BTreeMap<u128, Box<dyn FileSystemFactory>> = BTreeMap::new();
 ///maps from partition guid to filesystem driver. Might be unused if we don't do caching
-static mut PARTITION_DRIVERS: BTreeMap<u128, Box<dyn FileSystem>> = BTreeMap::new();
+static mut MOUNTED_PARTITIONS: BTreeMap<u128, Box<dyn FileSystem>> = BTreeMap::new();
 
 pub fn init() {
     unsafe {
@@ -30,25 +29,6 @@ pub fn add_disk(mut disk: Box<dyn Disk>) {
 
     unsafe {
         DISKS.insert(guid, (disk, partition_guids));
-        for (guid, partition) in partitions {
-            PARTITIONS.insert(guid, partition);
-        }
-    }
-}
-
-pub fn print_disks() {
-    unsafe {
-        for disk in DISKS.iter() {
-            println!("Disk: {:#x?}", disk);
-        }
-    }
-}
-
-pub fn print_partitions() {
-    unsafe {
-        for partition in PARTITIONS.iter() {
-            println!("Partition: {:#x?}", partition);
-        }
     }
 }
 
@@ -114,6 +94,10 @@ impl InodeType {
 
     pub fn is_fifo(&self) -> bool {
         self.0 & FILE_TYPE_MASK == 0o10000
+    }
+
+    pub fn new_dir(perms: u32) -> Self {
+        InodeType(0o40000 | perms)
     }
 }
 

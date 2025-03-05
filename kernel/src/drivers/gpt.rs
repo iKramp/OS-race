@@ -1,26 +1,34 @@
-use std::{boxed::Box, mem_utils::VirtAddr, string::String, vec::Vec, PAGE_ALLOCATOR};
+use std::{mem_utils::{get_at_virtual_addr, translate_virt_phys_addr, VirtAddr}, println, string::String, vec::Vec, PageAllocator, PAGE_ALLOCATOR};
+
+use crate::memory::{PAGE_TREE_ALLOCATOR, paging::LiminePat, physical_allocator::BUDDY_ALLOCATOR};
 
 use super::disk::{Disk, Partition, PartitionSchemeDriver};
-
 
 pub struct GPTDriver {}
 
 impl PartitionSchemeDriver for GPTDriver {
     fn partitions(&self, disk: &mut dyn Disk) -> Vec<(u128, Partition)> {
-        let first_lba = Box::new([0u8; 512]);
-        let first_lba_ptr = &*first_lba as *const [u8; 512] as *const u8;
-        let command_slot = disk.read(1, 1, VirtAddr(first_lba_ptr as u64));
+        println!("GPT partitions");
+        let first_lba = unsafe { BUDDY_ALLOCATOR.allocate_frame() };
+        let first_lba_binding = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(first_lba)) };
+        unsafe {
+            PAGE_TREE_ALLOCATOR
+                .get_page_table_entry_mut(first_lba_binding)
+                .set_pat(LiminePat::UC);
+        }
+        let command_slot = disk.read(1, 1, std::vec![first_lba]);
         disk.clean_after_read(command_slot);
-        let header: &GptHeader = unsafe { &*(first_lba_ptr as *const GptHeader) };
+        let header = unsafe { get_at_virtual_addr::<GptHeader>(first_lba_binding) };
 
         assert_eq!(header.signature, *b"EFI PART", "Not a GPT disk");
 
         let start_entries = header.partition_entry_lba as usize;
         let num_entries = header.num_partition_entries as usize;
         let entry_size = header.size_partition_entry as usize;
-        let entry_num_lbas = (num_entries * entry_size + 511) / 512;
+        let entry_num_lbas = (num_entries * entry_size).div_ceil(512);
         let buffer = unsafe { PAGE_ALLOCATOR.allocate_contigious(entry_num_lbas as u64 / 8, None) };
-        let command_slot = disk.read(start_entries, entry_num_lbas, buffer);
+        let physical_addresses = (0..entry_num_lbas / 8).map(|i| translate_virt_phys_addr(buffer + VirtAddr(i as u64 * 4096)).unwrap()).collect();
+        let command_slot = disk.read(start_entries, entry_num_lbas, physical_addresses);
         disk.clean_after_read(command_slot);
 
         let mut partitions = Vec::new();
@@ -50,23 +58,31 @@ impl PartitionSchemeDriver for GPTDriver {
             }
         }
 
-        unsafe { 
+        unsafe {
             //free memory
             for i in 0..(entry_num_lbas / 8) {
                 PAGE_ALLOCATOR.deallocate(buffer + VirtAddr(i as u64 * 4096));
             }
+            PAGE_ALLOCATOR.deallocate(first_lba_binding);
         }
 
         partitions
     }
 
     fn guid(&self, disk: &mut dyn Disk) -> u128 {
-        let first_lba = Box::new([0u8; 512]);
-        let first_lba_ptr = &*first_lba as *const [u8; 512];
-        let command_slot = disk.read(1, 1, VirtAddr(first_lba_ptr as u64));
+        let first_lba = unsafe { BUDDY_ALLOCATOR.allocate_frame() };
+        let first_lba_binding = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(first_lba)) };
+        unsafe {
+            PAGE_TREE_ALLOCATOR
+                .get_page_table_entry_mut(first_lba_binding)
+                .set_pat(LiminePat::UC);
+        }
+        let command_slot = disk.read(1, 1, std::vec![first_lba]);
         disk.clean_after_read(command_slot);
-        let header: &GptHeader = unsafe { &*(first_lba_ptr as *const GptHeader) };
-        u128::from_le_bytes(header.disk_guid)
+        let header = unsafe { get_at_virtual_addr::<GptHeader>(first_lba_binding) };
+        let guid = header.disk_guid;
+        unsafe { PAGE_ALLOCATOR.deallocate(first_lba_binding) };
+        u128::from_le_bytes(guid)
     }
 }
 

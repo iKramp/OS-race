@@ -2,7 +2,7 @@ use std::{boxed::Box, println, printlnc};
 
 use device_config::{MassStorageController, RegularPciDevice};
 
-use crate::{vfs::print_partitions, drivers::ahci::disk::AhciController, interrupts::handlers::{apic_eoi, ExceptionStackFrame}};
+use crate::{drivers::ahci::disk::AhciController, interrupts::handlers::{apic_eoi, ExceptionStackFrame}};
 
 pub mod device_config;
 mod port_access;
@@ -32,7 +32,6 @@ pub fn enumerate_devices() {
         }
         printlnc!((51, 153, 10), "Device configured");
     }
-    print_partitions();
 }
 
 

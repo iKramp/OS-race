@@ -12,7 +12,13 @@ const VIRTUAL_ONLY: bool = true;
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct DirEntry {
+struct SuperBlock {
+    pub inode_tree: u32,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone)]
+struct DirEntry {
     pub inode: u32,
     pub name: [u8; 128], 
 }
@@ -21,9 +27,8 @@ pub struct DirEntry {
 //  to pointers, etc
 #[repr(C)]
 #[derive(Debug)]
-pub struct Inode {
+struct Inode {
     size: InodeSize,
-    start_block: u32,
     inode_type_mode: InodeType,
     link_count: u16,
     uid: u16,
@@ -31,7 +36,7 @@ pub struct Inode {
 }
 
 bitfield! {
-    pub struct InodeSize(u64);
+    struct InodeSize(u64);
     impl Debug;
     ///Size in bytes. Block length is size / 4096 rounded up
     pub size, set_size: 61, 0;
@@ -41,7 +46,7 @@ bitfield! {
 }
 
 //max size: block size
-pub struct GroupHeader {
+struct GroupHeader {
     bitmask: [u8; 4096],
 }
 
@@ -80,7 +85,7 @@ impl GroupHeader {
 
 //can fit 32736 (0x7FE0) inodes
 #[repr(C)]
-pub struct InodeHeader {
+struct InodeHeader {
     inodes: [u8; 4092],
     next_ptr: u32,
 }
