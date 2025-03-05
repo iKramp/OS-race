@@ -1,9 +1,9 @@
-
+use core::alloc;
 use std::{boxed::Box, collections::btree_map::BTreeMap};
 
 use crate::drivers::disk::{Disk, FileSystem, FileSystemFactory};
 
-use super::btree::BtreeNode;
+use super::{btree::{BtreeNode, Key}, VIRTUAL_ONLY};
 
 pub struct RfsFactory {}
 
@@ -40,6 +40,11 @@ pub struct Rfs {
     ///Removing: Remove from cache, convert to VirtAddr, unmap
     inode_tree_cache: BTreeMap<u32, (bool, *mut BtreeNode)>,
     disk: &'static mut dyn Disk,
+    root_block: u32,
+
+
+    //virtual only
+    block_counter: u32,
 }
 
 impl Rfs {
@@ -47,17 +52,27 @@ impl Rfs {
         Self {
             inode_tree_cache: BTreeMap::new(),
             disk,
+            root_block: 1,
+            block_counter: 1,
         }
     }
 
     pub fn allocate_block(&mut self) -> u32 {
+        if VIRTUAL_ONLY {
+            self.block_counter += 1;
+            return self.block_counter; 
+        }
         unimplemented!()
     }
 
-    pub fn free_block(&mut self, block: u32) {
+    pub fn free_block(&mut self, _block: u32) {
+        if VIRTUAL_ONLY {
+            return; //nothing to do
+        }
         unimplemented!()
     }
 
+    //TODO: fix all modified bit
     pub fn get_node(&mut self, node_addr: u32) -> &mut (bool, *mut BtreeNode) {
         if let std::collections::btree_map::Entry::Vacant(e) = self.inode_tree_cache.entry(node_addr) {
             let data = BtreeNode::read_from_disk(self.disk, node_addr);
@@ -74,8 +89,29 @@ impl Rfs {
     pub fn remove_node(&mut self, node_addr: u32) {
         self.inode_tree_cache.remove(&node_addr);
     }
+
+    pub fn print_inode_tree(&mut self) {
+        BtreeNode::print_inode_tree(self.root_block, 0, self);
+    }
+
+    pub fn add_key(&mut self, key: u32, value: u32) {
+        let (_modified, node) = self.get_node(self.root_block);
+        let node = &mut *node;
+        let key = Key { index: key, indoe_block: value };
+        let new_root = node.insert_key_root(self.root_block, key, self);
+        if let Some(new_root) = new_root {
+            self.root_block = new_root;
+        }
+    }
+    
+    pub fn remove_key(&mut self, key: u32) {
+        let (_modified, node) = self.get_node(self.root_block);
+        let node = &mut *node;
+        let new_root = node.delete_key_root(self.root_block, key, self);
+        if let Some(new_root) = new_root {
+            self.root_block = new_root;
+        }
+    }
 }
 
-impl FileSystem for Rfs {
-}
-
+impl FileSystem for Rfs {}

@@ -1,11 +1,14 @@
+
 use bitfield::bitfield;
 use crate::vfs::InodeType;
 
 mod btree;
+#[allow(clippy::module_inception)]
 mod rfs;
 pub use rfs::*;
 
 const BLOCK_SIZE: u64 = 4096;
+const VIRTUAL_ONLY: bool = true;
 
 #[repr(C)]
 #[derive(Debug)]

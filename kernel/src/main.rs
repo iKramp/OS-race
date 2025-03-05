@@ -8,7 +8,7 @@
 #![feature(arbitrary_self_types)]
 #![feature(arbitrary_self_types_pointers)]
 
-use std::{println, printlnc};
+use std::{print, println, printlnc};
 
 mod acpi;
 mod cpuid;
@@ -24,6 +24,7 @@ mod vga;
 mod pci;
 mod drivers;
 mod vfs;
+use drivers::{rfs::{Rfs, RfsFactory}, virtual_disk::VirtualDisk};
 use limine::LIMINE_BOOTLOADER_REQUESTS;
 use vga::vga_text;
 
@@ -51,24 +52,42 @@ extern "C" fn _start() -> ! {
 
 
     pci::enumerate_devices();
-    panic!("test");
 
-    vga_text::hello_message();
+    //vga_text::hello_message();
+    //
+    //#[cfg(feature = "run_tests")]
+    //{
+    //    println!("Running tests");
+    //    use tests::test_runner;
+    //    test_runner();
+    //    println!("Finished running tests");
+    //}
 
-    #[cfg(feature = "run_tests")]
-    {
-        println!("Running tests");
-        use tests::test_runner;
-        test_runner();
-        println!("Finished running tests");
+    let mut virt_disk = VirtualDisk {
+        data: Default::default(),
+    };
+    let virt_disk: &'static mut VirtualDisk = unsafe {&mut *((&mut virt_disk) as *mut VirtualDisk)};
+    let mut filesystem = Rfs::new(virt_disk);
+    //for i in 0..117700 {
+    //    filesystem.add_key(i, i);
+    //} 
+    //
+    //for i in 0..117700 {
+    //    filesystem.remove_key(i);
+    //}
+    
+    for i in 3..10000 {
+        filesystem.add_key(i, i);
+    }
+    for i in 3..10000 {
+        filesystem.remove_key(i);
     }
 
     println!("looping infinitely now");
-    let mut a = 0;
+    let mut a = 2;
     #[allow(clippy::empty_loop)]
     loop {
-        a += 1;
-        println!("{}", a);
-        std::thread::sleep(std::time::Duration::from_secs(10));
+        a += 100;
+        std::thread::sleep(std::time::Duration::from_secs(1));
     }
 }
