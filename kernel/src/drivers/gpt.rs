@@ -1,4 +1,4 @@
-use std::{mem_utils::{get_at_virtual_addr, translate_virt_phys_addr, VirtAddr}, println, string::String, vec::Vec, PageAllocator, PAGE_ALLOCATOR};
+use std::{mem_utils::{get_at_virtual_addr, translate_virt_phys_addr, PhysAddr, VirtAddr}, println, string::String, vec::Vec, PageAllocator, PAGE_ALLOCATOR};
 
 use crate::memory::{PAGE_TREE_ALLOCATOR, paging::LiminePat, physical_allocator::BUDDY_ALLOCATOR};
 
@@ -16,7 +16,7 @@ impl PartitionSchemeDriver for GPTDriver {
                 .get_page_table_entry_mut(first_lba_binding)
                 .set_pat(LiminePat::UC);
         }
-        let command_slot = disk.read(1, 1, std::vec![first_lba]);
+        let command_slot = disk.read(1, 1, &[first_lba]);
         disk.clean_after_read(command_slot);
         let header = unsafe { get_at_virtual_addr::<GptHeader>(first_lba_binding) };
 
@@ -27,8 +27,8 @@ impl PartitionSchemeDriver for GPTDriver {
         let entry_size = header.size_partition_entry as usize;
         let entry_num_lbas = (num_entries * entry_size).div_ceil(512);
         let buffer = unsafe { PAGE_ALLOCATOR.allocate_contigious(entry_num_lbas as u64 / 8, None) };
-        let physical_addresses = (0..entry_num_lbas / 8).map(|i| translate_virt_phys_addr(buffer + VirtAddr(i as u64 * 4096)).unwrap()).collect();
-        let command_slot = disk.read(start_entries, entry_num_lbas, physical_addresses);
+        let physical_addresses: Vec<PhysAddr> = (0..entry_num_lbas / 8).map(|i| translate_virt_phys_addr(buffer + VirtAddr(i as u64 * 4096)).unwrap()).collect();
+        let command_slot = disk.read(start_entries, entry_num_lbas, &physical_addresses);
         disk.clean_after_read(command_slot);
 
         let mut partitions = Vec::new();
@@ -77,7 +77,7 @@ impl PartitionSchemeDriver for GPTDriver {
                 .get_page_table_entry_mut(first_lba_binding)
                 .set_pat(LiminePat::UC);
         }
-        let command_slot = disk.read(1, 1, std::vec![first_lba]);
+        let command_slot = disk.read(1, 1, &[first_lba]);
         disk.clean_after_read(command_slot);
         let header = unsafe { get_at_virtual_addr::<GptHeader>(first_lba_binding) };
         let guid = header.disk_guid;

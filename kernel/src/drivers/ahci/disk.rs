@@ -441,7 +441,7 @@ impl VirtualPort {
 
 impl Disk for VirtualPort {
     ///Returns the virtual address of the read data and the command index used
-    fn read(&mut self, start_sec_index: usize, sec_count: usize, buffer: Vec<PhysAddr>) -> u64 {
+    fn read(&mut self, start_sec_index: usize, sec_count: usize, buffer: &[PhysAddr]) -> u64 {
         assert!(sec_count <= self.sectors as usize);
         let prdt_entries = (sec_count + 7) / 8; //8 sectors in one physical frame
 
@@ -492,9 +492,9 @@ impl Disk for VirtualPort {
     }
 
     ///Returns the virtual address of the read data and the command index used
-    fn write(&mut self, start_sec_index: usize, sec_count: usize, buffer: Vec<PhysAddr>) -> u64 {
+    fn write(&mut self, start_sec_index: usize, sec_count: usize, buffer: &[PhysAddr]) -> u64 {
         assert!(sec_count <= self.sectors as usize);
-        let prdt_entries = (sec_count + 7) / 8; //8 sectors in one physical frame
+        let prdt_entries = sec_count.div_ceil(8); //8 sectors in one physical frame
 
         let prdt = buffer
             .iter()

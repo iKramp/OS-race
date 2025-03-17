@@ -6,8 +6,8 @@ use crate::vfs::{Inode, InodeType};
 
 
 pub trait Disk: Debug {
-    fn read(&mut self, sector: usize, sec_count: usize, buffer: Vec<PhysAddr>) -> u64;
-    fn write(&mut self, sector: usize, sec_count: usize, buffer: Vec<PhysAddr>) -> u64;
+    fn read(&mut self, sector: usize, sec_count: usize, buffer: &[PhysAddr]) -> u64;
+    fn write(&mut self, sector: usize, sec_count: usize, buffer: &[PhysAddr]) -> u64;
     fn clean_after_read(&mut self, metadata: u64);
     fn clean_after_write(&mut self, metadata: u64);
 }
@@ -23,13 +23,18 @@ pub trait FileSystemFactory {
 }
 
 pub trait FileSystem {
-    fn unmount(&self);
-    fn read(&self, inode: u32, offset: u32, size: u32, buffer: Vec<PhysAddr>);
-    fn write(&self, inode: u32, offset: u32, size: u32, buffer: Vec<PhysAddr>);
-    fn stat(&self, inode: u32) -> Inode;
-    fn create(&self, path: String, type_mode: InodeType) -> Inode;
-    fn remove(&self, inode: u32);
-    fn link(&self, inode: u32, path: String);
+    fn unmount(&mut self);
+    ///Offset must be page aligned
+    fn read(&mut self, inode: u32, offset: u64, size: u64, buffer: &[PhysAddr]);
+    ///Offset must be page aligned
+    fn write(&mut self, inode: u32, offset: u64, size: u64, buffer: &[PhysAddr]);
+    fn stat(&mut self, inode: u32) -> Inode;
+    fn set_stat(&mut self, inode_index: u32, inode_data: Inode);
+    fn create(&mut self, name: String, parent_dir: u32, type_mode: InodeType, uid: u16, gid: u16) -> Inode;
+    fn remove(&mut self, inode: u32);
+    fn link(&mut self, inode: u32, parent_dir: u32, name: String);
+    fn truncate(&mut self, inode: u32, size: u64);
+    fn rename(&mut self, inode: u32, parent_inode: u32, name: String);
 }
 
 #[derive(Debug)]
@@ -55,12 +60,12 @@ impl MountedPartition {
         }
     }
 
-    pub fn read(&mut self, sector: usize, sec_count: usize, buffer: Vec<PhysAddr>) -> u64 {
+    pub fn read(&mut self, sector: usize, sec_count: usize, buffer: &[PhysAddr]) -> u64 {
         assert!(sector + sec_count <= self.partition.size_sectors);
         self.disk.read(self.partition.start_sector + sector, sec_count, buffer)
     }
 
-    pub fn write(&mut self, sector: usize, sec_count: usize, buffer: Vec<PhysAddr>) -> u64 {
+    pub fn write(&mut self, sector: usize, sec_count: usize, buffer: &[PhysAddr]) -> u64 {
         assert!(sector + sec_count <= self.partition.size_sectors);
         self.disk.write(self.partition.start_sector + sector, sec_count, buffer)
     }

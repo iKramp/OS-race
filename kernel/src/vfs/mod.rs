@@ -34,23 +34,23 @@ pub fn add_disk(mut disk: Box<dyn Disk>) {
 
 //this is returned by the stat() syscall
 pub struct Inode {
-    index: u32,
-    device: u128, //some map to major/minor (minor are partitions)
-    type_mode: InodeType,
-    link_cnt: u16,
-    uid: u16,
-    gid: u16,
+    pub index: u32,
+    pub device: u128, //some map to major/minor (minor are partitions)
+    pub type_mode: InodeType,
+    pub link_cnt: u16,
+    pub uid: u16,
+    pub gid: u16,
     ///this is set to a device uuid if the inode represents a device
-    device_represented: u128,
+    pub device_represented: u128,
     ///len of a symlink is the length of the pathname
-    size: u64,
+    pub size: u64,
     //available if this represents a device, otherwise inherits from device
-    preferred_block_size: u16,
+    pub preferred_block_size: u16,
     ///number of blocks used by this inode, in 512 byte units!!!!!
-    blocks: u32,
-    access_time: u32,
-    modification_time: u32,
-    stat_change_time: u32,
+    pub blocks: u32,
+    pub access_time: u32,
+    pub modification_time: u32,
+    pub stat_change_time: u32,
 }
 
 const FILE_MODE_MASK: u32 = 0xFFF00000;
@@ -60,7 +60,7 @@ const TEST: u32 = 0o4000;
 //use this: https://man7.org/linux/man-pages/man7/inode.7.html
 //internal fs inode types may differ (as there is no need for socket, block device,...) but rfs
 //uses this
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InodeType(u32);
 
 impl InodeType {

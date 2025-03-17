@@ -25,7 +25,7 @@ impl BtreeNode {
                 .get_page_table_entry_mut(virt_ptr)
                 .set_pat(paging::LiminePat::UC);
         }
-        let command_slot = partition.read(sector, 8, vec![phys_ptr]);
+        let command_slot = partition.read(sector, 8, &[phys_ptr]);
         partition.clean_after_read(command_slot);
         unsafe { &mut *(virt_ptr.0 as *mut BtreeNode) }
     }
@@ -37,11 +37,11 @@ impl BtreeNode {
     }
 
     ///set modified to false
-    fn write_to_disk(self: *const Self, partition: &mut MountedPartition, block: u32) {
+    pub fn write_to_disk(self: *const Self, partition: &mut MountedPartition, block: u32) {
         let sector = block as usize * 8;
         let phys_addr = std::mem_utils::translate_virt_phys_addr(VirtAddr(self as u64)).unwrap();
 
-        let command_slot = partition.write(sector, 8, vec![phys_addr]);
+        let command_slot = partition.write(sector, 8, &[phys_addr]);
         partition.clean_after_write(command_slot);
     }
 
@@ -75,6 +75,38 @@ impl BtreeNode {
         unsafe {
             (self as *mut u32).byte_add(0xAA8).add(index).write_volatile(child);
         }
+    }
+
+    ///Returns the block intex on the disk (each has 8 sectors) where the inode is stored
+    pub fn find_inode_block(self: *mut Self, key_index: u32, fs_data: &mut Rfs) -> Option<u32> {
+        for i in 0..341 {
+            let key = self.get_key(i);
+            if key.index == 0 {
+                if self.get_child(i) == 0 {
+                    return None;
+                }
+                let child_block = self.get_child(i);
+                let child_node = fs_data.get_node(child_block).1;
+                return child_node.find_inode_block(key_index, fs_data);
+            }
+            if key.index == key_index {
+                return Some(key.inode_block);
+            }
+            if key.index > key_index {
+                if self.get_child(i) == 0 {
+                    return None;
+                }
+                let child_block = self.get_child(i);
+                let child_node = fs_data.get_node(child_block).1;
+                return child_node.find_inode_block(key_index, fs_data);
+            }
+        }
+        if self.get_child(341) == 0 {
+            return None;
+        }
+        let child_block = self.get_child(341);
+        let child_node = fs_data.get_node(child_block).1;
+        child_node.find_inode_block(key_index, fs_data)
     }
 
     //returns a new root node if the root was split
@@ -189,7 +221,7 @@ impl BtreeNode {
 
                         if self.get_key(0).index == 0 {
                             //root is empty, merge
-                            fs_data.remove_node(block);
+                            fs_data.remove_inode_cache_entry(block);
                             fs_data.free_block(block);
                             let child = self.get_child(0);
                             self.drop();
@@ -245,7 +277,7 @@ impl BtreeNode {
             RebalanceResult::Merge(_) => {
                 if self.get_key(0).index == 0 {
                     //root is empty, merge
-                    fs_data.remove_node(block);
+                    fs_data.remove_inode_cache_entry(block);
                     fs_data.free_block(block);
                     let child = self.get_child(0);
                     self.drop();
@@ -524,7 +556,7 @@ impl BtreeNode {
 
         right_node.drop();
         fs_data.free_block(right_block);
-        fs_data.remove_node(right_block);
+        fs_data.remove_inode_cache_entry(right_block);
 
         fs_data.get_node(left_block).0 = true;
         fs_data.get_node(parent_block).0 = true;
@@ -904,14 +936,14 @@ impl BtreeNode {
 #[repr(C)]
 pub struct Key {
     pub index: u32,
-    pub indoe_block: u32,
+    pub inode_block: u32,
 }
 
 impl Key {
     fn empty() -> Self {
         Self {
             index: 0,
-            indoe_block: 0,
+            inode_block: 0,
         }
     }
 }
