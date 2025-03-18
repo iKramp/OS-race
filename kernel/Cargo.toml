@@ -26,3 +26,4 @@ macros = { path = "../macros/macros" }
 traits = { path = "../macros/traits" }
 bitfield = "0.18.1" #yeah outside dependency, crazy, i know
 unroll = { path = "../unroll" }
+uuid = {version = "1.16.0", default-features = false }

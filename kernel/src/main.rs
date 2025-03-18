@@ -8,6 +8,7 @@
 #![feature(arbitrary_self_types)]
 #![feature(arbitrary_self_types_pointers)]
 
+use core::ffi;
 use std::{println, printlnc};
 
 mod acpi;
@@ -24,6 +25,7 @@ mod tests;
 mod utils;
 mod vfs;
 mod vga;
+mod cmd_args;
 use limine::LIMINE_BOOTLOADER_REQUESTS;
 use vga::vga_text;
 
@@ -39,6 +41,10 @@ extern "C" fn _start() -> ! {
     vga::init_vga_driver();
     vga::clear_screen();
 
+    let cmd_line_info = unsafe { &(*LIMINE_BOOTLOADER_REQUESTS.cmd_line_request.info) };
+    let str = unsafe { ffi::CStr::from_ptr(cmd_line_info.cmdline) };
+
+
     println!("starting RustOs...");
     println!("stack pointer: {:?}", stack_pointer);
 
@@ -46,9 +52,19 @@ extern "C" fn _start() -> ! {
 
     memory::init_memory();
 
+    let cmd_args = cmd_args::CmdArgs::new(str.to_str().unwrap());
+    println!("cmd_args: {:?}", cmd_args);
+
     acpi::init_acpi();
 
     pci::enumerate_devices();
+    vfs::init();
+
+    let res = vfs::mount_partition(cmd_args.root_partition);
+    if let Err(e) = res {
+        println!("{}", e);
+        panic!("Failed to mount root partition");
+    }
 
     vga_text::hello_message();
 

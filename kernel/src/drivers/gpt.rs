@@ -1,13 +1,21 @@
-use std::{mem_utils::{get_at_virtual_addr, translate_virt_phys_addr, PhysAddr, VirtAddr}, println, string::String, vec::Vec, PageAllocator, PAGE_ALLOCATOR};
+use std::{
+    PAGE_ALLOCATOR, PageAllocator,
+    mem_utils::{PhysAddr, VirtAddr, get_at_virtual_addr, translate_virt_phys_addr},
+    println,
+    string::String,
+    vec::Vec,
+};
 
-use crate::memory::{PAGE_TREE_ALLOCATOR, paging::LiminePat, physical_allocator::BUDDY_ALLOCATOR};
+use uuid::Uuid;
+
+use crate::{drivers::{disk::FileSystemFactory, rfs::RfsFactory}, memory::{paging::LiminePat, physical_allocator::BUDDY_ALLOCATOR, PAGE_TREE_ALLOCATOR}};
 
 use super::disk::{Disk, Partition, PartitionSchemeDriver};
 
 pub struct GPTDriver {}
 
 impl PartitionSchemeDriver for GPTDriver {
-    fn partitions(&self, disk: &mut dyn Disk) -> Vec<(u128, Partition)> {
+    fn partitions(&self, disk: &mut dyn Disk) -> Vec<(Uuid, Partition)> {
         println!("GPT partitions");
         let first_lba = unsafe { BUDDY_ALLOCATOR.allocate_frame() };
         let first_lba_binding = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(first_lba)) };
@@ -27,7 +35,10 @@ impl PartitionSchemeDriver for GPTDriver {
         let entry_size = header.size_partition_entry as usize;
         let entry_num_lbas = (num_entries * entry_size).div_ceil(512);
         let buffer = unsafe { PAGE_ALLOCATOR.allocate_contigious(entry_num_lbas as u64 / 8, None) };
-        let physical_addresses: Vec<PhysAddr> = (0..entry_num_lbas / 8).map(|i| translate_virt_phys_addr(buffer + VirtAddr(i as u64 * 4096)).unwrap()).collect();
+        let physical_addresses: Vec<PhysAddr> = (0..entry_num_lbas / 8)
+            .inspect(|i| unsafe { PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(buffer + VirtAddr(*i as u64 * 4096)).set_pat(LiminePat::UC) })
+            .map(|i| translate_virt_phys_addr(buffer + VirtAddr(i as u64 * 4096)).unwrap())
+            .collect();
         let command_slot = disk.read(start_entries, entry_num_lbas, &physical_addresses);
         disk.clean_after_read(command_slot);
 
@@ -37,22 +48,31 @@ impl PartitionSchemeDriver for GPTDriver {
 
         for i in 0..num_entries {
             unsafe {
-                let ptr = (buffer.0 as *const u8).add(i * entry_size);
-                let entry = ptr as *const GptEntry;
-                let entry = entry.read_volatile();
+                let ptr = (buffer.0 as *mut u8).add(i * entry_size);
+                let entry_ptr = ptr as *mut GptEntry;
+                let mut entry = entry_ptr.read_volatile();
                 if entry.partition_type_guid == [0; 16] {
                     continue;
                 }
+                //if i == 0 {
+                //    entry.partition_type_guid = *RfsFactory::guid().as_bytes();
+                //    entry_ptr.write_volatile(entry);
+                //    entry = entry_ptr.read_volatile();
+                //    let command_slot = disk.write(start_entries, entry_num_lbas, &physical_addresses);
+                //    disk.clean_after_write(command_slot);
+                //}
                 let mut name = String::from_utf16(&entry.partition_name).unwrap();
                 name.remove_matches("\u{0}");
-                let guid = u128::from_le_bytes(entry.unique_partition_guid);
+                let partition_uuid = Uuid::from_bytes(entry.unique_partition_guid);
+                let fs_uuid = Uuid::from_bytes(entry.partition_type_guid);
                 partitions.push((
-                    guid,
+                    partition_uuid,
                     Partition {
                         start_sector: entry.starting_lba as usize,
                         size_sectors: (entry.ending_lba - entry.starting_lba + 1) as usize,
                         name,
                         disk: disk_guid,
+                        fs_uuid,
                     },
                 ))
             }
@@ -66,10 +86,12 @@ impl PartitionSchemeDriver for GPTDriver {
             PAGE_ALLOCATOR.deallocate(first_lba_binding);
         }
 
+        println!("Partitions: {:#?}", partitions);
+
         partitions
     }
 
-    fn guid(&self, disk: &mut dyn Disk) -> u128 {
+    fn guid(&self, disk: &mut dyn Disk) -> Uuid {
         let first_lba = unsafe { BUDDY_ALLOCATOR.allocate_frame() };
         let first_lba_binding = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(first_lba)) };
         unsafe {
@@ -82,7 +104,7 @@ impl PartitionSchemeDriver for GPTDriver {
         let header = unsafe { get_at_virtual_addr::<GptHeader>(first_lba_binding) };
         let guid = header.disk_guid;
         unsafe { PAGE_ALLOCATOR.deallocate(first_lba_binding) };
-        u128::from_le_bytes(guid)
+        Uuid::from_bytes(guid)
     }
 }
 

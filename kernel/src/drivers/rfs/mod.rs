@@ -50,7 +50,7 @@ impl Inode {
             link_cnt: self.link_count,
             uid: self.uid,
             gid: self.gid,
-            device_represented: 0,
+            device_represented: None,
             size: self.size.size(),
             preferred_block_size: 4096,
             blocks: self.size.size().div_ceil(4096) as u32,

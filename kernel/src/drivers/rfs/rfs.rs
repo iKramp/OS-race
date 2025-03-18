@@ -1,3 +1,5 @@
+use uuid::Uuid;
+
 use super::{
     DirEntry, Inode, InodeBitmask, InodeSize, SuperBlock,
     btree::{BtreeNode, Key},
@@ -22,13 +24,13 @@ const GROUP_BLOCK_SIZE: u64 = 4096 * 8;
 pub struct RfsFactory {}
 
 impl RfsFactory {
-    pub fn guid() -> u128 {
-        0xb1b3b44dbece44dfba0e964a35a05a16
+    pub fn guid() -> Uuid {
+        Uuid::from_u128(0xb1b3b44dbece44dfba0e964a35a05a16)
     }
 }
 
 impl FileSystemFactory for RfsFactory {
-    fn guid(&self) -> u128 {
+    fn guid(&self) -> Uuid {
         Self::guid()
     }
 

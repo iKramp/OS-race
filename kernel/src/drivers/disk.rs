@@ -1,9 +1,9 @@
 use core::fmt::Debug;
-use std::{boxed::Box, mem_utils::{PhysAddr, VirtAddr}, string::String, vec::Vec};
+use std::{boxed::Box, mem_utils::PhysAddr, string::String, vec::Vec};
+
+use uuid::Uuid;
 
 use crate::vfs::{Inode, InodeType};
-
-
 
 pub trait Disk: Debug {
     fn read(&mut self, sector: usize, sec_count: usize, buffer: &[PhysAddr]) -> u64;
@@ -13,12 +13,13 @@ pub trait Disk: Debug {
 }
 
 pub trait PartitionSchemeDriver {
-    fn guid(&self, disk: &mut dyn Disk) -> u128;
-    fn partitions(&self, disk: &mut dyn Disk) -> Vec<(u128, Partition)>;
+    fn guid(&self, disk: &mut dyn Disk) -> Uuid;
+    ///returns a vector of partition guids (not filesystem ids) and partition objects
+    fn partitions(&self, disk: &mut dyn Disk) -> Vec<(Uuid, Partition)>;
 }
 
 pub trait FileSystemFactory {
-    fn guid(&self) -> u128;
+    fn guid(&self) -> Uuid;
     fn mount(&self, partition: MountedPartition) -> Box<dyn FileSystem>;
 }
 
@@ -43,9 +44,10 @@ pub struct MountedPartition {
     pub partition: Partition,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Partition {
-    pub disk: u128,
+    pub fs_uuid: Uuid,
+    pub disk: Uuid,
     pub start_sector: usize,
     pub size_sectors: usize,
     pub name: String,
@@ -53,11 +55,7 @@ pub struct Partition {
 
 impl MountedPartition {
     pub fn new(disk: &'static mut dyn Disk, partition: Partition) -> Self {
-        Self {
-            disk,
-            partition,
-
-        }
+        Self { disk, partition }
     }
 
     pub fn read(&mut self, sector: usize, sec_count: usize, buffer: &[PhysAddr]) -> u64 {

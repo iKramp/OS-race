@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use core::ffi;
 use std::mem_utils::{PhysAddr, VirtAddr};
 
 
@@ -18,6 +19,11 @@ pub static mut LIMINE_BOOTLOADER_REQUESTS: BootloaderRequests = BootloaderReques
     _request_start_marker: [0xf6b8f4b39de7d1ae, 0xfab91a6940fcb9cf, 0x785c6ed015d3e316, 0x181e920a7852b9d9],
     bootloader_info_request: BootloaderInfoRequest {
         magic: [0xc7b1dd30df4c8b88, 0x0a82e883a194f07b, 0xf55038d8e2a1202f, 0x279426fcf5f59740],
+        revision: 0,
+        info: core::ptr::null(),
+    },
+    cmd_line_request: CmdLineRequest {
+        magic: [0xc7b1dd30df4c8b88, 0x0a82e883a194f07b, 0x4b161536e598651e, 0xb390ad4a2f1f303a],
         revision: 0,
         info: core::ptr::null(),
     },
@@ -70,10 +76,12 @@ pub static mut LIMINE_BOOTLOADER_REQUESTS: BootloaderRequests = BootloaderReques
 };
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct BootloaderRequests {
     _request_start_marker: [u64; 4],
 
     pub bootloader_info_request: BootloaderInfoRequest,
+    pub cmd_line_request: CmdLineRequest,
     pub firmware_type_request: FirmwareTypeRequest,
     pub higher_half_direct_map_request: HigherHalfDirectMapRequest,
     pub frame_buffer_request: FrameBufferRequest,
@@ -88,6 +96,7 @@ pub struct BootloaderRequests {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct BootloaderInfoRequest {
     magic: [u64; 4],
     revision: u64,
@@ -103,6 +112,22 @@ pub struct BootloaderInfo {
 }
 
 #[repr(C)]
+#[derive(Debug)]
+pub struct CmdLineRequest {
+    magic: [u64; 4],
+    revision: u64,
+    pub info: *const CmdLine,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct CmdLine {
+    revision: u64,
+    pub cmdline: *const i8,
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub struct FirmwareTypeRequest {
     magic: [u64; 4],
     revision: u64,
@@ -110,12 +135,14 @@ pub struct FirmwareTypeRequest {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 struct FirmwareType {
     revision: u64,
     firmware_type: u64, //0 = bios, 1 = uefi32, 2 = uefi64
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct HigherHalfDirectMapRequest {
     magic: [u64; 4],
     revision: u64,
@@ -123,12 +150,14 @@ pub struct HigherHalfDirectMapRequest {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct HigherHalfDirectMap {
     revision: u64,
     pub offset: u64,
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct FrameBufferRequest {
     magic: [u64; 4],
     pub revision: u64,
@@ -136,6 +165,7 @@ pub struct FrameBufferRequest {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct FrameBuffer {
     pub revision: u64,
     pub framebuffer_count: u64,
@@ -185,6 +215,7 @@ pub struct FramebufferMode {
 
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct PagingModeRequest {
     magic: [u64; 4],
     revision: u64, //1
@@ -195,6 +226,7 @@ pub struct PagingModeRequest {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 struct SMPRequest { //processors will be bootstrapped 
     magic: [u64; 4],
     revision: u64,
@@ -203,6 +235,7 @@ struct SMPRequest { //processors will be bootstrapped
 }
 
 #[repr(C)]
+#[derive(Debug)]
 struct SMPInfo {
     revision: u64,
     flags: u32,
@@ -212,6 +245,7 @@ struct SMPInfo {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 struct CPUInfo {
     processor_id: u32,
     lapic_id: u32,
@@ -222,6 +256,7 @@ struct CPUInfo {
 
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct MemoryMapRequest {
     magic: [u64; 4],
     revision: u64,
@@ -229,6 +264,7 @@ pub struct MemoryMapRequest {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct MemoryMap {
     revision: u64,
     pub memory_map_count: u64,
@@ -244,6 +280,7 @@ pub struct MemoryMapEntry {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct RsdpRequest {
     magic: [u64; 4],
     revision: u64,
@@ -251,12 +288,14 @@ pub struct RsdpRequest {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct Rsdp {
     revision: u64,
     pub rsdp: *const (),
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct KernelAddressRequest {
     magic: [u64; 4],
     revision: u64,
@@ -264,6 +303,7 @@ pub struct KernelAddressRequest {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct KernelAddress {
     revision: u64,
     pub phys_addr: PhysAddr,
@@ -271,6 +311,7 @@ pub struct KernelAddress {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct Limine_UUID {
     pub data1: u32,
     pub data2: u16,
@@ -279,6 +320,7 @@ pub struct Limine_UUID {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct LimineKernelFileRequest {
     magic: [u64; 4],
     revision: u64,
@@ -286,12 +328,14 @@ pub struct LimineKernelFileRequest {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct LimineKernelFile {
     revision: u64,
     pub address: *const LimineFile,
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct LimineFile {
     pub revision: u64,
     pub address: *const (),

@@ -1,18 +1,22 @@
 use bitfield::bitfield;
-use std::{boxed::Box, collections::btree_map::BTreeMap, vec::Vec};
+use uuid::Uuid;
+use core::ptr::addr_of_mut;
+use std::{boxed::Box, collections::btree_map::BTreeMap, format, string::{String, ToString}, vec::Vec};
 
 use crate::drivers::{
-    disk::{Disk, FileSystem, FileSystemFactory, PartitionSchemeDriver},
+    disk::{Disk, FileSystem, FileSystemFactory, MountedPartition, Partition, PartitionSchemeDriver},
     gpt::GPTDriver,
     rfs::RfsFactory,
 };
 
 ///Map from disk guid to disk object (driver) and a list of partition guids
-static mut DISKS: BTreeMap<u128, (Box<dyn Disk>, Vec<u128>)> = BTreeMap::new();
+static mut DISKS: BTreeMap<Uuid, (Box<dyn Disk>, Vec<Uuid>)> = BTreeMap::new();
 ///maps from filesystem type guid to filesystem driver factory
-static mut FILESYSTEM_DRIVER_FACTORIES: BTreeMap<u128, Box<dyn FileSystemFactory>> = BTreeMap::new();
-///maps from partition guid to filesystem driver. Might be unused if we don't do caching
-static mut MOUNTED_PARTITIONS: BTreeMap<u128, Box<dyn FileSystem>> = BTreeMap::new();
+static mut FILESYSTEM_DRIVER_FACTORIES: BTreeMap<Uuid, Box<dyn FileSystemFactory>> = BTreeMap::new();
+///maps from partition guid to filesystem driver
+static mut MOUNTED_PARTITIONS: BTreeMap<Uuid, Box<dyn FileSystem>> = BTreeMap::new();
+///maps from partition guid to partition object
+static mut AVAILABLE_PARTITIONS: BTreeMap<Uuid, Partition> = BTreeMap::new();
 
 pub fn init() {
     unsafe {
@@ -25,23 +29,75 @@ pub fn add_disk(mut disk: Box<dyn Disk>) {
     let gpt_driver = GPTDriver {};
     let guid = gpt_driver.guid(&mut *disk);
     let partitions = gpt_driver.partitions(&mut *disk);
-    let partition_guids: Vec<u128> = partitions.iter().map(|(guid, _)| *guid).collect();
+    let partition_guids: Vec<Uuid> = partitions.iter().map(|(guid, _)| *guid).collect();
 
     unsafe {
         DISKS.insert(guid, (disk, partition_guids));
+    }
+
+    for partition in partitions {
+        unsafe {
+            AVAILABLE_PARTITIONS.insert(partition.0, partition.1);
+        }
+    }
+}
+
+//called after unmounting all partitions or when it was forcibly removed
+fn remove_disk(uuid: Uuid) {
+    for partition in unsafe { DISKS.get(&uuid).unwrap().1.iter() } {
+        unsafe {
+            AVAILABLE_PARTITIONS.remove(partition);
+        }
+    }
+    unsafe {
+        DISKS.remove(&uuid);
+    }
+}
+
+pub fn mount_partition(part_id: Uuid) -> Result<(), String> {
+    let Some(partition) = (unsafe { AVAILABLE_PARTITIONS.get(&part_id) } ) else {
+        return Err("Partition not found".to_string());
+    };
+    let disk = unsafe { DISKS.get_mut(&partition.disk).unwrap() };
+    let disk = &raw mut *disk.0;
+    let disk: &'static mut dyn Disk = unsafe { &mut *disk };
+    let Some(fs_factory) = (unsafe { FILESYSTEM_DRIVER_FACTORIES.get(&partition.fs_uuid) }) else {
+        return Err(format!("No filesystem driver loaded for \n
+                partition type: {}, \n
+                partition: {}",
+                partition.fs_uuid,
+                part_id
+            ).to_string());
+    };
+    let mounted_partition = MountedPartition {
+        disk,
+        partition: partition.clone(),
+    };
+    let fs = fs_factory.mount(mounted_partition);
+    unsafe {
+        MOUNTED_PARTITIONS.insert(part_id, fs);
+    }
+    Ok(())
+}
+
+pub fn unmount_partition(part_id: Uuid) {
+    let partition = unsafe { MOUNTED_PARTITIONS.get_mut(&part_id).unwrap() };
+    partition.unmount();
+    unsafe {
+        MOUNTED_PARTITIONS.remove(&part_id);
     }
 }
 
 //this is returned by the stat() syscall
 pub struct Inode {
     pub index: u32,
-    pub device: u128, //some map to major/minor (minor are partitions)
+    pub device: Uuid, //some map to major/minor (minor are partitions)
     pub type_mode: InodeType,
     pub link_cnt: u16,
     pub uid: u16,
     pub gid: u16,
     ///this is set to a device uuid if the inode represents a device
-    pub device_represented: u128,
+    pub device_represented: Option<Uuid>,
     ///len of a symlink is the length of the pathname
     pub size: u64,
     //available if this represents a device, otherwise inherits from device
