@@ -58,21 +58,15 @@ impl MountedPartition {
         Self { disk, partition }
     }
 
-    pub fn read(&mut self, sector: usize, sec_count: usize, buffer: &[PhysAddr]) -> u64 {
+    pub fn read(&mut self, sector: usize, sec_count: usize, buffer: &[PhysAddr]) {
         assert!(sector + sec_count <= self.partition.size_sectors);
-        self.disk.read(self.partition.start_sector + sector, sec_count, buffer)
-    }
-
-    pub fn write(&mut self, sector: usize, sec_count: usize, buffer: &[PhysAddr]) -> u64 {
-        assert!(sector + sec_count <= self.partition.size_sectors);
-        self.disk.write(self.partition.start_sector + sector, sec_count, buffer)
-    }
-
-    pub fn clean_after_read(&mut self, metadata: u64) {
+        let metadata = self.disk.read(self.partition.start_sector + sector, sec_count, buffer);
         self.disk.clean_after_read(metadata);
     }
 
-    pub fn clean_after_write(&mut self, metadata: u64) {
+    pub fn write(&mut self, sector: usize, sec_count: usize, buffer: &[PhysAddr]) {
+        assert!(sector + sec_count <= self.partition.size_sectors);
+        let metadata = self.disk.write(self.partition.start_sector + sector, sec_count, buffer);
         self.disk.clean_after_write(metadata);
     }
 }

@@ -14,7 +14,7 @@ use std::{
     PAGE_ALLOCATOR,
     boxed::Box,
     collections::btree_map::BTreeMap,
-    mem_utils::{PhysAddr, VirtAddr, get_at_virtual_addr, set_at_physical_addr, set_at_virtual_addr},
+    mem_utils::{PhysAddr, VirtAddr, get_at_virtual_addr, memset_virtual_addr, set_at_physical_addr, set_at_virtual_addr},
     println,
     vec::{self, Vec},
 };
@@ -66,13 +66,17 @@ impl Rfs {
         let blocks = partition.partition.size_sectors as u32 / 8;
         let groups = blocks.div_ceil(GROUP_BLOCK_SIZE as u32);
         println!("it is initialized");
-        Self {
+        let mut fs_driver = Self {
             inode_tree_cache: BTreeMap::new(),
             root_block: 1,
             partition,
             groups,
             blocks,
-        }
+        };
+
+        fs_driver.format_partition();
+
+        fs_driver
     }
 
     pub fn allocate_block(&mut self) -> u32 {
@@ -234,22 +238,27 @@ impl Rfs {
         let last_group_blocks = whole_blocks % GROUP_BLOCK_SIZE;
         let group_memory = unsafe { BUDDY_ALLOCATOR.allocate_frame() };
         let group_mem_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(group_memory)) };
-
-        //----------Initialize free block tables----------
         unsafe {
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(group_mem_binding)
                 .set_pat(LiminePat::UC);
         }
+        unsafe {
+            memset_virtual_addr(group_mem_binding, 0, 4096);
+            set_at_virtual_addr::<u8>(group_mem_binding, 1);
+        }
+
+        //----------Initialize free block tables----------
         for i in 0..whole_groups {
-            unsafe {
-                set_at_physical_addr::<u8>(group_memory, 1);
-            }
             self.partition
-                .write(i as usize * GROUP_BLOCK_SIZE as usize, 1, &[group_memory]);
+                .write(i as usize * GROUP_BLOCK_SIZE as usize, 8, &[group_memory]);
         }
         let last_group_invalid = GROUP_BLOCK_SIZE - last_group_blocks;
-        let last_group_invalid_partial = (0xFF >> (8 - last_group_invalid % 8)) << (8 - last_group_invalid % 8);
+        let last_group_invalid_partial = if last_group_invalid % 8 == 0 {
+            0
+        } else {
+            (0xFF >> (8 - last_group_invalid % 8)) << (8 - last_group_invalid % 8)
+        };
         for i in 0..(last_group_invalid / 8) {
             unsafe {
                 set_at_virtual_addr::<u8>(group_mem_binding + VirtAddr(4095 - i), 0xFF);
@@ -894,7 +903,9 @@ impl FileSystem for Rfs {
         self.read(parent_inode, 0, dir_size, &frames);
         let mut affected_inode = 0;
         for i in 0..(dir_size / core::mem::size_of::<DirEntry>() as u64) {
-            let dir_entry = unsafe { get_at_virtual_addr::<DirEntry>(folder_binding + VirtAddr(i * core::mem::size_of::<DirEntry>() as u64)) };
+            let dir_entry = unsafe {
+                get_at_virtual_addr::<DirEntry>(folder_binding + VirtAddr(i * core::mem::size_of::<DirEntry>() as u64))
+            };
             if dir_entry.inode == inode {
                 let name_bytes = name.as_bytes();
                 let mut name_byte_arr: [u8; 128] = [0; 128];
@@ -904,19 +915,19 @@ impl FileSystem for Rfs {
                 let mut new_dir_entry = dir_entry.clone();
                 new_dir_entry.name = name_byte_arr;
                 unsafe {
-                    set_at_virtual_addr(folder_binding + VirtAddr(i * core::mem::size_of::<DirEntry>() as u64), new_dir_entry);
+                    set_at_virtual_addr(
+                        folder_binding + VirtAddr(i * core::mem::size_of::<DirEntry>() as u64),
+                        new_dir_entry,
+                    );
                 }
                 affected_inode = i;
                 break;
             }
         }
         let affected_block = affected_inode * core::mem::size_of::<DirEntry>() as u64 / 4096;
-        let next_block_affeted = ((affected_inode + 1) * core::mem::size_of::<DirEntry>() as u64 - 1) / 4096 == affected_block + 1;
-        let write_size = if next_block_affeted {
-            8192
-        } else {
-            4096
-        };
+        let next_block_affeted =
+            ((affected_inode + 1) * core::mem::size_of::<DirEntry>() as u64 - 1) / 4096 == affected_block + 1;
+        let write_size = if next_block_affeted { 8192 } else { 4096 };
         let buffers = if next_block_affeted {
             &frames[affected_block as usize..(affected_block + 2) as usize]
         } else {

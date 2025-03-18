@@ -25,8 +25,7 @@ impl BtreeNode {
                 .get_page_table_entry_mut(virt_ptr)
                 .set_pat(paging::LiminePat::UC);
         }
-        let command_slot = partition.read(sector, 8, &[phys_ptr]);
-        partition.clean_after_read(command_slot);
+        partition.read(sector, 8, &[phys_ptr]);
         unsafe { &mut *(virt_ptr.0 as *mut BtreeNode) }
     }
 
@@ -41,8 +40,7 @@ impl BtreeNode {
         let sector = block as usize * 8;
         let phys_addr = std::mem_utils::translate_virt_phys_addr(VirtAddr(self as u64)).unwrap();
 
-        let command_slot = partition.write(sector, 8, &[phys_addr]);
-        partition.clean_after_write(command_slot);
+        partition.write(sector, 8, &[phys_addr]);
     }
 
     pub fn new() -> *mut Self {
