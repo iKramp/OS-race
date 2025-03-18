@@ -66,17 +66,14 @@ impl Rfs {
         let blocks = partition.partition.size_sectors as u32 / 8;
         let groups = blocks.div_ceil(GROUP_BLOCK_SIZE as u32);
         println!("it is initialized");
-        let mut fs_driver = Self {
+        
+        Self {
             inode_tree_cache: BTreeMap::new(),
             root_block: 1,
             partition,
             groups,
             blocks,
-        };
-
-        fs_driver.format_partition();
-
-        fs_driver
+        }
     }
 
     pub fn allocate_block(&mut self) -> u32 {
