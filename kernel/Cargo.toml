@@ -9,7 +9,7 @@ dead_code = "allow"
 static_mut_refs = "allow"
 
 [lints.clippy]
-needless_range_loops = "allow"
+needless_range_loop = "allow"
 comparison_chain = "allow"
 
 [[bin]]

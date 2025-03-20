@@ -8,7 +8,7 @@ use std::{
     PageAllocator,
 };
 
-use crate::memory::{paging::LiminePat, physical_allocator::BUDDY_ALLOCATOR, PAGE_TREE_ALLOCATOR};
+use crate::memory::{paging::LiminePat, physical_allocator, PAGE_TREE_ALLOCATOR};
 
 use super::port_access;
 
@@ -221,12 +221,12 @@ impl PciDevice {
             let num = size / 4096;
             let address = unsafe {
                 for i in 0..num {
-                    BUDDY_ALLOCATOR.mark_addr(physical_bar_addr + PhysAddr(i * 0x1000), true);
+                    physical_allocator::mark_addr(physical_bar_addr + PhysAddr(i * 0x1000), true);
                 }
                 let address = PAGE_TREE_ALLOCATOR.allocate_contigious(num, Some(physical_bar_addr));
                 //mark caching as uncacheable, unless prefetchable, then write-through
                 for i in 0..num {
-                    let page_entry = PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(address + VirtAddr(i * 4096));
+                    let page_entry = PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(address + (i * 4096));
                     if prefetchable {
                         page_entry.set_pat(LiminePat::WT);
                     } else {

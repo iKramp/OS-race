@@ -14,7 +14,7 @@ use std::{mem_utils::PhysAddr, Vec};
 pub use apic::{LapicRegisters, LAPIC_REGISTERS};
 use platform_info::PlatformInfo;
 
-use crate::{limine::LIMINE_BOOTLOADER_REQUESTS, memory::physical_allocator::BUDDY_ALLOCATOR, println, printlnc};
+use crate::{limine::LIMINE_BOOTLOADER_REQUESTS, memory::physical_allocator, println, printlnc};
 
 static mut PLATFORM_INFO: Option<PlatformInfo> = None;
 pub fn get_platform_info() -> &'static PlatformInfo {
@@ -70,7 +70,7 @@ pub fn init_acpi() {
     //override madt apic address if it exists in entries
     println!("initing APIC");
     let platform_info = unsafe {
-        BUDDY_ALLOCATOR.mark_addr(platform_info.apic.lapic_address, true);
+        physical_allocator::mark_addr(platform_info.apic.lapic_address, true);
         PLATFORM_INFO = Some(platform_info);
         let Some(platform_info) = &PLATFORM_INFO else {
             panic!("a");

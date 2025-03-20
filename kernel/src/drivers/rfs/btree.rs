@@ -2,7 +2,7 @@ use std::{mem_utils::VirtAddr, print, println, vec, PAGE_ALLOCATOR};
 
 use crate::{
     drivers::disk::{Disk, MountedPartition, Partition},
-    memory::{paging, physical_allocator::BUDDY_ALLOCATOR, PAGE_TREE_ALLOCATOR},
+    memory::{paging, physical_allocator, PAGE_TREE_ALLOCATOR},
 };
 use super::Rfs;
 
@@ -18,7 +18,7 @@ impl BtreeNode {
     pub fn read_from_disk(partition: &mut MountedPartition, block: u32) -> *mut Self {
         let sector = block as usize * 8;
 
-        let phys_ptr = unsafe { BUDDY_ALLOCATOR.allocate_frame() };
+        let phys_ptr = unsafe { physical_allocator::allocate_frame() };
         let virt_ptr = unsafe { PAGE_ALLOCATOR.allocate(Some(phys_ptr)) };
         unsafe {
             PAGE_TREE_ALLOCATOR

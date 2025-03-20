@@ -13,7 +13,7 @@ use bitfield::bitfield;
 
 use crate::{
     drivers::{ahci::fis::{D2HRegisterFis, IdentifyStructure, PioSetupFis}, disk::Disk},
-    memory::{paging::LiminePat, physical_allocator::BUDDY_ALLOCATOR, PAGE_TREE_ALLOCATOR},
+    memory::{paging::LiminePat, physical_allocator, PAGE_TREE_ALLOCATOR},
     pci::device_config::{self, Bar},
 };
 
@@ -204,17 +204,17 @@ impl VirtualPort {
         const FIS_SWITCHING: bool = false;
 
         let cmd_list_base = if is_64_bit {
-            unsafe { BUDDY_ALLOCATOR.allocate_frame() }
+            unsafe { physical_allocator::allocate_frame() }
         } else {
-            unsafe { BUDDY_ALLOCATOR.allocate_frame_low() }
+            unsafe { physical_allocator::allocate_frame_low() }
         };
 
         let fis_base = if !FIS_SWITCHING {
             cmd_list_base + PhysAddr(0x400)
         } else if is_64_bit {
-            unsafe { BUDDY_ALLOCATOR.allocate_frame() }
+            unsafe { physical_allocator::allocate_frame() }
         } else {
-            unsafe { BUDDY_ALLOCATOR.allocate_frame_low() }
+            unsafe { physical_allocator::allocate_frame_low() }
         };
 
         self.set_property(0, cmd_list_base.0 as u32);
@@ -225,7 +225,7 @@ impl VirtualPort {
         let clb_virt = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(cmd_list_base)) };
         unsafe { memset_virtual_addr(clb_virt, 0, 0x1000) };
         let fis_virt = if !FIS_SWITCHING {
-            clb_virt + VirtAddr(0x400)
+            clb_virt + 0x400
         } else {
             let temp = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(fis_base)) };
             unsafe { memset_virtual_addr(temp, 0, 0x1000) };
@@ -310,8 +310,8 @@ impl VirtualPort {
         self.send_identify();
 
         unsafe {
-            let register_fis = &raw const *get_at_virtual_addr::<D2HRegisterFis>(self.fis + VirtAddr(0x40));
-            let _pio_setup_fis = &raw const *get_at_virtual_addr::<PioSetupFis>(self.fis + VirtAddr(0x20));
+            let register_fis = &raw const *get_at_virtual_addr::<D2HRegisterFis>(self.fis + 0x40);
+            let _pio_setup_fis = &raw const *get_at_virtual_addr::<PioSetupFis>(self.fis + 0x20);
             self.set_property(0x10, 3);
             self.device = register_fis.read_volatile().device;
             //use them?
@@ -334,7 +334,7 @@ impl VirtualPort {
             ..Default::default()
         };
 
-        let fis_recv_area = unsafe { BUDDY_ALLOCATOR.allocate_frame() };
+        let fis_recv_area = unsafe { physical_allocator::allocate_frame() };
         let prdt = PrdtDescriptor {
             base: fis_recv_area,
             count: 512,
@@ -373,9 +373,9 @@ impl VirtualPort {
         let index = cmd_issue.trailing_ones() as u8;
 
         let cmd_table_page = if self.is_64_bit {
-            unsafe { BUDDY_ALLOCATOR.allocate_frame() }
+            unsafe { physical_allocator::allocate_frame() }
         } else {
-            unsafe { BUDDY_ALLOCATOR.allocate_frame_low() }
+            unsafe { physical_allocator::allocate_frame_low() }
         };
 
         let mut cmd_header = CmdHeader(0);
@@ -433,7 +433,7 @@ impl VirtualPort {
             let table_lower = cmd_header.add(2).read_volatile();
             let table_upper = cmd_header.add(3).read_volatile();
             let table = (table_upper as u64) << 32 | table_lower as u64;
-            BUDDY_ALLOCATOR.mark_addr(PhysAddr(table), false);
+            physical_allocator::mark_addr(PhysAddr(table), false);
         }
         //potentially anything else
     }

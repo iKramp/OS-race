@@ -89,7 +89,7 @@ impl ElfFile {
         let header = ElfHeader::new(file);
         let shstrtab_section = unsafe {
                 crate::mem_utils::get_at_virtual_addr::<SectionHeader>(
-                    file + VirtAddr(header.section_header_table_offset + header.shstr_index as u64 * core::mem::size_of::<SectionHeader>() as u64),
+                    file + header.section_header_table_offset + (header.shstr_index as u64 * core::mem::size_of::<SectionHeader>() as u64),
                 )
         };
         let mut debug_abbrev_section = None;
@@ -103,7 +103,7 @@ impl ElfFile {
         for i in 0..header.section_header_entries {
             let section_header = unsafe {
                 crate::mem_utils::get_at_virtual_addr::<SectionHeader>(
-                    file + VirtAddr(header.section_header_table_offset + i as u64 * core::mem::size_of::<SectionHeader>() as u64),
+                    file + header.section_header_table_offset + (i as u64 * core::mem::size_of::<SectionHeader>() as u64),
                 )
             };
             let section_name = unsafe {

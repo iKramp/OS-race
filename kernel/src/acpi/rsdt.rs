@@ -49,7 +49,7 @@ impl RootSystemDescriptorTable for Rsdt {
             let start_table_ptr = VirtAddr((self as *const Self) as u64 + 36);
             let num_entries = (self.length() - 36) / 4;
             for entry_index in 0..num_entries {
-                let table_entry_ptr = start_table_ptr + VirtAddr(entry_index as u64 * 4);
+                let table_entry_ptr = start_table_ptr + (entry_index as u64 * 4);
                 let table_ptr = PhysAddr(*get_at_virtual_addr::<u32>(table_entry_ptr) as u64);
                 let header = get_at_physical_addr::<super::sdt::AcpiSdtHeader>(table_ptr);
                 if header.signature == signature {
@@ -66,7 +66,7 @@ impl RootSystemDescriptorTable for Rsdt {
             let start_table_ptr = VirtAddr((self as *const Self) as u64 + 36);
             let num_entries = (self.length() - 36) / 4;
             for entry_index in 0..num_entries {
-                let table_entry_ptr = start_table_ptr + VirtAddr(entry_index as u64 * 4);
+                let table_entry_ptr = start_table_ptr + (entry_index as u64 * 4);
                 let table_ptr = PhysAddr(*get_at_virtual_addr::<u32>(table_entry_ptr) as u64);
                 tables.push(table_ptr);
             }
@@ -79,7 +79,7 @@ impl RootSystemDescriptorTable for Rsdt {
             let start_table_ptr = VirtAddr((self as *const Self) as u64 + 36);
             let num_entries = (self.length() - 36) / 4;
             for entry_index in 0..num_entries {
-                let table_entry_ptr = start_table_ptr + VirtAddr(entry_index as u64 * 4);
+                let table_entry_ptr = start_table_ptr + (entry_index as u64 * 4);
                 let table_ptr = PhysAddr(*get_at_virtual_addr::<u32>(table_entry_ptr) as u64);
                 let header = get_at_physical_addr::<super::sdt::AcpiSdtHeader>(table_ptr);
                 crate::println!("{:?}", header.signature.map(|a| a as char))
@@ -106,7 +106,7 @@ impl RootSystemDescriptorTable for Xsdt {
             let start_table_ptr = VirtAddr((self as *const Self) as u64 + 36);
             let num_entries = (self.length() - 36) / 8;
             for entry_index in 0..num_entries {
-                let table_entry_ptr = start_table_ptr + VirtAddr(entry_index as u64 * 8);
+                let table_entry_ptr = start_table_ptr + (entry_index as u64 * 8);
                 let table_ptr = PhysAddr(*get_at_virtual_addr::<u64>(table_entry_ptr));
                 let header = get_at_physical_addr::<super::sdt::AcpiSdtHeader>(table_ptr);
                 if header.signature == signature {
@@ -122,7 +122,7 @@ impl RootSystemDescriptorTable for Xsdt {
             let start_table_ptr = VirtAddr((self as *const Self) as u64 + 36);
             let num_entries = (self.length() - 36) / 8;
             for entry_index in 0..num_entries {
-                let table_entry_ptr = start_table_ptr + VirtAddr(entry_index as u64 * 8);
+                let table_entry_ptr = start_table_ptr + (entry_index as u64 * 8);
                 let table_ptr = PhysAddr(*get_at_virtual_addr::<u64>(table_entry_ptr));
                 tables.push(table_ptr);
             }
@@ -134,7 +134,7 @@ impl RootSystemDescriptorTable for Xsdt {
             let start_table_ptr = VirtAddr((self as *const Self) as u64 + 36);
             let num_entries = (self.length() - 36) / 8;
             for entry_index in 0..num_entries {
-                let table_entry_ptr = start_table_ptr + VirtAddr(entry_index as u64 * 8);
+                let table_entry_ptr = start_table_ptr + (entry_index as u64 * 8);
                 let table_ptr = PhysAddr(*get_at_virtual_addr::<u64>(table_entry_ptr));
                 let header = get_at_physical_addr::<super::sdt::AcpiSdtHeader>(table_ptr);
                 crate::println!("{:?}", header.signature.map(|a| a as char))

@@ -26,23 +26,23 @@ impl HeapPageMetadata {
     pub fn populate(&mut self, page_addr: VirtAddr) {
         unsafe {
             let size_of_object = u64::pow(2, self.size_order_of_objects as u32);
-            let addr_of_first = page_addr + VirtAddr(4096 - size_of_object * self.max_allocations as u64);
+            let addr_of_first = page_addr + 4096 - size_of_object * self.max_allocations as u64;
             for i in (addr_of_first.0..(page_addr.0 + 4096)).step_by(size_of_object as usize) {
                 let empty_block = get_at_virtual_addr::<EmptyBlock>(VirtAddr(i));
                 empty_block.ptr_to_prev = VirtAddr(i - size_of_object);
                 empty_block.ptr_to_next = VirtAddr(i + size_of_object);
                 debug_assert!(
-                    !(empty_block.ptr_to_prev.0 < 0x100 || VirtAddr(i).0 < 0x100 || empty_block.ptr_to_next.0 < 0x100),
+                    !(empty_block.ptr_to_prev.0 < 0x100 || i < 0x100 || empty_block.ptr_to_next.0 < 0x100),
                     "prev: {:#x?}, current: {:#x?}, next: {:#x?}",
                     empty_block.ptr_to_prev,
                     VirtAddr(i),
                     empty_block.ptr_to_next
                 );
             }
-            get_at_virtual_addr::<EmptyBlock>(addr_of_first).ptr_to_prev = page_addr + VirtAddr(4096 - size_of_object);
-            get_at_virtual_addr::<EmptyBlock>(page_addr + VirtAddr(4096 - size_of_object)).ptr_to_next = addr_of_first;
+            get_at_virtual_addr::<EmptyBlock>(addr_of_first).ptr_to_prev = page_addr + 4096 - size_of_object;
+            get_at_virtual_addr::<EmptyBlock>(page_addr + 4096 - size_of_object).ptr_to_next = addr_of_first;
             self.ptr_to_first = addr_of_first;
-            self.ptr_to_last = page_addr + VirtAddr(4096 - size_of_object);
+            self.ptr_to_last = page_addr + 4096 - size_of_object;
             debug_assert!(
                 !(self.ptr_to_first.0 < 0x100
                     || self.ptr_to_last.0 < 0x100
@@ -247,7 +247,7 @@ impl Heap {
             if size > 1024 {
                 let pages_allocated = size.div_ceil(4096);
                 for i in 0..pages_allocated {
-                    crate::PAGE_ALLOCATOR.deallocate(page_addr + VirtAddr(i * 4096));
+                    crate::PAGE_ALLOCATOR.deallocate(page_addr + (i * 4096));
                 }
             } else {
                 let metadata = get_at_virtual_addr::<HeapPageMetadata>(page_addr);

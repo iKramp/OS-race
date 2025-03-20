@@ -4,12 +4,12 @@ use std::{
 };
 
 use super::platform_info::PlatformInfo;
-use crate::memory::{paging::LiminePat, physical_allocator::BUDDY_ALLOCATOR};
+use crate::memory::{paging::LiminePat, physical_allocator};
 
 pub fn init_ioapic(platform_info: &PlatformInfo) {
     unsafe {
         for io_apic_info in &platform_info.apic.io_apics {
-            BUDDY_ALLOCATOR.mark_addr(PhysAddr(io_apic_info.address.into()), true);
+            physical_allocator::mark_addr(PhysAddr(io_apic_info.address.into()), true);
             let io_apic_address = crate::memory::PAGE_TREE_ALLOCATOR.allocate(Some(PhysAddr(io_apic_info.address.into())));
             let apic_registers_page_entry = crate::memory::PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(io_apic_address);
             apic_registers_page_entry.set_pat(LiminePat::UC);

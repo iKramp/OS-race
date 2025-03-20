@@ -59,7 +59,7 @@ impl Rsdp {
     }
 
     pub fn from_ptr(address: VirtAddr) -> Self {
-        let revision = unsafe { *std::mem_utils::get_at_virtual_addr::<u8>(address + VirtAddr(15)) };
+        let revision = unsafe { *std::mem_utils::get_at_virtual_addr::<u8>(address + 15) };
         if revision == 0 {
             Self::V1(unsafe { std::mem_utils::get_at_virtual_addr::<RsdpV1>(address) })
         } else {

@@ -9,6 +9,8 @@ use crate::drivers::{
     rfs::RfsFactory,
 };
 
+mod fs_tree;
+
 ///Map from disk guid to disk object (driver) and a list of partition guids
 static mut DISKS: BTreeMap<Uuid, (Box<dyn Disk>, Vec<Uuid>)> = BTreeMap::new();
 ///maps from filesystem type guid to filesystem driver factory

@@ -20,9 +20,9 @@ pub fn init_memory() {
         mem_utils::set_physical_offset(mem_utils::PhysOffset(offset));
         println!("offset: {:#x?}", offset);
         println!("initializing physical allocator");
-        physical_allocator::BuyddyAllocator::init();
+        physical_allocator::init();
         //allocates low addresses first, so we reserve this for the trampoline
-        TRAMPOLINE_RESERVED = physical_allocator::BUDDY_ALLOCATOR.allocate_frame_low(); 
+        TRAMPOLINE_RESERVED = physical_allocator::allocate_frame_low(); 
         println!("initializing pager");
         PAGE_TREE_ALLOCATOR = paging::PageTree::new();
         printlnc!((0, 255, 0), "memory initialized");

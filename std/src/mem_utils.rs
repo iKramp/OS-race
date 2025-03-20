@@ -34,6 +34,22 @@ impl core::ops::Add for VirtAddr {
     }
 }
 
+impl core::ops::Add<u64> for VirtAddr {
+    type Output = VirtAddr;
+    #[inline]
+    fn add(self, rhs: u64) -> Self::Output {
+        Self(self.0 + rhs)
+    }
+}
+
+impl core::ops::Sub<u64> for VirtAddr {
+    type Output = VirtAddr;
+    #[inline]
+    fn sub(self, rhs: u64) -> Self::Output {
+        Self(self.0 - rhs)
+    }
+}
+
 ///# Safety
 ///the address must be valid and there are no other references to the data
 #[inline]
