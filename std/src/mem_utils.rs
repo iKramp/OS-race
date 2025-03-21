@@ -54,19 +54,23 @@ impl core::ops::Sub<u64> for VirtAddr {
 ///the address must be valid and there are no other references to the data
 #[inline]
 pub unsafe fn get_at_physical_addr<T>(addr: PhysAddr) -> &'static mut T {
-    #[cfg(debug_assertions)]
-    assert!(MEM_INITIALIZED);
-    let data: *mut T = (addr + PHYSICAL_OFFSET).0 as *mut T;
-    &mut *data
+    unsafe {
+        #[cfg(debug_assertions)]
+        assert!(MEM_INITIALIZED);
+        let data: *mut T = (addr + PHYSICAL_OFFSET).0 as *mut T;
+        &mut *data
+    }
 }
 
 ///# Safety
 ///must be a valid addr (with no other data there)
 #[inline]
 pub unsafe fn set_at_physical_addr<T>(addr: PhysAddr, data: T) {
-    #[cfg(debug_assertions)]
-    assert!(MEM_INITIALIZED);
-    set_at_virtual_addr(addr + PHYSICAL_OFFSET, data);
+    unsafe {
+        #[cfg(debug_assertions)]
+        assert!(MEM_INITIALIZED);
+        set_at_virtual_addr(addr + PHYSICAL_OFFSET, data);
+    }
 }
 
 #[inline]
@@ -86,7 +90,7 @@ pub fn get_physical_offset() -> PhysOffset {
 #[inline]
 pub unsafe fn get_at_virtual_addr<T>(addr: VirtAddr) -> &'static mut T {
     let data: *mut T = addr.0 as *mut T;
-    &mut *data
+    unsafe { &mut *data }
 }
 
 ///# Safety
@@ -94,15 +98,17 @@ pub unsafe fn get_at_virtual_addr<T>(addr: VirtAddr) -> &'static mut T {
 #[inline]
 pub unsafe fn set_at_virtual_addr<T>(addr: VirtAddr, data: T) {
     let data_to_replace: *mut T = addr.0 as *mut T;
-    data_to_replace.write_volatile(data);
+    unsafe { data_to_replace.write_volatile(data) };
 }
 
 ///# Safety
 ///the physical address offset must be correct
 #[inline]
 pub unsafe fn set_physical_offset(addr: PhysOffset) {
-    MEM_INITIALIZED = true;
-    PHYSICAL_OFFSET = addr;
+    unsafe {
+        MEM_INITIALIZED = true;
+        PHYSICAL_OFFSET = addr;
+    }
 }
 
 ///# Safety
@@ -111,8 +117,10 @@ pub unsafe fn set_physical_offset(addr: PhysOffset) {
 pub unsafe fn memset_virtual_addr(addr: VirtAddr, value: u8, size: usize) {
     let mut data = addr.0 as *mut u8;
     for _ in 0..size {
-        data.write(value);
-        data = data.add(1);
+        unsafe {
+            data.write_volatile(value);
+            data = data.add(1);
+        }
     }
 }
 

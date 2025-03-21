@@ -7,7 +7,7 @@ pub static mut PRINT: Option<&mut Mutex<dyn Print>> = None;
 ///# Safety
 ///printer must be a valid pointer
 pub unsafe fn set_print(printer: *mut Mutex<dyn Print>) {
-    PRINT = Some(&mut *printer)
+    unsafe { PRINT = Some(&mut *printer) }
 }
 
 pub trait Print: Write {
