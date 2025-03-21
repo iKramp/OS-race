@@ -6,17 +6,16 @@ use super::{
 };
 use crate::{
     drivers::disk::{FileSystem, FileSystemFactory, MountedPartition},
-    memory::{paging::LiminePat, physical_allocator, PAGE_TREE_ALLOCATOR},
+    memory::{PAGE_TREE_ALLOCATOR, paging::LiminePat, physical_allocator},
     vfs::{self, InodeType},
 };
-use core::{ffi, fmt::write};
 use std::{
     PAGE_ALLOCATOR,
     boxed::Box,
     collections::btree_map::BTreeMap,
-    mem_utils::{PhysAddr, VirtAddr, get_at_virtual_addr, memset_virtual_addr, set_at_physical_addr, set_at_virtual_addr},
+    mem_utils::{PhysAddr, VirtAddr, get_at_virtual_addr, memset_virtual_addr, set_at_virtual_addr},
     println,
-    vec::{self, Vec},
+    vec::Vec,
 };
 
 const GROUP_BLOCK_SIZE: u64 = 4096 * 8;
@@ -66,7 +65,7 @@ impl Rfs {
         let blocks = partition.partition.size_sectors as u32 / 8;
         let groups = blocks.div_ceil(GROUP_BLOCK_SIZE as u32);
         println!("it is initialized");
-        
+
         Self {
             inode_tree_cache: BTreeMap::new(),
             root_block: 1,
@@ -679,7 +678,7 @@ impl FileSystem for Rfs {
     fn stat(&mut self, inode: u32) -> crate::vfs::Inode {
         let root = self.get_node(self.root_block).1;
         let inode_block_index = root.find_inode_block(inode, self).unwrap();
-        let inode_block = unsafe { physical_allocator::allocate_frame() };
+        let inode_block = physical_allocator::allocate_frame();
         let inode_block_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(inode_block)) };
         unsafe {
             PAGE_TREE_ALLOCATOR
@@ -697,7 +696,7 @@ impl FileSystem for Rfs {
     fn set_stat(&mut self, inode_index: u32, vfs_inode_data: vfs::Inode) {
         let root = self.get_node(self.root_block).1;
         let inode_block_index = root.find_inode_block(inode_index, self).unwrap();
-        let inode_block = unsafe { physical_allocator::allocate_frame() };
+        let inode_block = physical_allocator::allocate_frame();
         let inode_block_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(inode_block)) };
         unsafe {
             PAGE_TREE_ALLOCATOR
@@ -732,7 +731,7 @@ impl FileSystem for Rfs {
             modification_time: 0,
             stat_change_time: 0,
         };
-        let inode_block = unsafe { physical_allocator::allocate_frame() };
+        let inode_block = physical_allocator::allocate_frame();
         let inode_block_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(inode_block)) };
         unsafe {
             PAGE_TREE_ALLOCATOR
@@ -761,6 +760,7 @@ impl FileSystem for Rfs {
     }
 
     fn remove(&mut self, inode: u32) {
+        todo!("this is wrong, unlink and delete only if link count is 0");
         let working_block = physical_allocator::allocate_frame();
         let working_block_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(working_block)) };
         unsafe {
@@ -902,9 +902,8 @@ impl FileSystem for Rfs {
         self.read(parent_inode, 0, dir_size, &frames);
         let mut affected_inode = 0;
         for i in 0..(dir_size / core::mem::size_of::<DirEntry>() as u64) {
-            let dir_entry = unsafe {
-                get_at_virtual_addr::<DirEntry>(folder_binding + i * core::mem::size_of::<DirEntry>() as u64)
-            };
+            let dir_entry =
+                unsafe { get_at_virtual_addr::<DirEntry>(folder_binding + i * core::mem::size_of::<DirEntry>() as u64) };
             if dir_entry.inode == inode {
                 let name_bytes = name.as_bytes();
                 let mut name_byte_arr: [u8; 128] = [0; 128];
@@ -914,10 +913,7 @@ impl FileSystem for Rfs {
                 let mut new_dir_entry = dir_entry.clone();
                 new_dir_entry.name = name_byte_arr;
                 unsafe {
-                    set_at_virtual_addr(
-                        folder_binding + i * core::mem::size_of::<DirEntry>() as u64,
-                        new_dir_entry,
-                    );
+                    set_at_virtual_addr(folder_binding + i * core::mem::size_of::<DirEntry>() as u64, new_dir_entry);
                 }
                 affected_inode = i;
                 break;

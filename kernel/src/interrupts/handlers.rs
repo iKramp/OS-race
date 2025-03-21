@@ -1,7 +1,7 @@
 use crate::utils::{byte_from_port, byte_to_port};
 #[allow(unused_imports)] //they are used in macros
 use core::arch::asm;
-use std::{println, printlnc};
+use std::printlnc;
 
 #[derive(Debug)]
 #[repr(C)]
@@ -14,9 +14,11 @@ pub struct ExceptionStackFrame {
 }
 
 pub extern "x86-interrupt" fn invalid_opcode(stack_frame: ExceptionStackFrame) -> ! {
-    printlnc!((0, 0, 255),
+    printlnc!(
+        (0, 0, 255),
         "EXCEPTION: INVALID OPCODE at {:#X}\n{:#X?}",
-        stack_frame.instruction_pointer, stack_frame
+        stack_frame.instruction_pointer,
+        stack_frame
     );
     unsafe {
         loop {
@@ -26,10 +28,7 @@ pub extern "x86-interrupt" fn invalid_opcode(stack_frame: ExceptionStackFrame) -
 }
 
 pub extern "x86-interrupt" fn breakpoint(stack_frame: ExceptionStackFrame) {
-    printlnc!((0, 255, 255),
-        "Breakpoint reached at {:#X}",
-        stack_frame.instruction_pointer
-    );
+    printlnc!((0, 255, 255), "Breakpoint reached at {:#X}", stack_frame.instruction_pointer);
     apic_eoi();
     legacy_eoi();
 }
@@ -57,7 +56,8 @@ impl From<u64> for PageFaultErrorCode {
 }
 
 pub extern "x86-interrupt" fn page_fault(stack_frame: ExceptionStackFrame, error_code: u64) -> ! {
-    printlnc!((0, 0, 255),
+    printlnc!(
+        (0, 0, 255),
         "EXCEPTION: PAGE FAULT with error code\n{:#X?}\n{:#X?}",
         PageFaultErrorCode::from(error_code),
         stack_frame

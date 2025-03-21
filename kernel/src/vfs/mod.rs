@@ -1,6 +1,5 @@
 use bitfield::bitfield;
 use uuid::Uuid;
-use core::ptr::addr_of_mut;
 use std::{boxed::Box, collections::btree_map::BTreeMap, format, string::{String, ToString}, vec::Vec};
 
 use crate::drivers::{

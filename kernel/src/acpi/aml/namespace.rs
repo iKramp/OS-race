@@ -223,13 +223,13 @@ impl Namespace {
     ///vec is invalid. Only add nodes
     pub unsafe fn get_current_namespace_nodes_mut(&mut self) -> Option<Vec<&mut NamespaceNode>> {
         let mut acc = Vec::new();
-        acc.push(&mut *(&mut self.root as *mut NamespaceNode));
-        let segments = &*(self.get_namespace_sequence() as *const [NameSeg]);
+        unsafe { acc.push(&mut *(&mut self.root as *mut NamespaceNode)) };
+        let segments = unsafe { &*(self.get_namespace_sequence() as *const [NameSeg]) };
         let mut current_node = &mut self.root;
         for segment in segments {
             if let Some(node) = current_node.children.get_mut(segment) {
                 current_node = node;
-                acc.push(&mut *(current_node as *mut NamespaceNode));
+                unsafe { acc.push(&mut *(current_node as *mut NamespaceNode)) };
             } else {
                 return None;
             }

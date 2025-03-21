@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-use core::ffi;
 use std::mem_utils::{PhysAddr, VirtAddr};
 
 

@@ -1,10 +1,10 @@
-use std::{mem_utils::VirtAddr, print, println, vec, PAGE_ALLOCATOR};
+use std::{PAGE_ALLOCATOR, mem_utils::VirtAddr};
 
-use crate::{
-    drivers::disk::{Disk, MountedPartition, Partition},
-    memory::{paging, physical_allocator, PAGE_TREE_ALLOCATOR},
-};
 use super::Rfs;
+use crate::{
+    drivers::disk::MountedPartition,
+    memory::{PAGE_TREE_ALLOCATOR, paging, physical_allocator},
+};
 
 ///Takes up exactly 1 block or physical frame
 #[repr(C)]
@@ -18,7 +18,7 @@ impl BtreeNode {
     pub fn read_from_disk(partition: &mut MountedPartition, block: u32) -> *mut Self {
         let sector = block as usize * 8;
 
-        let phys_ptr = unsafe { physical_allocator::allocate_frame() };
+        let phys_ptr = physical_allocator::allocate_frame();
         let virt_ptr = unsafe { PAGE_ALLOCATOR.allocate(Some(phys_ptr)) };
         unsafe {
             PAGE_TREE_ALLOCATOR
@@ -657,7 +657,6 @@ impl BtreeNode {
             //is empty root
             return;
         }
-
 
         while ptr >= 0 && !key_inserted {
             let current_key = self.get_key(ptr as usize);

@@ -33,7 +33,7 @@ impl VgaText {
         self.line += 1;
         if self.line >= self.height_lines - 1 {
             self.line -= 1;
-            unsafe { self.scroll() };
+            self.scroll();
         }
     }
 
@@ -68,26 +68,28 @@ impl VgaText {
         }
     }
 
-    unsafe fn scroll(&mut self) {
-        let top_ptr = VGA_BINDING.buffer;
-        let diff = VGA_BINDING.stride * CHAR_HEIGHT;
-        let limit = top_ptr.add(diff * (self.height_lines - 1) - 1);
+    fn scroll(&mut self) {
+        unsafe {
+            let top_ptr = VGA_BINDING.buffer;
+            let diff = VGA_BINDING.stride * CHAR_HEIGHT;
+            let limit = top_ptr.add(diff * (self.height_lines - 1) - 1);
 
-        asm!(
-            "2:",
-            "mov r8, [r10 + r9]",
-            "mov qword ptr [r10], r8",
-            "add r10, 8",
-            "cmp r10, r11",
-            "jle 2b",
-            in("r9") diff,
-            in("r10") top_ptr,
-            in("r11") limit,
-            lateout("r9") _,
-            lateout("r10") _,
-            lateout("r11") _,
-            out("r8") _,
-        )
+            asm!(
+                "2:",
+                "mov r8, [r10 + r9]",
+                "mov qword ptr [r10], r8",
+                "add r10, 8",
+                "cmp r10, r11",
+                "jle 2b",
+                in("r9") diff,
+                in("r10") top_ptr,
+                in("r11") limit,
+                lateout("r9") _,
+                lateout("r10") _,
+                lateout("r11") _,
+                out("r8") _,
+            )
+        }
     }
 }
 
@@ -100,7 +102,7 @@ impl core::fmt::Write for VgaText {
 
 impl std::Print for VgaText {
     fn set_bg_color(&mut self, color: (u8, u8, u8)) {
-       self.background = color;
+        self.background = color;
     }
 
     fn set_fg_color(&mut self, color: (u8, u8, u8)) {
@@ -141,12 +143,12 @@ pub fn clear_screen() {
     }
 }
 
-
-
 pub fn hello_message() {
     print!("Hello via ");
 
-    printlnc!((30, 105, 210), "RustOS\n
+    printlnc!(
+        (30, 105, 210),
+        "RustOS\n
             .  :*. ## .*:  .            \n    
          :  @@*@@@@@@@@@@*@@  :         \n
         :@@@@@@@@@@  @@@@@@@@@@:        \n

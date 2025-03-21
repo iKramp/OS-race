@@ -204,17 +204,17 @@ impl VirtualPort {
         const FIS_SWITCHING: bool = false;
 
         let cmd_list_base = if is_64_bit {
-            unsafe { physical_allocator::allocate_frame() }
+            physical_allocator::allocate_frame()
         } else {
-            unsafe { physical_allocator::allocate_frame_low() }
+            physical_allocator::allocate_frame_low()
         };
 
         let fis_base = if !FIS_SWITCHING {
             cmd_list_base + PhysAddr(0x400)
         } else if is_64_bit {
-            unsafe { physical_allocator::allocate_frame() }
+            physical_allocator::allocate_frame()
         } else {
-            unsafe { physical_allocator::allocate_frame_low() }
+            physical_allocator::allocate_frame_low()
         };
 
         self.set_property(0, cmd_list_base.0 as u32);
@@ -334,7 +334,7 @@ impl VirtualPort {
             ..Default::default()
         };
 
-        let fis_recv_area = unsafe { physical_allocator::allocate_frame() };
+        let fis_recv_area = physical_allocator::allocate_frame();
         let prdt = PrdtDescriptor {
             base: fis_recv_area,
             count: 512,
@@ -373,9 +373,9 @@ impl VirtualPort {
         let index = cmd_issue.trailing_ones() as u8;
 
         let cmd_table_page = if self.is_64_bit {
-            unsafe { physical_allocator::allocate_frame() }
+            physical_allocator::allocate_frame()
         } else {
-            unsafe { physical_allocator::allocate_frame_low() }
+            physical_allocator::allocate_frame_low()
         };
 
         let mut cmd_header = CmdHeader(0);
@@ -443,7 +443,7 @@ impl Disk for VirtualPort {
     ///Returns the virtual address of the read data and the command index used
     fn read(&mut self, start_sec_index: usize, sec_count: usize, buffer: &[PhysAddr]) -> u64 {
         assert!(sec_count <= self.sectors as usize);
-        let prdt_entries = (sec_count + 7) / 8; //8 sectors in one physical frame
+        let prdt_entries = sec_count.div_ceil(8); //8 sectors in one physical frame
 
         let prdt = buffer
             .iter()

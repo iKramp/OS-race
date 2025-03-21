@@ -1,6 +1,6 @@
 use std::{
     PAGE_ALLOCATOR, PageAllocator,
-    mem_utils::{PhysAddr, VirtAddr, get_at_virtual_addr, translate_virt_phys_addr},
+    mem_utils::{PhysAddr, get_at_virtual_addr, translate_virt_phys_addr},
     println,
     string::String,
     vec::Vec,
@@ -8,7 +8,7 @@ use std::{
 
 use uuid::Uuid;
 
-use crate::{drivers::{disk::FileSystemFactory, rfs::RfsFactory}, memory::{paging::LiminePat, physical_allocator, PAGE_TREE_ALLOCATOR}};
+use crate::memory::{PAGE_TREE_ALLOCATOR, paging::LiminePat, physical_allocator};
 
 use super::disk::{Disk, Partition, PartitionSchemeDriver};
 
@@ -36,7 +36,11 @@ impl PartitionSchemeDriver for GPTDriver {
         let entry_num_lbas = (num_entries * entry_size).div_ceil(512);
         let buffer = unsafe { PAGE_ALLOCATOR.allocate_contigious(entry_num_lbas as u64 / 8, None) };
         let physical_addresses: Vec<PhysAddr> = (0..entry_num_lbas / 8)
-            .inspect(|i| unsafe { PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(buffer + (*i as u64 * 4096)).set_pat(LiminePat::UC) })
+            .inspect(|i| unsafe {
+                PAGE_TREE_ALLOCATOR
+                    .get_page_table_entry_mut(buffer + (*i as u64 * 4096))
+                    .set_pat(LiminePat::UC)
+            })
             .map(|i| translate_virt_phys_addr(buffer + (i as u64 * 4096)).unwrap())
             .collect();
         let command_slot = disk.read(start_entries, entry_num_lbas, &physical_addresses);
@@ -85,7 +89,7 @@ impl PartitionSchemeDriver for GPTDriver {
     }
 
     fn guid(&self, disk: &mut dyn Disk) -> Uuid {
-        let first_lba = unsafe { physical_allocator::allocate_frame() };
+        let first_lba = physical_allocator::allocate_frame();
         let first_lba_binding = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(first_lba)) };
         unsafe {
             PAGE_TREE_ALLOCATOR
