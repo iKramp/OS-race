@@ -19,6 +19,11 @@ static mut MOUNTED_PARTITIONS: BTreeMap<Uuid, Box<dyn FileSystem>> = BTreeMap::n
 ///maps from partition guid to partition object
 static mut AVAILABLE_PARTITIONS: BTreeMap<Uuid, Partition> = BTreeMap::new();
 
+///A wrapper type for path, that have been resolved to a list of path components
+///That is, the path starts from root and does not contain any "." or ".." components
+#[repr(transparent)]
+pub struct ResolvedPath(Box<[Box<str>]>);
+
 pub fn init() {
     unsafe {
         FILESYSTEM_DRIVER_FACTORIES.insert(RfsFactory::guid(), Box::new(RfsFactory {}));
@@ -55,10 +60,11 @@ fn remove_disk(uuid: Uuid) {
     }
 }
 
-pub fn mount_partition(part_id: Uuid) -> Result<(), String> {
+pub fn mount_partition(part_id: Uuid, mountpoint: ResolvedPath) -> Result<(), String> {
     let Some(partition) = (unsafe { AVAILABLE_PARTITIONS.get(&part_id) } ) else {
         return Err("Partition not found".to_string());
     };
+
     let disk = unsafe { DISKS.get_mut(&partition.disk).unwrap() };
     let disk = &raw mut *disk.0;
     let disk: &'static mut dyn Disk = unsafe { &mut *disk };
@@ -70,6 +76,13 @@ pub fn mount_partition(part_id: Uuid) -> Result<(), String> {
                 part_id
             ).to_string());
     };
+
+    //mounting root. This is the first FS cache operation and can only happen once per boot
+    if mountpoint.0.len() == 0 && unsafe { fs_tree::CURRENT_NUM } != 0 {
+        return Err("Root already mounted".to_string());
+    }
+    
+
     let mounted_partition = MountedPartition {
         disk,
         partition: partition.clone(),
@@ -177,4 +190,35 @@ bitfield! {
     pub r_othr, set_r_othr: 0x4;
     pub w_othr, set_w_othr: 0x2;
     pub x_othr, set_x_othr: 0x1;
+}
+
+
+pub fn resolve_path(path: &str, working_dir: &str) -> ResolvedPath {
+    if path.starts_with('/') {
+        return ResolvedPath(resolve_single_path(path).into());
+    } else {
+        let mut working_dir = resolve_single_path(working_dir);
+        working_dir.extend(resolve_single_path(path));
+        return ResolvedPath(working_dir.into());
+    }
+}
+
+fn resolve_single_path(path: &str) -> Vec<Box<str>> {
+    let chunks = path.split('/');
+    let mut path = Vec::new();
+    for chunk in chunks {
+        if chunk.is_empty() {
+            continue;
+        }
+        if chunk == "." {
+            continue;
+        }
+        if chunk == ".." {
+            path.pop();
+            continue;
+        }
+        path.push(chunk.into());
+    }
+
+    return path;
 }

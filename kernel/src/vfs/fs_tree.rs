@@ -3,7 +3,7 @@ use std::{boxed::Box, collections::btree_map::BTreeMap, vec::Vec};
 use super::Inode;
 
 static mut INODE_CACHE: InodeCache = InodeCache::new();
-static mut CURRENT_NUM: u64 = 0;
+pub(super) static mut CURRENT_NUM: u64 = 0;
 
 struct FsTreeNode {
     cahce_num: u64,
