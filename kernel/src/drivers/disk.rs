@@ -20,7 +20,7 @@ pub trait PartitionSchemeDriver {
 
 pub trait FileSystemFactory {
     fn guid(&self) -> Uuid;
-    fn mount(&self, partition: MountedPartition) -> Box<dyn FileSystem>;
+    fn mount(&self, partition: MountedPartition) -> Box<dyn FileSystem + Send>;
 }
 
 pub trait FileSystem {

@@ -60,7 +60,7 @@ extern "C" fn _start() -> ! {
     pci::enumerate_devices();
     vfs::init();
 
-    let res = vfs::mount_partition(cmd_args.root_partition);
+    let res = vfs::mount_partition(cmd_args.root_partition, "/");
     if let Err(e) = res {
         println!("{}", e);
         panic!("Failed to mount root partition");
