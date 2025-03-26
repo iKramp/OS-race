@@ -60,6 +60,9 @@ pub struct Rfs {
     partition: MountedPartition,
 }
 
+//this is dafe because the inode tree cache really behaves like it had Box<BtreeNode>
+unsafe impl Send for Rfs {}
+
 impl Rfs {
     pub fn new(partition: MountedPartition) -> Self {
         let blocks = partition.partition.size_sectors as u32 / 8;

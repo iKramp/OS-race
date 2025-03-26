@@ -53,7 +53,7 @@ pub fn init() {
 }
 
 //this is returned by the stat() syscall
-struct Inode {
+pub struct Inode {
     pub index: u32,
     pub device: Uuid, //some map to major/minor (minor are partitions)
     pub type_mode: InodeType,
