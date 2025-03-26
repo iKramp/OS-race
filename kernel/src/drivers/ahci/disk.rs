@@ -194,6 +194,10 @@ pub struct VirtualPort {
     command_metadata: [CommandMetadata; 32],
 }
 
+//Safe because address doesn't point to actual data that can be freed, but only to mmio (still
+//shouldn't be unmapped)
+unsafe impl Send for VirtualPort {}
+
 #[derive(Debug, Clone, Copy)]
 struct CommandMetadata {
     issued: bool,

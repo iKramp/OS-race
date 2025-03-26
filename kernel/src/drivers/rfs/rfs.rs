@@ -33,7 +33,7 @@ impl FileSystemFactory for RfsFactory {
         Self::guid()
     }
 
-    fn mount(&self, partition: MountedPartition) -> Box<dyn FileSystem> {
+    fn mount(&self, partition: MountedPartition) -> Box<dyn FileSystem + Send> {
         Box::new(Rfs::new(partition))
     }
 }
