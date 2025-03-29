@@ -1,11 +1,15 @@
 use uuid::Uuid;
 
 use super::{
-    btree::{BtreeNode, Key}, DirEntry, Inode, InodeBitmask, InodeSize, SuperBlock
+    DirEntry, Inode, InodeBitmask, InodeSize, SuperBlock,
+    btree::{BtreeNode, Key},
 };
 use crate::{
-    drivers::{disk::{FileSystem, FileSystemFactory, MountedPartition}, rfs::BLOCK_SIZE_SECTORS},
-    memory::{paging::LiminePat, physical_allocator, PAGE_TREE_ALLOCATOR},
+    drivers::{
+        disk::{FileSystem, FileSystemFactory, MountedPartition},
+        rfs::BLOCK_SIZE_SECTORS,
+    },
+    memory::{PAGE_TREE_ALLOCATOR, paging::LiminePat, physical_allocator},
     vfs::{self, InodeType, ROOT_INODE_INDEX},
 };
 use std::{
@@ -63,18 +67,33 @@ pub struct Rfs {
 unsafe impl Send for Rfs {}
 
 impl Rfs {
-    pub fn new(partition: MountedPartition) -> Self {
+    pub fn new(mut partition: MountedPartition) -> Self {
         let blocks = partition.partition.size_sectors as u32 / 8;
         let groups = blocks.div_ceil(GROUP_BLOCK_SIZE as u32);
-        println!("it is initialized");
+        let working_block = physical_allocator::allocate_frame();
+        let working_block_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(working_block)) };
+        unsafe {
+            PAGE_TREE_ALLOCATOR
+                .get_page_table_entry_mut(working_block_binding)
+                .set_pat(LiminePat::UC);
+        }
 
-        Self {
+        partition.read(BLOCK_SIZE_SECTORS as usize, 1, &[working_block]);
+        let header = unsafe { get_at_virtual_addr::<SuperBlock>(working_block_binding) };
+        let root_block = header.inode_tree;
+        unsafe { PAGE_ALLOCATOR.deallocate(working_block_binding) };
+
+        let mut driver = Self {
             inode_tree_cache: BTreeMap::new(),
-            root_block: 1,
+            root_block,
             partition,
             groups,
             blocks,
-        }
+        };
+
+        driver.format_partition();
+
+        driver
     }
 
     pub fn allocate_block(&mut self) -> u32 {
@@ -253,11 +272,9 @@ impl Rfs {
                 .write(i as usize * GROUP_BLOCK_SIZE as usize, 8, &[group_memory]);
         }
         let last_group_invalid = GROUP_BLOCK_SIZE - last_group_blocks;
-        let last_group_invalid_partial = if last_group_invalid % 8 == 0 {
-            0
-        } else {
-            (0xFF >> (8 - last_group_invalid % 8)) << (8 - last_group_invalid % 8)
-        };
+        let last_group_invalid_partial = last_group_invalid
+            .unbounded_shr(8 - last_group_invalid as u32 % 8)
+            .unbounded_shl(8 - last_group_invalid as u32 % 8);
         for i in 0..(last_group_invalid / 8) {
             unsafe {
                 set_at_virtual_addr::<u8>(group_mem_binding + 4095 - i, 0xFF);
@@ -266,11 +283,11 @@ impl Rfs {
         unsafe {
             set_at_virtual_addr::<u8>(
                 group_mem_binding + 4095 - (last_group_invalid / 8),
-                last_group_invalid_partial,
+                last_group_invalid_partial as u8,
             );
         }
         self.partition
-            .write(whole_groups as usize * GROUP_BLOCK_SIZE as usize, 1, &[group_memory]);
+            .write(whole_groups as usize * GROUP_BLOCK_SIZE as usize, 8, &[group_memory]);
         unsafe { std::mem_utils::memset_virtual_addr(group_mem_binding, 0, 4096) };
 
         //----------Initialize header at block 1----------
@@ -279,7 +296,7 @@ impl Rfs {
             inode_bitmask: 4,
         };
         unsafe { set_at_virtual_addr(group_mem_binding, header) };
-        self.partition.write(1, 1, &[group_memory]);
+        self.partition.write(BLOCK_SIZE_SECTORS as usize, 1, &[group_memory]);
         unsafe { std::mem_utils::memset_virtual_addr(group_mem_binding, 0, core::mem::size_of::<SuperBlock>()) };
 
         //----------Initialize root node at block 2, with a key for root----------
@@ -291,8 +308,8 @@ impl Rfs {
                 inode_block: 3,
             },
         );
-        unsafe { set_at_virtual_addr(group_mem_binding, root_node) };
-        self.partition.write(2, 1, &[group_memory]);
+        unsafe { set_at_virtual_addr(group_mem_binding, (*root_node).clone()) };
+        self.partition.write(2 * BLOCK_SIZE_SECTORS as usize, 1, &[group_memory]);
 
         //i can clean like this because key is the first field
         unsafe { std::mem_utils::memset_virtual_addr(group_mem_binding, 0, core::mem::size_of::<Key>()) };
@@ -318,22 +335,24 @@ impl Rfs {
         root_dir_entry.name[0] = b'.';
         unsafe {
             set_at_virtual_addr(
-                group_mem_binding + core::mem::size_of::<Inode>() as u64,
+                group_mem_binding + 512,
                 root_dir_entry.clone(),
             )
         };
         root_dir_entry.name[1] = b'.';
         unsafe {
             set_at_virtual_addr(
-                group_mem_binding + (core::mem::size_of::<Inode>() + core::mem::size_of::<DirEntry>()) as u64,
+                group_mem_binding + 512 + core::mem::size_of::<DirEntry>() as u64,
                 root_dir_entry,
             )
         };
+        self.partition.write(3 * 8, 2, &[group_memory]);
+        unsafe { std::mem_utils::memset_virtual_addr(group_mem_binding, 0, 4096) };
 
         //---------------Initialize inode bitmask at block 4---------------
-        unsafe { std::mem_utils::memset_virtual_addr(group_mem_binding, 0, 4096) };
         for i in 1..BLOCK_SIZE_SECTORS as u32 {
-            self.partition.write(4 * BLOCK_SIZE_SECTORS as usize + i as usize, 1, &[group_memory]);
+            self.partition
+                .write(4 * BLOCK_SIZE_SECTORS as usize + i as usize, 1, &[group_memory]);
         }
         //indexes 0, 1, and 2 are used
         unsafe { set_at_virtual_addr::<u8>(group_mem_binding, 0b111) };
