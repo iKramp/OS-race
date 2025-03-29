@@ -317,7 +317,7 @@ impl Rfs {
 
         //----------Initialize root inode block at block 3----------
         let root_inode = Inode {
-            size: InodeSize(core::mem::size_of::<[DirEntry; 2]>() as u64), //size 0, 0 levels of pointers
+            size: InodeSize(0), //size 0, 0 levels of pointers
             inode_type_mode: InodeType::new_dir(0o755),
             link_count: 0,
             uid: 0,
@@ -328,26 +328,7 @@ impl Rfs {
         };
         unsafe { set_at_virtual_addr(group_mem_binding, root_inode) };
 
-        //write entries for itself and its parent, both actually being itself
-        let mut root_dir_entry = DirEntry {
-            inode: 3,
-            name: [0; 128],
-        };
-        root_dir_entry.name[0] = b'.';
-        unsafe {
-            set_at_virtual_addr(
-                group_mem_binding + 512,
-                root_dir_entry.clone(),
-            )
-        };
-        root_dir_entry.name[1] = b'.';
-        unsafe {
-            set_at_virtual_addr(
-                group_mem_binding + 512 + core::mem::size_of::<DirEntry>() as u64,
-                root_dir_entry,
-            )
-        };
-        self.partition.write(3 * 8, 2, &[group_memory]);
+        self.partition.write(3 * 8, 1, &[group_memory]);
         unsafe { std::mem_utils::memset_virtual_addr(group_mem_binding, 0, 4096) };
 
         //---------------Initialize inode bitmask at block 4---------------
@@ -569,6 +550,9 @@ impl FileSystem for Rfs {
     }
 
     fn read(&mut self, inode: u32, offset_bytes: u64, size_bytes: u64, buffer: &[PhysAddr]) {
+        if size_bytes == 0 {
+            return;
+        }
         assert!(buffer.len() == (offset_bytes + size_bytes).div_ceil(4096) as usize);
         assert!(offset_bytes % 4096 == 0);
         let aligned_size = size_bytes.div_ceil(4096) * 4096;
@@ -974,6 +958,9 @@ impl FileSystem for Rfs {
     fn read_dir(&mut self, inode: &vfs::Inode) -> Box<[crate::drivers::disk::DirEntry]> {
         assert!(inode.device == self.partition.partition.device);
         let needed_blocks = inode.size.div_ceil(4096);
+        if needed_blocks == 0 {
+            return Box::new([]);
+        }
         let phys_addresses = (0..needed_blocks).map(|_| physical_allocator::allocate_frame()).collect::<Box<[_]>>();
         let virt_addr_start = unsafe { PAGE_ALLOCATOR.mmap_contigious(&phys_addresses) };
         self.read(inode.index, 0, inode.size, &phys_addresses);
