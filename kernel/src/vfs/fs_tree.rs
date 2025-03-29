@@ -1,9 +1,9 @@
 use core::sync::atomic::AtomicU64;
 use std::{boxed::Box, collections::btree_map::BTreeMap, sync::mutex::Mutex, vec::Vec};
 
-use super::Inode;
+use super::{Inode, ResolvedPath, VFS};
 
-static INODE_CACHE: Mutex<InodeCache> = Mutex::new(InodeCache::new());
+pub(super) static INODE_CACHE: Mutex<InodeCache> = Mutex::new(InodeCache::new());
 pub(super) static CURRENT_NUM: AtomicU64 = AtomicU64::new(0);
 
 struct FsTreeNode {
@@ -11,7 +11,7 @@ struct FsTreeNode {
     children: Vec<(Box<str>, FsTreeNode)>,
 }
 
-struct InodeCache {
+pub(super) struct InodeCache {
     inodes: BTreeMap<u64, Inode>,
     root: FsTreeNode,
 }
@@ -38,4 +38,47 @@ pub fn init(root: Inode) {
         cahce_num: cache_num,
         children: Vec::new(),
     };
+}
+
+pub fn get_inode(inode_num: u64) -> Option<Inode> {
+    let cache = INODE_CACHE.lock();
+    cache.inodes.get(&inode_num).cloned()
+}
+
+pub fn get_inode_num(path: ResolvedPath) -> Option<u64> {
+    let cache = &mut *INODE_CACHE.lock();
+    let mut current = &mut cache.root;
+    let cache_inodes = &mut cache.inodes;
+    for component in path.0.iter() {
+        if current.children.is_empty() {
+            let inode = cache_inodes.get(&current.cahce_num).unwrap();
+            let mut vfs = VFS.lock();
+            let fs = vfs.mounted_partitions.get_mut(&inode.device).unwrap();
+            let dir = fs.read_dir(inode);
+            if dir.is_empty() {
+                return None;
+            }
+            for dir_entry in dir.iter() {
+                let inode = fs.stat(dir_entry.inode);
+                let cache_num = CURRENT_NUM.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+                cache_inodes.insert(cache_num, inode);
+                current.children.push((dir_entry.name.clone(), FsTreeNode {
+                    cahce_num: cache_num,
+                    children: Vec::new(),
+                }));
+            }
+        }
+        let mut found = false;
+        for (name, node) in current.children.iter_mut() {
+            if name == component {
+                current = unsafe { &mut *(node as *mut FsTreeNode) };
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            return None;
+        }
+    }
+    Some(current.cahce_num)
 }

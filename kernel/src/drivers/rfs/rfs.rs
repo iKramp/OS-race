@@ -1,13 +1,12 @@
 use uuid::Uuid;
 
 use super::{
-    DirEntry, Inode, InodeBitmask, InodeSize, SuperBlock,
-    btree::{BtreeNode, Key},
+    btree::{BtreeNode, Key}, DirEntry, Inode, InodeBitmask, InodeSize, SuperBlock
 };
 use crate::{
-    drivers::disk::{FileSystem, FileSystemFactory, MountedPartition},
-    memory::{PAGE_TREE_ALLOCATOR, paging::LiminePat, physical_allocator},
-    vfs::{self, InodeType},
+    drivers::{disk::{FileSystem, FileSystemFactory, MountedPartition}, rfs::BLOCK_SIZE_SECTORS},
+    memory::{paging::LiminePat, physical_allocator, PAGE_TREE_ALLOCATOR},
+    vfs::{self, InodeType, ROOT_INODE_INDEX},
 };
 use std::{
     PAGE_ALLOCATOR,
@@ -233,6 +232,7 @@ impl Rfs {
 
     pub fn format_partition(&mut self) {
         let whole_blocks = self.partition.partition.size_sectors as u64 / 8;
+        assert!(whole_blocks >= 4, "Partition too small");
         let whole_groups = whole_blocks / GROUP_BLOCK_SIZE;
         let last_group_blocks = whole_blocks % GROUP_BLOCK_SIZE;
         let group_memory = physical_allocator::allocate_frame();
@@ -276,7 +276,7 @@ impl Rfs {
         //----------Initialize header at block 1----------
         let header = SuperBlock {
             inode_tree: 2,
-            inode_bitmask: 0,
+            inode_bitmask: 4,
         };
         unsafe { set_at_virtual_addr(group_mem_binding, header) };
         self.partition.write(1, 1, &[group_memory]);
@@ -287,7 +287,7 @@ impl Rfs {
         root_node.set_key(
             0,
             Key {
-                index: 2,
+                index: ROOT_INODE_INDEX,
                 inode_block: 3,
             },
         );
@@ -329,6 +329,15 @@ impl Rfs {
                 root_dir_entry,
             )
         };
+
+        //---------------Initialize inode bitmask at block 4---------------
+        unsafe { std::mem_utils::memset_virtual_addr(group_mem_binding, 0, 4096) };
+        for i in 1..BLOCK_SIZE_SECTORS as u32 {
+            self.partition.write(4 * BLOCK_SIZE_SECTORS as usize + i as usize, 1, &[group_memory]);
+        }
+        //indexes 0, 1, and 2 are used
+        unsafe { set_at_virtual_addr::<u8>(group_mem_binding, 0b111) };
+        self.partition.write(4 * BLOCK_SIZE_SECTORS as usize, 1, &[group_memory]);
 
         unsafe {
             PAGE_ALLOCATOR.deallocate(group_mem_binding);
@@ -940,5 +949,9 @@ impl FileSystem for Rfs {
         unsafe { PAGE_ALLOCATOR.deallocate(working_block_binding) };
 
         self.clean_after_operation();
+    }
+
+    fn read_dir(&mut self, inode: &vfs::Inode) -> Box<[crate::drivers::disk::DirEntry]> {
+        todo!();
     }
 }

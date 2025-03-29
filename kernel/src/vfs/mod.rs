@@ -17,6 +17,8 @@ mod fs_tree;
 mod operations;
 pub use operations::*;
 
+//0 is unknown, 1 is bad blocks, 2 is root
+pub const ROOT_INODE_INDEX: u32 = 2;
 static VFS: Mutex<Vfs> = Mutex::new(Vfs::new());
 
 ///A wrapper type for path, that have been resolved to a list of path components
@@ -53,6 +55,7 @@ pub fn init() {
 }
 
 //this is returned by the stat() syscall
+#[derive(Debug, Clone)]
 pub struct Inode {
     pub index: u32,
     pub device: Uuid, //some map to major/minor (minor are partitions)

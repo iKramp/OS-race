@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::drivers::{disk::{Disk, MountedPartition, PartitionSchemeDriver}, gpt::GPTDriver};
 
-use super::{fs_tree, resolve_path, ResolvedPath, VFS};
+use super::{fs_tree, resolve_path, ResolvedPath, ROOT_INODE_INDEX, VFS};
 
 
 pub fn add_disk(mut disk: Box<dyn Disk + Send>) {
@@ -27,7 +27,7 @@ pub fn add_disk(mut disk: Box<dyn Disk + Send>) {
 fn remove_disk(uuid: Uuid) {
     let mut vfs = VFS.lock();
     for partition in vfs.disks.remove(&uuid).unwrap().1.iter() {
-        vfs.available_partitions.remove(&partition);
+        vfs.available_partitions.remove(partition);
     }
 }
 
@@ -60,14 +60,24 @@ pub fn mount_partition_resolved(part_id: Uuid, mountpoint: ResolvedPath) -> Resu
         .to_string());
     };
 
+    let current_num = fs_tree::CURRENT_NUM.load(core::sync::atomic::Ordering::Relaxed);
+
     //mounting root. This is the first FS cache operation and can only happen once per boot
-    if mountpoint.0.len() == 0 && unsafe { fs_tree::CURRENT_NUM } != 0 {
+    if mountpoint.0.is_empty() && current_num != 0 {
         return Err("Root already mounted".to_string());
     }
 
+    if !mountpoint.0.is_empty() {
+        panic!("mounting non-root not implemented yet");
+    }
+
     let mounted_partition = MountedPartition { disk, partition };
-    let fs = fs_factory.mount(mounted_partition);
+    let mut fs = fs_factory.mount(mounted_partition);
+    let inode = fs.stat(ROOT_INODE_INDEX);
+    fs_tree::init(inode);
     vfs.mounted_partitions.insert(part_id, fs);
+
+    
     Ok(())
 }
 
@@ -77,3 +87,11 @@ pub fn unmount_partition(part_id: Uuid) {
     partition.unmount();
 }
 
+pub fn get_dir_entries(path: ResolvedPath) -> Result<Box<[Box<str>]>, String> {
+    let inode_num = fs_tree::get_inode_num(path).ok_or("Path not found")?;
+    let inode = fs_tree::get_inode(inode_num).ok_or("Inode not found")?;
+    
+
+    //Ok(entries)
+    Err("todo".to_string())
+}

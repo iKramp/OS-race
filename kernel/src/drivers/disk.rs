@@ -26,7 +26,8 @@ pub trait FileSystemFactory {
 pub trait FileSystem {
     fn unmount(&mut self);
     ///Offset must be page aligned
-    fn read(&mut self, inode: u32, offset: u64, size: u64, buffer: &[PhysAddr]);
+    fn read(&mut self, inode: u32, offset_bytes: u64, size_bytes: u64, buffer: &[PhysAddr]);
+    fn read_dir(&mut self, inode: &Inode) -> Box<[DirEntry]>;
     ///Offset must be page aligned
     fn write(&mut self, inode: u32, offset: u64, size: u64, buffer: &[PhysAddr]);
     fn stat(&mut self, inode: u32) -> Inode;
@@ -69,4 +70,9 @@ impl MountedPartition {
         let metadata = self.disk.write(self.partition.start_sector + sector, sec_count, buffer);
         self.disk.clean_after_write(metadata);
     }
+}
+
+pub struct DirEntry {
+    pub inode: u32,
+    pub name: Box<str>,
 }

@@ -9,13 +9,15 @@ pub use rfs::*;
 
 use super::disk::Partition;
 
-const BLOCK_SIZE: u64 = 4096;
+const BLOCK_SIZE_SECTORS: u64 = 8;
 const VIRTUAL_ONLY: bool = true;
 
 #[repr(C)]
 #[derive(Debug)]
 struct SuperBlock {
+    ///Block index of the inode tree
     pub inode_tree: u32,
+    ///Block index of the inode bitmask
     pub inode_bitmask: u32,
 }
 
