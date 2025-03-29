@@ -1,9 +1,10 @@
-use std::{boxed::Box, collections::btree_map::BTreeMap, vec::Vec};
+use core::sync::atomic::AtomicU64;
+use std::{boxed::Box, collections::btree_map::BTreeMap, sync::mutex::Mutex, vec::Vec};
 
 use super::Inode;
 
-static mut INODE_CACHE: InodeCache = InodeCache::new();
-pub(super) static mut CURRENT_NUM: u64 = 0;
+static INODE_CACHE: Mutex<InodeCache> = Mutex::new(InodeCache::new());
+pub(super) static CURRENT_NUM: AtomicU64 = AtomicU64::new(0);
 
 struct FsTreeNode {
     cahce_num: u64,
@@ -29,13 +30,12 @@ impl InodeCache {
 
 ///Should be called when mounting a new fs as root
 pub fn init(root: Inode) {
-    unsafe {
-        INODE_CACHE.inodes.clear();
-        INODE_CACHE.inodes.insert(CURRENT_NUM, root);
-        INODE_CACHE.root = FsTreeNode {
-            cahce_num: CURRENT_NUM,
-            children: Vec::new(),
-        };
-        CURRENT_NUM += 1;
-    }
+    let mut cache = INODE_CACHE.lock();
+    let cache_num = CURRENT_NUM.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+    cache.inodes.clear();
+    cache.inodes.insert(cache_num, root);
+    cache.root = FsTreeNode {
+        cahce_num: cache_num,
+        children: Vec::new(),
+    };
 }
