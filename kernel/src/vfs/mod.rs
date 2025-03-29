@@ -19,14 +19,24 @@ pub use operations::*;
 
 //0 is unknown, 1 is bad blocks, 2 is root
 pub const ROOT_INODE_INDEX: u32 = 2;
-static VFS: Mutex<Vfs> = Mutex::new(Vfs::new());
+pub static VFS: Mutex<Vfs> = Mutex::new(Vfs::new());
 
 ///A wrapper type for path, that have been resolved to a list of path components
 ///That is, the path starts from root and does not contain any "." or ".." components
 #[repr(transparent)]
 pub struct ResolvedPath(Box<[Box<str>]>);
 
-struct Vfs {
+//just a wrapper
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(transparent)]
+pub struct DeviceId(u64);
+
+pub struct DeviceDetails {
+    pub drive: Uuid,
+    pub partition: Uuid,
+}
+
+pub struct Vfs {
     ///Map from disk guid to disk object (driver) and a list of partition guids
     disks: BTreeMap<Uuid, (Box<dyn Disk + Send>, Vec<Uuid>)>,
     ///maps from filesystem type guid to filesystem driver factory
@@ -35,6 +45,10 @@ struct Vfs {
     mounted_partitions: BTreeMap<Uuid, Box<dyn FileSystem + Send>>,
     ///maps from partition guid to partition object
     available_partitions: BTreeMap<Uuid, Partition>,
+    ///maps from device id to partition and drive uuid
+    devices: BTreeMap<DeviceId, DeviceDetails>,
+    ///counts devices
+    device_counter: u64,
 }
 
 impl Vfs {
@@ -44,7 +58,15 @@ impl Vfs {
             filesystem_driver_factories: BTreeMap::new(),
             mounted_partitions: BTreeMap::new(),
             available_partitions: BTreeMap::new(),
+            devices: BTreeMap::new(),
+            device_counter: 0,
         }
+    }
+
+    pub fn allocate_device(&mut self) -> DeviceId {
+        let id = DeviceId(self.device_counter);
+        self.device_counter += 1;
+        id
     }
 }
 
@@ -58,7 +80,7 @@ pub fn init() {
 #[derive(Debug, Clone)]
 pub struct Inode {
     pub index: u32,
-    pub device: Uuid, //some map to major/minor (minor are partitions)
+    pub device: DeviceId, //some map to major/minor (minor are partitions)
     pub type_mode: InodeType,
     pub link_cnt: u16,
     pub uid: u16,

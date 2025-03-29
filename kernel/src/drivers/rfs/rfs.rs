@@ -12,6 +12,7 @@ use crate::{
     memory::{PAGE_TREE_ALLOCATOR, paging::LiminePat, physical_allocator},
     vfs::{self, InodeType, ROOT_INODE_INDEX},
 };
+use core::str;
 use std::{
     PAGE_ALLOCATOR,
     boxed::Box,
@@ -971,6 +972,25 @@ impl FileSystem for Rfs {
     }
 
     fn read_dir(&mut self, inode: &vfs::Inode) -> Box<[crate::drivers::disk::DirEntry]> {
-        todo!();
+        assert!(inode.device == self.partition.partition.device);
+        let needed_blocks = inode.size.div_ceil(4096);
+        let phys_addresses = (0..needed_blocks).map(|_| physical_allocator::allocate_frame()).collect::<Box<[_]>>();
+        let virt_addr_start = unsafe { PAGE_ALLOCATOR.mmap_contigious(&phys_addresses) };
+        self.read(inode.index, 0, inode.size, &phys_addresses);
+        let mut entries = Vec::new();
+        let mut offset = 0;
+        while offset < inode.size {
+            let dir_entry = unsafe { get_at_virtual_addr::<DirEntry>(virt_addr_start + offset) };
+            let name = str::from_utf8(&dir_entry.name).unwrap();
+            let name = name.trim_matches('\0');
+            let name = Box::from(name);
+            entries.push(crate::drivers::disk::DirEntry {
+                inode: dir_entry.inode,
+                name,
+            });
+            offset += core::mem::size_of::<DirEntry>() as u64;
+        }
+
+        entries.into_boxed_slice()
     }
 }

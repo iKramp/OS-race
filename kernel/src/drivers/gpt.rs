@@ -8,7 +8,7 @@ use std::{
 
 use uuid::Uuid;
 
-use crate::memory::{PAGE_TREE_ALLOCATOR, paging::LiminePat, physical_allocator};
+use crate::{memory::{paging::LiminePat, physical_allocator, PAGE_TREE_ALLOCATOR}, vfs::VFS};
 
 use super::disk::{Disk, Partition, PartitionSchemeDriver};
 
@@ -48,7 +48,7 @@ impl PartitionSchemeDriver for GPTDriver {
 
         let mut partitions = Vec::new();
 
-        let disk_guid = self.guid(disk);
+        let mut vfs = VFS.lock();
 
         for i in 0..num_entries {
             unsafe {
@@ -68,7 +68,7 @@ impl PartitionSchemeDriver for GPTDriver {
                         start_sector: entry.starting_lba as usize,
                         size_sectors: (entry.ending_lba - entry.starting_lba + 1) as usize,
                         name,
-                        disk: disk_guid,
+                        device: vfs.allocate_device(),
                         fs_uuid,
                     },
                 ))

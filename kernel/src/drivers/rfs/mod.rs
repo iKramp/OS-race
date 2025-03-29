@@ -47,7 +47,7 @@ impl Inode {
     fn to_vfs(&self, index: u32, partition: &Partition) -> vfs::Inode {
         vfs::Inode {
             index,
-            device: partition.disk,
+            device: partition.device.clone(),
             type_mode: self.inode_type_mode.clone(),
             link_cnt: self.link_count,
             uid: self.uid,

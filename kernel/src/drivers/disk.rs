@@ -3,7 +3,7 @@ use std::{boxed::Box, mem_utils::PhysAddr, string::String, vec::Vec};
 
 use uuid::Uuid;
 
-use crate::vfs::{Inode, InodeType};
+use crate::vfs::{DeviceId, Inode, InodeType};
 
 pub trait Disk: Debug {
     fn read(&mut self, sector: usize, sec_count: usize, buffer: &[PhysAddr]) -> u64;
@@ -48,7 +48,7 @@ pub struct MountedPartition {
 #[derive(Debug, Clone)]
 pub struct Partition {
     pub fs_uuid: Uuid,
-    pub disk: Uuid,
+    pub device: DeviceId,
     pub start_sector: usize,
     pub size_sectors: usize,
     pub name: String,
@@ -72,6 +72,7 @@ impl MountedPartition {
     }
 }
 
+#[derive(Debug)]
 pub struct DirEntry {
     pub inode: u32,
     pub name: Box<str>,

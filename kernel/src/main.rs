@@ -66,6 +66,8 @@ extern "C" fn _start() -> ! {
         panic!("Failed to mount root partition");
     }
 
+    println!("{:?}", vfs::get_dir_entries(vfs::resolve_path("/", "/")));
+
     vga_text::hello_message();
 
     #[cfg(feature = "run_tests")]

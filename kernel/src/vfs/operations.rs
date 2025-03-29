@@ -2,9 +2,9 @@ use std::{boxed::Box, format, string::{String, ToString}, vec::Vec};
 
 use uuid::Uuid;
 
-use crate::drivers::{disk::{Disk, MountedPartition, PartitionSchemeDriver}, gpt::GPTDriver};
+use crate::drivers::{disk::{DirEntry, Disk, MountedPartition, PartitionSchemeDriver}, gpt::GPTDriver};
 
-use super::{fs_tree, resolve_path, ResolvedPath, ROOT_INODE_INDEX, VFS};
+use super::{fs_tree, resolve_path, DeviceDetails, ResolvedPath, ROOT_INODE_INDEX, VFS};
 
 
 pub fn add_disk(mut disk: Box<dyn Disk + Send>) {
@@ -19,7 +19,15 @@ pub fn add_disk(mut disk: Box<dyn Disk + Send>) {
     vfs.disks.insert(guid, (disk, partition_guids));
 
     for partition in partitions {
+        let device = partition.1.device.clone();
         vfs.available_partitions.insert(partition.0, partition.1);
+        vfs.devices.insert(
+            device,
+            DeviceDetails {
+                drive: guid,
+                partition: partition.0,
+            },
+        );
     }
 }
 
@@ -47,7 +55,9 @@ pub fn mount_partition_resolved(part_id: Uuid, mountpoint: ResolvedPath) -> Resu
     };
     let partition = partition.clone();
 
-    let disk = vfs.disks.get_mut(&partition.disk).unwrap();
+    let device_detail = vfs.devices.get(&partition.device).unwrap();
+    let drive_id = device_detail.drive;
+    let disk = vfs.disks.get_mut(&drive_id).unwrap();
     let disk = &raw mut *disk.0;
     let disk: &'static mut dyn Disk = unsafe { &mut *disk };
     let Some(fs_factory) = vfs.filesystem_driver_factories.get(&partition.fs_uuid) else {
@@ -87,11 +97,12 @@ pub fn unmount_partition(part_id: Uuid) {
     partition.unmount();
 }
 
-pub fn get_dir_entries(path: ResolvedPath) -> Result<Box<[Box<str>]>, String> {
+pub fn get_dir_entries(path: ResolvedPath) -> Result<Box<[DirEntry]>, String> {
     let inode_num = fs_tree::get_inode_num(path).ok_or("Path not found")?;
     let inode = fs_tree::get_inode(inode_num).ok_or("Inode not found")?;
-    
-
-    //Ok(entries)
-    Err("todo".to_string())
+    let mut vfs = VFS.lock();
+    let device_details = vfs.devices.get(&inode.device).ok_or("Device not found")?;
+    let partition_id = device_details.partition.clone();
+    let fs = vfs.mounted_partitions.get_mut(&partition_id).ok_or("FS not found")?;
+    Ok(fs.read_dir(&inode))
 }
