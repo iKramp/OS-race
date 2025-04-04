@@ -447,7 +447,7 @@ impl PageTable {
         entry.num_of_available_pages() == 1
     }
 
-    pub fn num_of_available_spaces(&mut self, level: u64) -> u64 {
+    pub fn set_num_of_available_spaces(&mut self, level: u64) -> u64 {
         let mut sum = 0;
         for entry in &mut self.entries {
             if !entry.present() {
@@ -459,11 +459,30 @@ impl PageTable {
             }
             unsafe {
                 let lower_level_page = get_at_physical_addr::<PageTable>(entry.address());
-                let lower_available = lower_level_page.num_of_available_spaces(level - 1);
+                let lower_available = lower_level_page.set_num_of_available_spaces(level - 1);
                 entry.set_num_of_available_pages(lower_available);
                 if lower_available > 0 {
                     sum += 1;
                 }
+            }
+        }
+        sum
+    }
+
+    fn get_num_allocated_spaces(&self, level: u64) -> u64 {
+        let mut sum = 0;
+        for entry in &self.entries {
+            if !entry.present() {
+                continue;
+            }
+            if level == 1 || entry.huge_page() {
+                sum += 1;
+                continue;
+            }
+            unsafe {
+                let lower_level_page = get_at_physical_addr::<PageTable>(entry.address());
+                let lower_available = lower_level_page.get_num_allocated_spaces(level - 1);
+                sum += lower_available;
             }
         }
         sum
@@ -510,11 +529,16 @@ impl PageTree {
         let level_4_table = Self::get_level4_addr();
         unsafe {
             let table = get_at_physical_addr::<PageTable>(level_4_table);
-            table.num_of_available_spaces(4);
+            table.set_num_of_available_spaces(4);
             table.allocate(VirtAddr(0));
-            table.num_of_available_spaces(4);
+            table.set_num_of_available_spaces(4);
         }
         Self { level_4_table }
+    }
+
+    pub fn get_num_allocated_pages(&self) -> u64 {
+        let level_4_table = unsafe { get_at_physical_addr::<PageTable>(self.level_4_table) };
+        level_4_table.get_num_allocated_spaces(4)
     }
 
     pub fn get_level4_addr() -> PhysAddr {

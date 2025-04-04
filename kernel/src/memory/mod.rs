@@ -40,3 +40,12 @@ pub fn init_memory() {
         ); //clear the TLB
     }
 }
+
+pub fn print_state() {
+    physical_allocator::print_state();
+
+
+    let allocator = unsafe { &PAGE_TREE_ALLOCATOR };
+    printlnc!((255, 200, 100), "Memory mapper state:");
+    println!("Mapped pages: {}", allocator.get_num_allocated_pages());
+}

@@ -1,9 +1,13 @@
 use std::{
-    mem_utils::{get_at_physical_addr, set_at_physical_addr, set_at_virtual_addr, VirtAddr}, println, string::String, vec::Vec, PageAllocator
+    PageAllocator,
+    mem_utils::{VirtAddr, get_at_physical_addr, set_at_physical_addr, set_at_virtual_addr},
+    println,
+    string::String,
+    vec::Vec,
 };
 
 use crate::{
-    memory::PAGE_TREE_ALLOCATOR,
+    memory::{self, PAGE_TREE_ALLOCATOR},
     vfs::{self, InodeType},
 };
 
@@ -21,11 +25,16 @@ const FILE_OPERATIONS: [FileOperation; 8] = [
 ];
 
 pub fn do_file_operations() {
+    memory::print_state();
     for opeartion in FILE_OPERATIONS {
+        println!("Executing operation: {:?}", opeartion);
         opeartion.execute();
+        println!("Memory state after execution: {:?}", opeartion);
+        memory::print_state();
     }
 }
 
+#[derive(Debug)]
 enum FileOperation {
     CreateFile(CreateFileOperation),
     ReadDir(ReadDirOperation),
@@ -48,10 +57,12 @@ impl FileOperation {
     }
 }
 
+#[derive(Debug)]
 struct CreateFileOperation {
     file_name: &'static str,
 }
 
+#[derive(Debug)]
 struct ReadDirOperation {
     folder_name: &'static str,
 }
@@ -83,6 +94,7 @@ impl CreateFileOperation {
     }
 }
 
+#[derive(Debug)]
 struct WriteFileOperation {
     file_name: &'static str,
     content: &'static str,
@@ -103,14 +115,14 @@ impl WriteFileOperation {
 
         let mut phys_addresses = Vec::new();
         let content = self.content.as_bytes();
+        let frame = crate::memory::physical_allocator::allocate_frame();
+        let frame_binding = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(frame)) };
+        unsafe {
+            PAGE_TREE_ALLOCATOR
+                .get_page_table_entry_mut(frame_binding)
+                .set_pat(crate::memory::paging::LiminePat::UC);
+        }
         for i in 0..(content.len().div_ceil(4096)) {
-            let frame = crate::memory::physical_allocator::allocate_frame();
-            let frame_binding = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(frame)) };
-            unsafe {
-                PAGE_TREE_ALLOCATOR
-                    .get_page_table_entry_mut(frame_binding)
-                    .set_pat(crate::memory::paging::LiminePat::UC);
-            }
             let ptr = frame_binding.0 as *mut u8;
             for j in 0..4096 {
                 if (i * 4096 + j) < content.len() {
@@ -120,16 +132,15 @@ impl WriteFileOperation {
                 }
             }
             phys_addresses.push(frame);
-            unsafe { PAGE_TREE_ALLOCATOR.unmap(frame_binding) };
-
         }
 
-
+        unsafe { PAGE_TREE_ALLOCATOR.unmap(frame_binding) };
         println!("Writing file: {} with content: {}", self.file_name, self.content);
         vfs::write_file(path, &phys_addresses, self.offset, self.content.len() as u64);
     }
 }
 
+#[derive(Debug)]
 struct CreateFolderOperation {
     folder_name: &'static str,
 }
@@ -147,6 +158,7 @@ impl CreateFolderOperation {
     }
 }
 
+#[derive(Debug)]
 struct DeleteFileOperation {
     file_name: &'static str,
 }
@@ -161,6 +173,7 @@ impl DeleteFileOperation {
     }
 }
 
+#[derive(Debug)]
 struct ReadFileOperation {
     file_name: &'static str,
     offset: u64,
@@ -202,7 +215,10 @@ impl ReadFileOperation {
             }
             unsafe { crate::memory::physical_allocator::deallocate_frame(*frame) };
         }
-        println!("Read file: {} at offset {} and size of read {}", self.file_name, self.offset, self.length);
+        println!(
+            "Read file: {} at offset {} and size of read {}",
+            self.file_name, self.offset, self.length
+        );
         println!("File content: {:?}", final_data);
         //transofm into string
         let string = String::from_utf8(final_data).unwrap();

@@ -1,4 +1,4 @@
-use std::{heap::log2_rounded_up, sync::mutex::Mutex};
+use std::{heap::log2_rounded_up, printlnc, sync::mutex::Mutex};
 
 use crate::{limine, println};
 
@@ -77,6 +77,13 @@ pub fn init() {
 
 pub fn is_frame_allocated(addr: PhysAddr) -> bool {
     BUDDY_ALLOCATOR.lock().is_frame_allocated(addr)
+}
+
+pub fn print_state() {
+    let allocator = BUDDY_ALLOCATOR.lock();
+    printlnc!((255, 200, 100), "Buddy Allocator state:");
+    println!("all_frames: {}", allocator.n_pages);
+    println!("allocated_frames: {}", allocator.allocated_pages);
 }
 
 ///# Safety

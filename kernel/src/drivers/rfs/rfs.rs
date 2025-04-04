@@ -18,7 +18,6 @@ use std::{
     boxed::Box,
     collections::btree_map::BTreeMap,
     mem_utils::{PhysAddr, VirtAddr, get_at_virtual_addr, memset_virtual_addr, set_at_virtual_addr},
-    println,
     vec::Vec,
 };
 

@@ -71,7 +71,7 @@ extern "C" fn _start() -> ! {
 
     file_operations::do_file_operations();
 
-    vga_text::hello_message();
+    // vga_text::hello_message();
 
     #[cfg(feature = "run_tests")]
     {
