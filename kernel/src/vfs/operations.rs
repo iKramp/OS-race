@@ -1,10 +1,10 @@
-use std::{boxed::Box, format, string::{String, ToString}, vec::Vec};
+use std::{boxed::Box, format, mem_utils::PhysAddr, println, string::{String, ToString}, vec::Vec};
 
 use uuid::Uuid;
 
 use crate::drivers::{disk::{DirEntry, Disk, MountedPartition, PartitionSchemeDriver}, gpt::GPTDriver};
 
-use super::{fs_tree, resolve_path, DeviceDetails, ResolvedPath, ROOT_INODE_INDEX, VFS};
+use super::{fs_tree, resolve_path, DeviceDetails, InodeType, ResolvedPath, ROOT_INODE_INDEX, VFS};
 
 
 pub fn add_disk(mut disk: Box<dyn Disk + Send>) {
@@ -102,7 +102,40 @@ pub fn get_dir_entries(path: ResolvedPath) -> Result<Box<[DirEntry]>, String> {
     let inode = fs_tree::get_inode(inode_num).ok_or("Inode not found")?;
     let mut vfs = VFS.lock();
     let device_details = vfs.devices.get(&inode.device).ok_or("Device not found")?;
-    let partition_id = device_details.partition.clone();
+    let partition_id = device_details.partition;
     let fs = vfs.mounted_partitions.get_mut(&partition_id).ok_or("FS not found")?;
     Ok(fs.read_dir(&inode))
+}
+
+pub fn create_file(path: ResolvedPath, name: &str, inode_type: InodeType) {
+    let parent_inode_num = fs_tree::get_inode_num(path).unwrap();
+    let parent_inode = fs_tree::get_inode(parent_inode_num).unwrap();
+    let mut vfs = VFS.lock();
+    let device_details = vfs.devices.get(&parent_inode.device).unwrap();
+    let partition_id = device_details.partition;
+    let fs = vfs.mounted_partitions.get_mut(&partition_id).unwrap();
+    let (file_inode, parent_inode) = fs.create(name, parent_inode.index, inode_type, 0, 0);
+    fs_tree::update_inode(parent_inode_num, parent_inode);
+    println!("{:?}", file_inode);
+    fs_tree::insert_inode(parent_inode_num, name.to_string().into_boxed_str(), file_inode);
+}
+
+pub fn write_file(path: ResolvedPath, content: &[PhysAddr], offset: u64, size: u64) {
+    let inode_num = fs_tree::get_inode_num(path).unwrap();
+    let inode = fs_tree::get_inode(inode_num).unwrap();
+    let mut vfs = VFS.lock();
+    let device_details = vfs.devices.get(&inode.device).unwrap();
+    let partition_id = device_details.partition;
+    let fs = vfs.mounted_partitions.get_mut(&partition_id).unwrap();
+    fs.write(inode.index, offset, size, content);
+}
+
+pub fn read_file(path: ResolvedPath, buffer: &[PhysAddr], offset: u64, size: u64) {
+    let inode_num = fs_tree::get_inode_num(path).unwrap();
+    let inode = fs_tree::get_inode(inode_num).unwrap();
+    let mut vfs = VFS.lock();
+    let device_details = vfs.devices.get(&inode.device).unwrap();
+    let partition_id = device_details.partition;
+    let fs = vfs.mounted_partitions.get_mut(&partition_id).unwrap();
+    fs.read(inode.index, offset, size, buffer);
 }

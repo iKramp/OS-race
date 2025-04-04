@@ -1,4 +1,4 @@
-use super::{mem_utils::*, physical_allocator};
+use super::{mem_utils::*, physical_allocator, PAGE_TREE_ALLOCATOR};
 
 #[derive(Clone, Copy)]
 pub struct PageTableEntry(u64);
@@ -96,6 +96,8 @@ impl PageTableEntry {
         //for now i ignore pat teehee :3
         //pat bit depends on if it's a page directory or page table. Can be checked with huge
         //table, but huge-huge tables (1GB) also have huge tables, and don't have pat bit
+
+        PageTree::reload();
     }
 
     pub fn accessed(&self) -> bool {

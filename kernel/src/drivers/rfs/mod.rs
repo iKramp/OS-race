@@ -9,7 +9,7 @@ pub use rfs::*;
 
 use super::disk::Partition;
 
-const BLOCK_SIZE_SECTORS: u64 = 8;
+const BLOCK_SIZE_SECTORS: usize = 8;
 const VIRTUAL_ONLY: bool = true;
 
 #[repr(C)]

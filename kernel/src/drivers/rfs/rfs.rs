@@ -79,7 +79,7 @@ impl Rfs {
                 .set_pat(LiminePat::UC);
         }
 
-        partition.read(BLOCK_SIZE_SECTORS as usize, 1, &[working_block]);
+        partition.read(BLOCK_SIZE_SECTORS, 1, &[working_block]);
         let header = unsafe { get_at_virtual_addr::<SuperBlock>(working_block_binding) };
         let root_block = header.inode_tree;
         unsafe { PAGE_ALLOCATOR.deallocate(working_block_binding) };
@@ -107,7 +107,7 @@ impl Rfs {
         }
         for i in 0..self.groups {
             self.partition
-                .read(i as usize * GROUP_BLOCK_SIZE as usize, 1, &[group_memory]);
+                .read(i as usize * GROUP_BLOCK_SIZE as usize * BLOCK_SIZE_SECTORS, 1, &[group_memory]);
             for j in (0..4096).step_by(8) {
                 let qword: u64 = unsafe { *get_at_virtual_addr(group_mem_binding + j) };
                 if qword != 0xFFFFFFFFFFFFFFFF {
@@ -160,12 +160,12 @@ impl Rfs {
                 .get_page_table_entry_mut(block_mem_binding)
                 .set_pat(LiminePat::UC);
         }
-        self.partition.read(1, 1, &[block_memory]);
+        self.partition.read(BLOCK_SIZE_SECTORS, 1, &[block_memory]);
         let superblock: &mut SuperBlock = unsafe { get_at_virtual_addr(block_mem_binding) };
         let mut next_ptr = superblock.inode_bitmask;
         let mut block_index = 0;
         loop {
-            self.partition.read(next_ptr as usize * 8, 8, &[block_memory]);
+            self.partition.read(next_ptr as usize * BLOCK_SIZE_SECTORS, 8, &[block_memory]);
             let bitmask: &mut InodeBitmask = unsafe { get_at_virtual_addr(block_mem_binding) };
             for (bit_index, byte_mask) in bitmask.inodes.iter_mut().enumerate() {
                 if *byte_mask != 0xFF {
@@ -221,22 +221,22 @@ impl Rfs {
         unsafe { PAGE_ALLOCATOR.deallocate(block_mem_binding) };
     }
 
-    pub fn get_node(&mut self, node_addr: u32) -> &mut (bool, *mut BtreeNode) {
-        if let std::collections::btree_map::Entry::Vacant(e) = self.inode_tree_cache.entry(node_addr) {
-            let data = BtreeNode::read_from_disk(&mut self.partition, node_addr);
+    pub fn get_node(&mut self, node_block: u32) -> &mut (bool, *mut BtreeNode) {
+        if let std::collections::btree_map::Entry::Vacant(e) = self.inode_tree_cache.entry(node_block) {
+            let data = BtreeNode::read_from_disk(&mut self.partition, node_block);
             e.insert((false, data));
         }
 
-        self.inode_tree_cache.get_mut(&node_addr).unwrap()
+        self.inode_tree_cache.get_mut(&node_block).unwrap()
     }
 
-    pub fn add_node(&mut self, node_addr: u32, node: *mut BtreeNode) {
-        self.inode_tree_cache.insert(node_addr, (true, node));
+    pub fn add_node(&mut self, node_block: u32, node: *mut BtreeNode) {
+        self.inode_tree_cache.insert(node_block, (true, node));
     }
 
     ///removes node from cache
-    pub fn remove_inode_cache_entry(&mut self, node_addr: u32) {
-        self.inode_tree_cache.remove(&node_addr);
+    pub fn remove_inode_cache_entry(&mut self, node_block: u32) {
+        self.inode_tree_cache.remove(&node_block);
     }
 
     pub fn clean_after_operation(&mut self) {
@@ -264,7 +264,9 @@ impl Rfs {
         }
         unsafe {
             memset_virtual_addr(group_mem_binding, 0, 4096);
-            set_at_virtual_addr::<u8>(group_mem_binding, 1);
+            
+            //first 5 groups are taken
+            set_at_virtual_addr::<u8>(group_mem_binding, 0b11111);
         }
 
         //----------Initialize free block tables----------
@@ -297,7 +299,7 @@ impl Rfs {
             inode_bitmask: 4,
         };
         unsafe { set_at_virtual_addr(group_mem_binding, header) };
-        self.partition.write(BLOCK_SIZE_SECTORS as usize, 1, &[group_memory]);
+        self.partition.write(BLOCK_SIZE_SECTORS, 1, &[group_memory]);
         unsafe { std::mem_utils::memset_virtual_addr(group_mem_binding, 0, core::mem::size_of::<SuperBlock>()) };
 
         //----------Initialize root node at block 2, with a key for root----------
@@ -310,7 +312,7 @@ impl Rfs {
             },
         );
         unsafe { set_at_virtual_addr(group_mem_binding, (*root_node).clone()) };
-        self.partition.write(2 * BLOCK_SIZE_SECTORS as usize, 1, &[group_memory]);
+        self.partition.write(2 * BLOCK_SIZE_SECTORS, 1, &[group_memory]);
 
         //i can clean like this because key is the first field
         unsafe { std::mem_utils::memset_virtual_addr(group_mem_binding, 0, core::mem::size_of::<Key>()) };
@@ -328,27 +330,25 @@ impl Rfs {
         };
         unsafe { set_at_virtual_addr(group_mem_binding, root_inode) };
 
-        self.partition.write(3 * 8, 1, &[group_memory]);
+        self.partition.write(3 * BLOCK_SIZE_SECTORS, 1, &[group_memory]);
         unsafe { std::mem_utils::memset_virtual_addr(group_mem_binding, 0, 4096) };
 
         //---------------Initialize inode bitmask at block 4---------------
         for i in 1..BLOCK_SIZE_SECTORS as u32 {
             self.partition
-                .write(4 * BLOCK_SIZE_SECTORS as usize + i as usize, 1, &[group_memory]);
+                .write(4 * BLOCK_SIZE_SECTORS + i as usize, 1, &[group_memory]);
         }
         //indexes 0, 1, and 2 are used
         unsafe { set_at_virtual_addr::<u8>(group_mem_binding, 0b111) };
-        self.partition.write(4 * BLOCK_SIZE_SECTORS as usize, 1, &[group_memory]);
+        self.partition.write(4 * BLOCK_SIZE_SECTORS, 1, &[group_memory]);
 
         unsafe {
             PAGE_ALLOCATOR.deallocate(group_mem_binding);
         }
     }
 
-    ///this function will not write the inode frame. That is the responsibility of the calling
-    ///function
-    fn increase_file_size(&mut self, inode_frame: VirtAddr, inode_block: u32, size_new: u64) {
-        let inode_data: &mut Inode = unsafe { get_at_virtual_addr(inode_frame) };
+    fn increase_file_size(&mut self, inode_frame_binding: VirtAddr, inode_frame: PhysAddr, inode_block: u32, size_new: u64) {
+        let inode_data: &mut Inode = unsafe { get_at_virtual_addr(inode_frame_binding) };
         let mut levels_curr = inode_data.size.ptr_levels() as u32;
         let size_old = inode_data.size.size();
 
@@ -380,6 +380,7 @@ impl Rfs {
 
         inode_data.size.set_ptr_levels(levels_new as u64);
         inode_data.size.set_size(size_new);
+        self.partition.write(inode_block as usize * BLOCK_SIZE_SECTORS, 1, &[inode_frame]);
 
         let mut blocks_old = size_old.div_ceil(4096);
         let blocks_new = size_new.div_ceil(4096);
@@ -390,14 +391,14 @@ impl Rfs {
         }
         if levels_new == 1 {
             assert!(blocks_new <= 512 * 7 / 4, "Function did not increase levels enough");
-            let pointers = unsafe { get_at_virtual_addr::<[u32; 512 / 4 * 7]>(inode_frame + 512) };
+            let pointers = unsafe { get_at_virtual_addr::<[u32; 512 / 4 * 7]>(inode_frame_binding + 512) };
             for i in blocks_old..blocks_new {
                 let new_block = self.allocate_block();
                 pointers[i as usize] = new_block;
             }
         } else {
             //level = 2 or 3
-            let pointers = unsafe { get_at_virtual_addr::<[u32; 512 / 4 * 7]>(inode_frame + 512) };
+            let pointers = unsafe { get_at_virtual_addr::<[u32; 512 / 4 * 7]>(inode_frame_binding + 512) };
             let pointer_capacity = u64::pow(1024, levels_new - 1);
             for i in 0..(512 / 4 * 7) {
                 if blocks_old >= blocks_new {
@@ -583,12 +584,11 @@ impl FileSystem for Rfs {
         }
 
         let mut first_ptr = 0;
-        let mut ptr_span = 4096 + (levels - 1) * 1024;
         while levels > 0 {
+            let ptr_span = 4096 + (levels - 1) * 1024;
             let first_relevant = (offset_bytes - first_ptr) / ptr_span;
             let last_relevant = (offset_bytes + aligned_size - 1 - first_ptr) / ptr_span;
             first_ptr += first_relevant * ptr_span;
-            ptr_span /= 1024;
 
             let mut new_pointers =
                 std::Vec::with_capacity((pointers.len() - (last_relevant - first_relevant + 1) as usize) * 1024);
@@ -607,15 +607,16 @@ impl FileSystem for Rfs {
         let last_relevant = (offset_bytes + aligned_size - 1 - first_ptr) / 4096;
         for i in first_relevant..=last_relevant {
             let i = i as usize;
+            let buf_index = i - first_relevant as usize;
             self.partition
-                .read(pointers[i] as usize * 8, 8, &buffer[(i * 8)..(i * 8 + 8)]);
+                .read(pointers[i] as usize * 8, 8, &buffer[buf_index..=buf_index]);
         }
         unsafe { PAGE_ALLOCATOR.deallocate(inode_block_binding) };
 
         self.clean_after_operation();
     }
 
-    fn write(&mut self, inode: u32, offset: u64, size: u64, buffer: &[PhysAddr]) {
+    fn write(&mut self, inode: u32, offset: u64, size: u64, buffer: &[PhysAddr]) -> vfs::Inode {
         assert!(offset % 4096 == 0);
         assert!(size.div_ceil(4096) <= buffer.len() as u64);
         //get info about file currently
@@ -634,8 +635,13 @@ impl FileSystem for Rfs {
         let size_curr = inode_data.size.size();
         let size_new = u64::max(offset + size, size_curr);
         if size_new > size_curr {
-            self.increase_file_size(inode_block_binding, inode_block_index, size_new);
+            self.increase_file_size(inode_block_binding, inode_block, inode_block_index, size_new);
         }
+
+        //create a new reference to avoid rustc optimization issues. This is really a no-op anyway
+        let inode_data: &mut Inode = unsafe { get_at_virtual_addr(inode_block_binding) };
+
+        let vfs_inode = inode_data.to_vfs(inode, &self.partition.partition);
 
         let mut levels = inode_data.size.ptr_levels();
 
@@ -657,17 +663,16 @@ impl FileSystem for Rfs {
         let aligned_size = size.div_ceil(4096) * 4096;
 
         let mut first_ptr = 0;
-        let mut ptr_span = 4096 + (levels - 1) * 1024;
         while levels > 0 {
+            let ptr_span = 4096 + (levels - 1) * 1024;
             let first_relevant = (offset - first_ptr) / ptr_span;
             let last_relevant = (offset + aligned_size - 1 - first_ptr) / ptr_span;
             first_ptr += first_relevant * ptr_span;
-            ptr_span /= 1024;
 
             let mut new_pointers =
                 std::Vec::with_capacity((pointers.len() - (last_relevant - first_relevant + 1) as usize) * 1024);
             for i in first_relevant..=last_relevant {
-                self.partition.read(pointers[i as usize] as usize * 8, 8, &[inode_block]);
+                self.partition.read(pointers[i as usize] as usize * BLOCK_SIZE_SECTORS, 8, &[inode_block]);
                 for i in 0..1024 {
                     new_pointers.push(unsafe { *get_at_virtual_addr(inode_block_binding + i * 4) });
                 }
@@ -683,12 +688,15 @@ impl FileSystem for Rfs {
         let last_relevant = (offset + aligned_size - 1 - first_ptr) / 4096;
         for i in first_relevant..=last_relevant {
             let i = i as usize;
+            let buffer_index = i - first_relevant as usize;
             self.partition
-                .write(pointers[i] as usize * 8, 8, &buffer[(i * 8)..(i * 8 + 8)]);
+                .write(pointers[i] as usize * BLOCK_SIZE_SECTORS, 8, &buffer[buffer_index..=buffer_index]);
         }
         unsafe { PAGE_ALLOCATOR.deallocate(inode_block_binding) };
 
         self.clean_after_operation();
+
+        vfs_inode
     }
 
     fn stat(&mut self, inode: u32) -> crate::vfs::Inode {
@@ -729,12 +737,12 @@ impl FileSystem for Rfs {
 
     fn create(
         &mut self,
-        name: std::string::String,
+        name: &str,
         parent_dir: u32,
         type_mode: crate::vfs::InodeType,
         uid: u16,
         gid: u16,
-    ) -> crate::vfs::Inode {
+    ) -> (vfs::Inode, vfs::Inode) {
         let new_inode_block_index = self.allocate_block();
         let inode_index = self.allocate_inode();
         let inode = Inode {
@@ -768,11 +776,11 @@ impl FileSystem for Rfs {
             self,
         );
 
-        self.link(inode_index, parent_dir, name);
+        let parent_vfs_inode = self.link(inode_index, parent_dir, name);
 
         unsafe { PAGE_ALLOCATOR.deallocate(inode_block_binding) };
 
-        vfs_inode
+        (vfs_inode, parent_vfs_inode)
     }
 
     fn remove(&mut self, inode: u32) {
@@ -787,8 +795,12 @@ impl FileSystem for Rfs {
         let root = self.get_node(self.root_block).1;
         let inode_block_index = root.find_inode_block(inode, self).unwrap();
         self.partition.read(inode_block_index as usize * 8, 8, &[working_block]);
-        let partition = unsafe { get_at_virtual_addr::<Inode>(working_block_binding) };
-        let levels = partition.size.ptr_levels() as u32;
+        let inode_meatadata = unsafe { get_at_virtual_addr::<Inode>(working_block_binding) };
+        let levels = inode_meatadata.size.ptr_levels() as u32;
+
+        if inode_meatadata.inode_type_mode.is_dir() && inode_meatadata.size.size() != 0 {
+            todo!("Directory not empty. Return error value instead");
+        }
 
         if levels == 0 {
             self.free_block(inode_block_index);
@@ -809,19 +821,19 @@ impl FileSystem for Rfs {
         self.clean_after_operation();
     }
 
-    fn link(&mut self, inode_index: u32, parent_inode: u32, name: std::string::String) {
+    fn link(&mut self, inode_index: u32, parent_inode_index: u32, name: &str) -> vfs::Inode {
         let root = self.get_node(self.root_block).1;
-        let inode_block = physical_allocator::allocate_frame();
-        let inode_block_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(inode_block)) };
+        let working_block = physical_allocator::allocate_frame();
+        let working_block_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(working_block)) };
         unsafe {
             PAGE_TREE_ALLOCATOR
-                .get_page_table_entry_mut(inode_block_binding)
+                .get_page_table_entry_mut(working_block_binding)
                 .set_pat(LiminePat::UC);
         }
 
-        let inode_block_index = root.find_inode_block(parent_inode, self).unwrap();
-        self.partition.read(inode_block_index as usize * 8, 1, &[inode_block]);
-        let inode_data: &mut Inode = unsafe { get_at_virtual_addr(inode_block_binding) };
+        let parent_inode_block_index = root.find_inode_block(parent_inode_index, self).unwrap();
+        self.partition.read(parent_inode_block_index as usize * BLOCK_SIZE_SECTORS, 1, &[working_block]);
+        let inode_data: &mut Inode = unsafe { get_at_virtual_addr(working_block_binding) };
         let offset = inode_data.size.size();
 
         let needs_second_block = (offset + core::mem::size_of::<DirEntry>() as u64) % 4096 < (offset % 4096);
@@ -840,7 +852,7 @@ impl FileSystem for Rfs {
         }
 
         if offset % 4096 != 0 {
-            self.read(parent_inode, offset & (!0xFFF), 4096, &[inode_block]);
+            self.read(parent_inode_index, offset & (!0xFFF), 4096, &[working_block]);
         }
         let name_bytes = name.as_bytes();
         let mut name_byte_arr: [u8; 128] = [0; 128];
@@ -856,9 +868,10 @@ impl FileSystem for Rfs {
 
         for i in 0..core::mem::size_of::<DirEntry>() {
             let new_off = temp_offset + i as u64;
-            if new_off & (!0xFFF) == 0 {
-                unsafe { set_at_virtual_addr(inode_block_binding + new_off, dir_entry_bytes.add(i).read()) }
+            if new_off < 4096 {
+                unsafe { set_at_virtual_addr(working_block_binding + new_off, dir_entry_bytes.add(i).read()) }
             } else {
+                assert!(needs_second_block);
                 unsafe { set_at_virtual_addr(second_block_binding + new_off % 4096, dir_entry_bytes.add(i).read()) }
             }
         }
@@ -866,27 +879,30 @@ impl FileSystem for Rfs {
         let write_size = if needs_second_block {
             8192
         } else {
+            //could do 4096, but this allows small dirs do have their content in the same block as
+            //the inode. This is unneeded for anything over 7 sectors, so
             offset + core::mem::size_of::<DirEntry>() as u64
         };
         let buffers: &[PhysAddr] = if needs_second_block {
-            &[inode_block, second_block]
+            &[working_block, second_block]
         } else {
-            &[inode_block]
+            &[working_block]
         };
-        self.write(parent_inode, offset & (!0xFFF), write_size, buffers);
+        let vfs_inode = self.write(parent_inode_index, offset & (!0xFFF), write_size, buffers);
 
         if needs_second_block {
             unsafe { PAGE_ALLOCATOR.deallocate(second_block_binding) };
         }
-        unsafe { PAGE_ALLOCATOR.deallocate(inode_block_binding) };
+        unsafe { PAGE_ALLOCATOR.deallocate(working_block_binding) };
         self.clean_after_operation();
+        vfs_inode
     }
 
     fn truncate(&mut self, inode: u32, size: u64) {
         todo!()
     }
 
-    fn rename(&mut self, inode: u32, parent_inode: u32, name: std::string::String) {
+    fn rename(&mut self, inode: u32, parent_inode: u32, name: &str) {
         let root_block_index = self.get_node(self.root_block).1;
         let parent_inode_block_index = root_block_index.find_inode_block(parent_inode, self).unwrap();
         let working_block = physical_allocator::allocate_frame();

@@ -26,6 +26,7 @@ mod utils;
 mod vfs;
 mod vga;
 mod cmd_args;
+mod file_operations;
 use limine::LIMINE_BOOTLOADER_REQUESTS;
 use vga::vga_text;
 
@@ -67,6 +68,8 @@ extern "C" fn _start() -> ! {
     }
 
     println!("{:?}", vfs::get_dir_entries(vfs::resolve_path("/", "/")));
+
+    file_operations::do_file_operations();
 
     vga_text::hello_message();
 

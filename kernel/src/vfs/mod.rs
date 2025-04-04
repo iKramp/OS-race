@@ -144,6 +144,10 @@ impl InodeType {
     pub fn new_dir(perms: u32) -> Self {
         InodeType(0o40000 | perms)
     }
+
+    pub fn new_file(perms: u32) -> Self {
+        InodeType(perms)
+    }
 }
 
 //unused for now, we don't need permissions

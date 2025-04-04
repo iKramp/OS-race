@@ -1,6 +1,6 @@
 use std::{PAGE_ALLOCATOR, mem_utils::VirtAddr};
 
-use super::Rfs;
+use super::{Rfs, BLOCK_SIZE_SECTORS};
 use crate::{
     drivers::disk::MountedPartition,
     memory::{PAGE_TREE_ALLOCATOR, paging, physical_allocator},
@@ -16,7 +16,7 @@ pub struct BtreeNode {
 
 impl BtreeNode {
     pub fn read_from_disk(partition: &mut MountedPartition, block: u32) -> *mut Self {
-        let sector = block as usize * 8;
+        let sector = block as usize * BLOCK_SIZE_SECTORS;
 
         let phys_ptr = physical_allocator::allocate_frame();
         let virt_ptr = unsafe { PAGE_ALLOCATOR.allocate(Some(phys_ptr)) };
@@ -37,7 +37,7 @@ impl BtreeNode {
 
     ///set modified to false
     pub fn write_to_disk(self: *const Self, partition: &mut MountedPartition, block: u32) {
-        let sector = block as usize * 8;
+        let sector = block as usize * BLOCK_SIZE_SECTORS;
         let phys_addr = std::mem_utils::translate_virt_phys_addr(VirtAddr(self as u64)).unwrap();
 
         partition.write(sector, 8, &[phys_addr]);

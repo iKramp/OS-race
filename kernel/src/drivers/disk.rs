@@ -28,15 +28,17 @@ pub trait FileSystem {
     ///Offset must be page aligned
     fn read(&mut self, inode: u32, offset_bytes: u64, size_bytes: u64, buffer: &[PhysAddr]);
     fn read_dir(&mut self, inode: &Inode) -> Box<[DirEntry]>;
-    ///Offset must be page aligned
-    fn write(&mut self, inode: u32, offset: u64, size: u64, buffer: &[PhysAddr]);
+    ///Offset must be page aligned. Returns the new inode
+    fn write(&mut self, inode: u32, offset: u64, size: u64, buffer: &[PhysAddr]) -> Inode;
     fn stat(&mut self, inode: u32) -> Inode;
     fn set_stat(&mut self, inode_index: u32, inode_data: Inode);
-    fn create(&mut self, name: String, parent_dir: u32, type_mode: InodeType, uid: u16, gid: u16) -> Inode;
+    ///returns the new parent inode in the first field and the new inode in the second
+    fn create(&mut self, name: &str, parent_dir: u32, type_mode: InodeType, uid: u16, gid: u16) -> (Inode, Inode);
     fn remove(&mut self, inode: u32);
-    fn link(&mut self, inode: u32, parent_dir: u32, name: String);
+    ///returns the new parent inode
+    fn link(&mut self, inode: u32, parent_dir: u32, name: &str) -> Inode;
     fn truncate(&mut self, inode: u32, size: u64);
-    fn rename(&mut self, inode: u32, parent_inode: u32, name: String);
+    fn rename(&mut self, inode: u32, parent_inode: u32, name: &str);
 }
 
 #[derive(Debug)]
