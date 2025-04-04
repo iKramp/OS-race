@@ -7,16 +7,16 @@ use crate::{
 
 const BEE_MOVIE_SCRIPT_START: &str = include_str!("./bee_movie_script.txt");
 
-const FILE_OPERATIONS: [FileOperation; 8] = [
-    FileOperation::CreateFolder(CreateFolderOperation::new("/test")),
+const FILE_OPERATIONS: [FileOperation; 1] = [
+    // FileOperation::CreateFolder(CreateFolderOperation::new("/test")),
     // FileOperation::ReadDir(ReadDirOperation::new("/")),
-    FileOperation::CreateFile(CreateFileOperation::new("/test.txt")),
-    FileOperation::CreateFile(CreateFileOperation::new("/test/test.txt")),
+    // FileOperation::CreateFile(CreateFileOperation::new("/test.txt")),
+    // FileOperation::CreateFile(CreateFileOperation::new("/test/test.txt")),
     // FileOperation::ReadDir(ReadDirOperation::new("/")),
-    FileOperation::Write(WriteFileOperation::new("/test.txt", "Hello, world!", 0)),
-    FileOperation::Write(WriteFileOperation::new("/test/test.txt", BEE_MOVIE_SCRIPT_START, 0)),
-    FileOperation::ReadFile(ReadFileOperation::new("/test.txt", 0, 5)),
-    FileOperation::ReadFile(ReadFileOperation::new("/test.txt", 7, 6)),
+    // FileOperation::Write(WriteFileOperation::new("/test.txt", "Hello, world!", 0)),
+    // FileOperation::Write(WriteFileOperation::new("/test/test.txt", BEE_MOVIE_SCRIPT_START, 0)),
+    // FileOperation::ReadFile(ReadFileOperation::new("/test.txt", 0, 5)),
+    // FileOperation::ReadFile(ReadFileOperation::new("/test.txt", 7, 6)),
     FileOperation::ReadFile(ReadFileOperation::new("/test/test.txt", 0, 49475)),
 ];
 

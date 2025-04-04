@@ -87,7 +87,7 @@ impl Rfs {
             blocks,
         };
 
-        driver.format_partition();
+        // driver.format_partition();
 
         driver
     }
