@@ -9,12 +9,11 @@ use crate::vfs::{self, InodeType};
 
 //TODO: move this to vfs operations when vfs works
 
-const FILE_OPERATIONS: [FileOperation; 8] = [
-    FileOperation::CreateFolder(CreateFolderOperation::new("/test")),
-    FileOperation::ReadDir(ReadDirOperation::new("/")),
-    FileOperation::ReadDir(ReadDirOperation::new("/test")),
-    FileOperation::CreateFile(CreateFileOperation::new("/test/test.txt")),
-    FileOperation::ReadDir(ReadDirOperation::new("/")),
+const FILE_OPERATIONS: [FileOperation; 4] = [
+    // FileOperation::CreateFolder(CreateFolderOperation::new("/test")),
+    // FileOperation::ReadDir(ReadDirOperation::new("/")),
+    FileOperation::CreateFile(CreateFileOperation::new("/test.txt")),
+    // FileOperation::ReadDir(ReadDirOperation::new("/")),
     FileOperation::Write(WriteFileOperation::new("/test.txt", "Hello, world!", 0)),
     FileOperation::ReadFile(ReadFileOperation::new("/test.txt", 0, 5)),
     FileOperation::ReadFile(ReadFileOperation::new("/test.txt", 7, 6)),
@@ -77,7 +76,9 @@ impl CreateFileOperation {
     fn execute(&self) {
         let split_index = self.file_name.rfind('/').unwrap();
         let (parent_path, file_name) = self.file_name.split_at(split_index + 1); //slash is in the
-        vfs::create_file(vfs::resolve_path(parent_path, "/"), file_name, InodeType::new_file(0))
+        println!("Creating file: {}", self.file_name);
+        vfs::create_file(vfs::resolve_path(parent_path, "/"), file_name, InodeType::new_file(0));
+        println!("Created file: {:?}", self.file_name);
     }
 }
 
@@ -122,6 +123,7 @@ impl CreateFolderOperation {
     fn execute(&self) {
         let split_index = self.folder_name.rfind('/').unwrap();
         let (parent_path, file_name) = self.folder_name.split_at(split_index + 1); //slash is in the
+        println!("Creating folder: {}", self.folder_name);
         vfs::create_file(vfs::resolve_path(parent_path, "/"), file_name, InodeType::new_file(0))
     }
 }

@@ -106,8 +106,11 @@ impl Rfs {
                 .set_pat(LiminePat::UC);
         }
         for i in 0..self.groups {
-            self.partition
-                .read(i as usize * GROUP_BLOCK_SIZE as usize * BLOCK_SIZE_SECTORS, 1, &[group_memory]);
+            self.partition.read(
+                i as usize * GROUP_BLOCK_SIZE as usize * BLOCK_SIZE_SECTORS,
+                1,
+                &[group_memory],
+            );
             for j in (0..4096).step_by(8) {
                 let qword: u64 = unsafe { *get_at_virtual_addr(group_mem_binding + j) };
                 if qword != 0xFFFFFFFFFFFFFFFF {
@@ -165,7 +168,8 @@ impl Rfs {
         let mut next_ptr = superblock.inode_bitmask;
         let mut block_index = 0;
         loop {
-            self.partition.read(next_ptr as usize * BLOCK_SIZE_SECTORS, 8, &[block_memory]);
+            self.partition
+                .read(next_ptr as usize * BLOCK_SIZE_SECTORS, 8, &[block_memory]);
             let bitmask: &mut InodeBitmask = unsafe { get_at_virtual_addr(block_mem_binding) };
             for (bit_index, byte_mask) in bitmask.inodes.iter_mut().enumerate() {
                 if *byte_mask != 0xFF {
@@ -264,7 +268,7 @@ impl Rfs {
         }
         unsafe {
             memset_virtual_addr(group_mem_binding, 0, 4096);
-            
+
             //first 5 groups are taken
             set_at_virtual_addr::<u8>(group_mem_binding, 0b11111);
         }
@@ -335,8 +339,7 @@ impl Rfs {
 
         //---------------Initialize inode bitmask at block 4---------------
         for i in 1..BLOCK_SIZE_SECTORS as u32 {
-            self.partition
-                .write(4 * BLOCK_SIZE_SECTORS + i as usize, 1, &[group_memory]);
+            self.partition.write(4 * BLOCK_SIZE_SECTORS + i as usize, 1, &[group_memory]);
         }
         //indexes 0, 1, and 2 are used
         unsafe { set_at_virtual_addr::<u8>(group_mem_binding, 0b111) };
@@ -380,7 +383,8 @@ impl Rfs {
 
         inode_data.size.set_ptr_levels(levels_new as u64);
         inode_data.size.set_size(size_new);
-        self.partition.write(inode_block as usize * BLOCK_SIZE_SECTORS, 1, &[inode_frame]);
+        self.partition
+            .write(inode_block as usize * BLOCK_SIZE_SECTORS, 1, &[inode_frame]);
 
         let mut blocks_old = size_old.div_ceil(4096);
         let blocks_new = size_new.div_ceil(4096);
@@ -651,9 +655,13 @@ impl FileSystem for Rfs {
         if levels == 0 {
             assert!(size <= 512 * 7);
             self.partition.write(inode_block_index as usize * 8 + 1, 7, buffer);
+            self.partition.write(inode_block_index as usize * 8, 1, &[inode_block]);
+            unsafe { PAGE_ALLOCATOR.deallocate(inode_block_binding) };
+            self.clean_after_operation();
+            return vfs_inode;
         }
 
-        self.partition.write(inode_block_index as usize * 8, 8, &[inode_block]);
+        self.partition.write(inode_block_index as usize * 8, 1, &[inode_block]);
 
         let mut pointers: Vec<u32> = std::Vec::new();
         for i in 0..(512 * 7 / 8) {
@@ -672,7 +680,8 @@ impl FileSystem for Rfs {
             let mut new_pointers =
                 std::Vec::with_capacity((pointers.len() - (last_relevant - first_relevant + 1) as usize) * 1024);
             for i in first_relevant..=last_relevant {
-                self.partition.read(pointers[i as usize] as usize * BLOCK_SIZE_SECTORS, 8, &[inode_block]);
+                self.partition
+                    .read(pointers[i as usize] as usize * BLOCK_SIZE_SECTORS, 8, &[inode_block]);
                 for i in 0..1024 {
                     new_pointers.push(unsafe { *get_at_virtual_addr(inode_block_binding + i * 4) });
                 }
@@ -689,8 +698,11 @@ impl FileSystem for Rfs {
         for i in first_relevant..=last_relevant {
             let i = i as usize;
             let buffer_index = i - first_relevant as usize;
-            self.partition
-                .write(pointers[i] as usize * BLOCK_SIZE_SECTORS, 8, &buffer[buffer_index..=buffer_index]);
+            self.partition.write(
+                pointers[i] as usize * BLOCK_SIZE_SECTORS,
+                8,
+                &buffer[buffer_index..=buffer_index],
+            );
         }
         unsafe { PAGE_ALLOCATOR.deallocate(inode_block_binding) };
 
@@ -822,6 +834,7 @@ impl FileSystem for Rfs {
     }
 
     fn link(&mut self, inode_index: u32, parent_inode_index: u32, name: &str) -> vfs::Inode {
+        //TODO: i don't increase link count ??
         let root = self.get_node(self.root_block).1;
         let working_block = physical_allocator::allocate_frame();
         let working_block_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(working_block)) };
@@ -832,7 +845,8 @@ impl FileSystem for Rfs {
         }
 
         let parent_inode_block_index = root.find_inode_block(parent_inode_index, self).unwrap();
-        self.partition.read(parent_inode_block_index as usize * BLOCK_SIZE_SECTORS, 1, &[working_block]);
+        self.partition
+            .read(parent_inode_block_index as usize * BLOCK_SIZE_SECTORS, 1, &[working_block]);
         let inode_data: &mut Inode = unsafe { get_at_virtual_addr(working_block_binding) };
         let offset = inode_data.size.size();
 
@@ -852,7 +866,7 @@ impl FileSystem for Rfs {
         }
 
         if offset % 4096 != 0 {
-            self.read(parent_inode_index, offset & (!0xFFF), 4096, &[working_block]);
+            self.read(parent_inode_index, offset & (!0xFFF), u64::min(4096,inode_data.size.size()), &[working_block]);
         }
         let name_bytes = name.as_bytes();
         let mut name_byte_arr: [u8; 128] = [0; 128];
@@ -977,7 +991,9 @@ impl FileSystem for Rfs {
         if needed_blocks == 0 {
             return Box::new([]);
         }
-        let phys_addresses = (0..needed_blocks).map(|_| physical_allocator::allocate_frame()).collect::<Box<[_]>>();
+        let phys_addresses = (0..needed_blocks)
+            .map(|_| physical_allocator::allocate_frame())
+            .collect::<Box<[_]>>();
         let virt_addr_start = unsafe { PAGE_ALLOCATOR.mmap_contigious(&phys_addresses) };
         self.read(inode.index, 0, inode.size, &phys_addresses);
         let mut entries = Vec::new();

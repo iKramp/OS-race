@@ -116,7 +116,6 @@ pub fn create_file(path: ResolvedPath, name: &str, inode_type: InodeType) {
     let fs = vfs.mounted_partitions.get_mut(&partition_id).unwrap();
     let (file_inode, parent_inode) = fs.create(name, parent_inode.index, inode_type, 0, 0);
     fs_tree::update_inode(parent_inode_num, parent_inode);
-    println!("{:?}", file_inode);
     fs_tree::insert_inode(parent_inode_num, name.to_string().into_boxed_str(), file_inode);
 }
 
