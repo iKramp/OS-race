@@ -1,9 +1,11 @@
-use std::{PageAllocator, mem_utils::get_at_physical_addr, println, string::String, vec::Vec};
+use std::{PageAllocator, mem_utils::get_at_physical_addr, println, printlnc, string::String, vec::Vec};
 
 use crate::{
-    memory::{self, PAGE_TREE_ALLOCATOR},
+    memory::PAGE_TREE_ALLOCATOR,
     vfs::{self, InodeType},
 };
+
+const BEE_MOVIE_SCRIPT_START: &str = include_str!("./bee_movie_script.txt");
 
 const FILE_OPERATIONS: [FileOperation; 8] = [
     FileOperation::CreateFolder(CreateFolderOperation::new("/test")),
@@ -12,19 +14,19 @@ const FILE_OPERATIONS: [FileOperation; 8] = [
     FileOperation::CreateFile(CreateFileOperation::new("/test/test.txt")),
     // FileOperation::ReadDir(ReadDirOperation::new("/")),
     FileOperation::Write(WriteFileOperation::new("/test.txt", "Hello, world!", 0)),
-    FileOperation::Write(WriteFileOperation::new("/test/test.txt", "This is a second string", 0)),
+    FileOperation::Write(WriteFileOperation::new("/test/test.txt", BEE_MOVIE_SCRIPT_START, 0)),
     FileOperation::ReadFile(ReadFileOperation::new("/test.txt", 0, 5)),
     FileOperation::ReadFile(ReadFileOperation::new("/test.txt", 7, 6)),
-    FileOperation::ReadFile(ReadFileOperation::new("/test/test.txt", 0, 23)),
+    FileOperation::ReadFile(ReadFileOperation::new("/test/test.txt", 0, 49475)),
 ];
 
 pub fn do_file_operations() {
-    memory::print_state();
+    // memory::print_state();
     for opeartion in FILE_OPERATIONS {
-        println!("Executing operation: {:?}", opeartion);
+        // println!("Executing operation: {:?}", opeartion);
         opeartion.execute();
-        println!("Memory state after execution: {:?}", opeartion);
-        memory::print_state();
+        // println!("Memory state after execution: {:?}", opeartion);
+        // memory::print_state();
     }
 }
 
@@ -107,17 +109,22 @@ impl WriteFileOperation {
     fn execute(&self) {
         let path = vfs::resolve_path(self.file_name, "/");
 
-        let mut phys_addresses = Vec::new();
         let content = self.content.as_bytes();
-        let frame = crate::memory::physical_allocator::allocate_frame();
-        let frame_binding = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(frame)) };
-        unsafe {
-            PAGE_TREE_ALLOCATOR
-                .get_page_table_entry_mut(frame_binding)
-                .set_pat(crate::memory::paging::LiminePat::UC);
+        let mut frames = Vec::new();
+        let mut frame_bindings = Vec::new();
+        for _ in 0..(content.len().div_ceil(4096)) {
+            let frame = crate::memory::physical_allocator::allocate_frame();
+            frames.push(frame);
+            let frame_binding = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(frame)) };
+            frame_bindings.push(frame_binding);
+            unsafe {
+                PAGE_TREE_ALLOCATOR
+                    .get_page_table_entry_mut(frame_binding)
+                    .set_pat(crate::memory::paging::LiminePat::UC);
+            }
         }
         for i in 0..(content.len().div_ceil(4096)) {
-            let ptr = frame_binding.0 as *mut u8;
+            let ptr = frame_bindings[i].0 as *mut u8;
             for j in 0..4096 {
                 if (i * 4096 + j) < content.len() {
                     unsafe { *ptr.add(j) = content[i * 4096 + j] };
@@ -125,12 +132,14 @@ impl WriteFileOperation {
                     unsafe { *ptr.add(j) = 0 };
                 }
             }
-            phys_addresses.push(frame);
         }
 
-        unsafe { PAGE_TREE_ALLOCATOR.unmap(frame_binding) };
-        println!("Writing file: {} with content: {}", self.file_name, self.content);
-        vfs::write_file(path, &phys_addresses, self.offset, self.content.len() as u64);
+        println!("Writing file: {} of size: {}", self.file_name, content.len());
+        vfs::write_file(path, &frames, self.offset, self.content.len() as u64);
+
+        for frame in frames {
+            unsafe { crate::memory::physical_allocator::deallocate_frame(frame) };
+        }
     }
 }
 
@@ -204,7 +213,7 @@ impl ReadFileOperation {
             };
             let data = unsafe { get_at_physical_addr::<[u8; 4096]>(*frame) };
             while frame_ptr < limit + frame_ptr_start {
-                final_data.push(data[frame_ptr]);
+                final_data.push(data[frame_ptr & 0xFFF]);
                 frame_ptr += 1;
             }
             unsafe { crate::memory::physical_allocator::deallocate_frame(*frame) };
@@ -216,6 +225,7 @@ impl ReadFileOperation {
         println!("File content: {:?}", final_data);
         //transofm into string
         let string = String::from_utf8(final_data).unwrap();
-        println!("File content as string: {}", string);
+        println!("File content as string:");
+        printlnc!((255, 200, 100), "{}", string);
     }
 }
