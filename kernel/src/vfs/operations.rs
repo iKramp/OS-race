@@ -1,4 +1,4 @@
-use std::{boxed::Box, format, mem_utils::PhysAddr, println, string::{String, ToString}, vec::Vec};
+use std::{boxed::Box, format, mem_utils::PhysAddr, string::{String, ToString}, vec::Vec};
 
 use uuid::Uuid;
 

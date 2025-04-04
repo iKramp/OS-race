@@ -173,10 +173,10 @@ bitfield! {
 
 pub fn resolve_path(path: &str, working_dir: &str) -> ResolvedPath {
     if path.starts_with('/') {
-        return ResolvedPath(resolve_single_path(path).into());
+        ResolvedPath(resolve_single_path(path))
     } else {
         let resolved_path = resolve_single_path(format!("{}/{}", working_dir, path).as_str());
-        return ResolvedPath(resolved_path);
+        ResolvedPath(resolved_path)
     }
 }
 
@@ -197,5 +197,5 @@ fn resolve_single_path(path: &str) -> Box<[Box<str>]> {
         path.push(chunk.into());
     }
 
-    return path.into();
+    path.into()
 }

@@ -28,7 +28,6 @@ mod vga;
 mod cmd_args;
 mod file_operations;
 use limine::LIMINE_BOOTLOADER_REQUESTS;
-use vga::vga_text;
 
 pub struct BootInfo {}
 

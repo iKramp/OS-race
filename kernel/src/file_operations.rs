@@ -1,10 +1,4 @@
-use std::{
-    PageAllocator,
-    mem_utils::{VirtAddr, get_at_physical_addr, set_at_physical_addr, set_at_virtual_addr},
-    println,
-    string::String,
-    vec::Vec,
-};
+use std::{PageAllocator, mem_utils::get_at_physical_addr, println, string::String, vec::Vec};
 
 use crate::{
     memory::{self, PAGE_TREE_ALLOCATOR},

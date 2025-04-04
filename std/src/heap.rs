@@ -203,6 +203,12 @@ impl HeapWrapper {
     }
 }
 
+impl Default for HeapWrapper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 
 #[global_allocator]
 pub static HEAP: HeapWrapper = HeapWrapper::new();

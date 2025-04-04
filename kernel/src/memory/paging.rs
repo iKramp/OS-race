@@ -1,4 +1,4 @@
-use super::{mem_utils::*, physical_allocator, PAGE_TREE_ALLOCATOR};
+use super::{mem_utils::*, physical_allocator};
 
 #[derive(Clone, Copy)]
 pub struct PageTableEntry(u64);
