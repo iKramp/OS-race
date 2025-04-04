@@ -245,6 +245,16 @@ impl Rfs {
 
     pub fn clean_after_operation(&mut self) {
         for (block, (modified, node)) in self.inode_tree_cache.iter_mut() {
+            let on_disk_ptr = BtreeNode::read_from_disk(&mut self.partition, *block);
+            let on_disk = unsafe { &*(on_disk_ptr as *const [u8; 4096])};
+            let in_mem = unsafe { &*(*node as *const [u8; 4096])};
+            if on_disk != in_mem && !*modified {
+                panic!("Node was modified but not marked as such");
+            }
+            on_disk_ptr.drop();
+
+
+
             if *modified {
                 node.write_to_disk(&mut self.partition, *block);
                 node.drop();
