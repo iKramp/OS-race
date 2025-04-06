@@ -3,7 +3,7 @@ use crate::{
         idt::{TablePointer, IDT_POINTER},
         GDT_POINTER,
     },
-    memory::{paging::LiminePat, PAGE_TREE_ALLOCATOR},
+    memory::{paging::{LiminePat, PageTree}, PAGE_TREE_ALLOCATOR},
     msr::{get_msr, get_mtrr_cap, get_mtrr_def_type},
     println,
 };
@@ -110,9 +110,10 @@ fn copy_trampoline() {
             out(reg) cr3,
         );
         let gdt_ptr = crate::interrupts::GDT_POINTER;
+        let page_tree_root = PageTree::get_level4_addr();
         let gdt_ptr = TablePointer {
             limit: gdt_ptr.limit,
-            base: std::mem_utils::translate_virt_phys_addr(VirtAddr(gdt_ptr.base)).unwrap().0,
+            base: std::mem_utils::translate_virt_phys_addr(VirtAddr(gdt_ptr.base), page_tree_root).unwrap().0,
         };
         let wait_loop_ptr = super::ap_startup::ap_started_wait_loop as *const () as u64;
 

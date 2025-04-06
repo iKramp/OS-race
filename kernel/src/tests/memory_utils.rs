@@ -1,4 +1,4 @@
-use crate::println;
+use crate::{memory::paging::PageTree, println};
 use kernel_test::{kernel_test, kernel_test_mod};
 use std::mem_utils;
 kernel_test_mod!(crate::tests::memory_utils);
@@ -18,10 +18,12 @@ fn virt_to_phys_addr_test() -> bool {
         field_2: [2465, 25462, 345, 52346356736],
         field_3: true,
     };
+    let root_page_table = PageTree::get_level4_addr();
     let ptr_to_data = core::ptr::addr_of!(data_1);
     let data_2 = unsafe {
         mem_utils::get_at_physical_addr::<ExampleStruct>(
-            mem_utils::translate_virt_phys_addr(mem_utils::VirtAddr(ptr_to_data as u64)).unwrap_or(mem_utils::PhysAddr(0)),
+            mem_utils::translate_virt_phys_addr(mem_utils::VirtAddr(ptr_to_data as u64), root_page_table)
+                .unwrap_or(mem_utils::PhysAddr(0)),
         )
     };
     data_1 == *data_2
@@ -30,10 +32,11 @@ fn virt_to_phys_addr_test() -> bool {
 #[kernel_test]
 fn huge_page_test() -> bool {
     unsafe {
+        let root_page_table = PageTree::get_level4_addr();
         let start_addr = mem_utils::PhysAddr(6554161);
         let virtual_addr = mem_utils::translate_phys_virt_addr(start_addr); //this gets a virtual address
-                                                                            //on the huge page
-        let physical_addr = mem_utils::translate_virt_phys_addr(virtual_addr).unwrap_or(mem_utils::PhysAddr(0));
+        //on the huge page
+        let physical_addr = mem_utils::translate_virt_phys_addr(virtual_addr, root_page_table).unwrap_or(mem_utils::PhysAddr(0));
 
         assert_eq!(start_addr, physical_addr);
         start_addr == physical_addr

@@ -166,11 +166,11 @@ impl PageTableEntry {
         self.0 & (1 << 63) != 0
     }
 
-    pub fn set_no_execute(&mut self, present: bool) {
+    pub fn set_no_execute(&mut self, no_execute: bool) {
         const OFFSET: u64 = 63;
         const MASK: u64 = 1 << OFFSET;
         const INVERSE_MASK: u64 = MASK ^ u64::MAX;
-        self.0 = (self.0 & INVERSE_MASK) | ((present as u64) << OFFSET);
+        self.0 = (self.0 & INVERSE_MASK) | ((no_execute as u64) << OFFSET);
     }
 }
 
@@ -525,15 +525,23 @@ pub struct PageTree {
 }
 
 impl PageTree {
-    pub fn new() -> Self {
-        let level_4_table = Self::get_level4_addr();
-        unsafe {
-            let table = get_at_physical_addr::<PageTable>(level_4_table);
-            table.set_num_of_available_spaces(4);
-            table.allocate(VirtAddr(0));
-            table.set_num_of_available_spaces(4);
-        }
+    pub fn new(level_4_table: PhysAddr) -> Self {
         Self { level_4_table }
+    }
+
+    ///This function walks the page table and sets the number of available spaces in the lower
+    ///level pages. It also maps addr 0 as user inaccessible, not writable and not executable.
+    ///Kernel can still read, but by mapping it to physical address 0 and not using it it's fine
+    pub fn init(&mut self) {
+        unsafe {
+            let level_4_table = get_at_physical_addr::<PageTable>(self.level_4_table);
+            level_4_table.set_num_of_available_spaces(4);
+            level_4_table.mmap(VirtAddr(0), PhysAddr(0));
+            let entry = level_4_table.get_page_table_entry(VirtAddr(0), 4);
+            entry.set_user_accessible(false);
+            entry.set_writeable(false);
+            entry.set_no_execute(true);
+        }
     }
 
     pub fn get_num_allocated_pages(&self) -> u64 {

@@ -14,7 +14,7 @@ use crate::{
 };
 use core::str;
 use std::{
-    boxed::Box, collections::btree_map::BTreeMap, mem_utils::{get_at_physical_addr, get_at_virtual_addr, memset_virtual_addr, set_at_virtual_addr, PhysAddr, VirtAddr}, println, vec::Vec, PAGE_ALLOCATOR
+    boxed::Box, collections::btree_map::BTreeMap, mem_utils::{get_at_physical_addr, get_at_virtual_addr, memset_virtual_addr, set_at_virtual_addr, PhysAddr, VirtAddr}, vec::Vec, PAGE_ALLOCATOR
 };
 
 const GROUP_BLOCK_SIZE: u64 = 4096 * 8;
@@ -79,17 +79,17 @@ impl Rfs {
         let root_block = header.inode_tree;
         unsafe { PAGE_ALLOCATOR.deallocate(working_block_binding) };
 
-        let mut driver = Self {
+
+
+        // driver.format_partition();
+
+        Self {
             inode_tree_cache: BTreeMap::new(),
             root_block,
             partition,
             groups,
             blocks,
-        };
-
-        // driver.format_partition();
-
-        driver
+        }
     }
 
     pub fn allocate_block(&mut self) -> u32 {

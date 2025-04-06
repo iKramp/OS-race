@@ -40,11 +40,11 @@ const IDT_SIZE: usize = 256;
 
 pub static mut CUSTOM_INTERRUPT_VECTOR: u8 = 0;
 
+#[repr(align(4096))]
 pub struct Idt {
     entry_table: [Entry; IDT_SIZE],
 }
 
-#[used]
 pub static mut IDT: Idt = Idt::new();
 
 impl Idt {

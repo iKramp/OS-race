@@ -23,7 +23,7 @@ impl core::ops::Add<PhysOffset> for PhysAddr {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
 pub struct VirtAddr(pub u64);
 
 impl core::ops::Add for VirtAddr {
@@ -34,11 +34,25 @@ impl core::ops::Add for VirtAddr {
     }
 }
 
+impl core::ops::AddAssign for VirtAddr {
+    #[inline]
+    fn add_assign(&mut self, rhs: Self) {
+        self.0 += rhs.0;
+    }
+}
+
 impl core::ops::Add<u64> for VirtAddr {
     type Output = VirtAddr;
     #[inline]
     fn add(self, rhs: u64) -> Self::Output {
         Self(self.0 + rhs)
+    }
+}
+
+impl core::ops::AddAssign<u64> for VirtAddr {
+    #[inline]
+    fn add_assign(&mut self, rhs: u64) {
+        self.0 += rhs;
     }
 }
 
@@ -124,14 +138,8 @@ pub unsafe fn memset_virtual_addr(addr: VirtAddr, value: u8, size: usize) {
     }
 }
 
-pub fn translate_virt_phys_addr(addr: VirtAddr) -> Option<PhysAddr> {
-    let mut page_addr = PhysAddr(0);
-    unsafe {
-        core::arch::asm!(
-            "mov {}, cr3",
-            out(reg) page_addr.0,
-        );
-    }
+pub fn translate_virt_phys_addr(addr: VirtAddr, root_page_addr: PhysAddr) -> Option<PhysAddr> {
+    let mut page_addr = root_page_addr;
     #[allow(clippy::unusual_byte_groupings)] //they are grouped by section masks
     let mut final_mask: u64 = 0b111111111_111111111_111111111_111111111_111111111111;
     let mask = 0b111_111_111_000;
@@ -159,4 +167,14 @@ pub fn translate_phys_virt_addr(addr: PhysAddr) -> VirtAddr {
         debug_assert!(MEM_INITIALIZED);
         addr + PHYSICAL_OFFSET
     }
+}
+
+#[inline]
+///# Safety
+///Caller must ensure the lifetimes will work out, even though it may be impossible in rust's type
+///system
+pub unsafe fn set_static_lifetime_mut<T>(data: &mut T) -> &'static mut T {
+    let data_ptr = data as *mut T;
+    let static_data: &'static mut T = unsafe { &mut *data_ptr };
+    static_data
 }

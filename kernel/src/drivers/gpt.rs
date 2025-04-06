@@ -8,7 +8,7 @@ use std::{
 
 use uuid::Uuid;
 
-use crate::{memory::{paging::LiminePat, physical_allocator, PAGE_TREE_ALLOCATOR}, vfs::VFS};
+use crate::{memory::{paging::{LiminePat, PageTree}, physical_allocator, PAGE_TREE_ALLOCATOR}, vfs::VFS};
 
 use super::disk::{Disk, Partition, PartitionSchemeDriver};
 
@@ -35,13 +35,14 @@ impl PartitionSchemeDriver for GPTDriver {
         let entry_size = header.size_partition_entry as usize;
         let entry_num_lbas = (num_entries * entry_size).div_ceil(512);
         let buffer = unsafe { PAGE_ALLOCATOR.allocate_contigious(entry_num_lbas as u64 / 8, None) };
+        let page_tree_root = PageTree::get_level4_addr();
         let physical_addresses: Vec<PhysAddr> = (0..entry_num_lbas / 8)
             .inspect(|i| unsafe {
                 PAGE_TREE_ALLOCATOR
                     .get_page_table_entry_mut(buffer + (*i as u64 * 4096))
                     .set_pat(LiminePat::UC)
             })
-            .map(|i| translate_virt_phys_addr(buffer + (i as u64 * 4096)).unwrap())
+            .map(|i| translate_virt_phys_addr(buffer + (i as u64 * 4096), page_tree_root).unwrap())
             .collect();
         let command_slot = disk.read(start_entries, entry_num_lbas, &physical_addresses);
         disk.clean_after_read(command_slot);

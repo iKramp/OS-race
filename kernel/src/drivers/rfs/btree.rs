@@ -3,7 +3,7 @@ use std::{PAGE_ALLOCATOR, mem_utils::VirtAddr};
 use super::{Rfs, BLOCK_SIZE_SECTORS};
 use crate::{
     drivers::disk::MountedPartition,
-    memory::{PAGE_TREE_ALLOCATOR, paging, physical_allocator},
+    memory::{paging::{self, PageTree}, physical_allocator, PAGE_TREE_ALLOCATOR},
 };
 
 ///Takes up exactly 1 block or physical frame
@@ -38,7 +38,8 @@ impl BtreeNode {
     ///set modified to false
     pub fn write_to_disk(self: *const Self, partition: &mut MountedPartition, block: u32) {
         let sector = block as usize * BLOCK_SIZE_SECTORS;
-        let phys_addr = std::mem_utils::translate_virt_phys_addr(VirtAddr(self as u64)).unwrap();
+        let root_page_table = PageTree::get_level4_addr();
+        let phys_addr = std::mem_utils::translate_virt_phys_addr(VirtAddr(self as u64), root_page_table).unwrap();
 
         partition.write(sector, BLOCK_SIZE_SECTORS, &[phys_addr]);
     }

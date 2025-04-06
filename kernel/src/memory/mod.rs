@@ -24,7 +24,9 @@ pub fn init_memory() {
         //allocates low addresses first, so we reserve this for the trampoline
         TRAMPOLINE_RESERVED = physical_allocator::allocate_frame_low(); 
         println!("initializing pager");
-        PAGE_TREE_ALLOCATOR = paging::PageTree::new();
+        let page_table_root = paging::PageTree::get_level4_addr();
+        PAGE_TREE_ALLOCATOR = paging::PageTree::new(page_table_root);
+        PAGE_TREE_ALLOCATOR.init();
         printlnc!((0, 255, 0), "memory initialized");
         #[allow(static_mut_refs)]
         {
