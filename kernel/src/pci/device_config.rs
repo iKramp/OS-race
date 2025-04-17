@@ -226,7 +226,8 @@ impl PciDevice {
                 let address = PAGE_TREE_ALLOCATOR.allocate_contigious(num, Some(physical_bar_addr));
                 //mark caching as uncacheable, unless prefetchable, then write-through
                 for i in 0..num {
-                    let page_entry = PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(address + (i * 4096));
+                    let page_entry = PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(address + (i * 4096)).unwrap()
+;
                     if prefetchable {
                         page_entry.set_pat(LiminePat::WT);
                     } else {

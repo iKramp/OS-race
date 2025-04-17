@@ -51,7 +51,7 @@ pub fn build_context(context: ContextInfo) -> ProcessData {
         let end = region.end.div_ceil(0x1000) * 0x1000;
         for i in (start..end).step_by(0x1000) {
             page_tree.allocate_set_virtual(None, VirtAddr(i as u64));
-            let page = page_tree.get_page_table_entry_mut(VirtAddr(i as u64));
+            let page = page_tree.get_page_table_entry_mut(VirtAddr(i as u64)).unwrap();
             page.set_writeable(region.flags.is_writeable());
             page.set_no_execute(!region.flags.is_executable());
         }
@@ -111,7 +111,7 @@ pub fn add_thread(proc_data: &mut ProcessData, stack_size_pages: u8) -> &ThreadD
 
     for i in (lowest_stack.0..stack_search.0).step_by(0x1000) {
         page_tree.allocate_set_virtual(None, VirtAddr(i));
-        let page = page_tree.get_page_table_entry_mut(VirtAddr(i));
+        let page = page_tree.get_page_table_entry_mut(VirtAddr(i)).unwrap();
         page.set_writeable(true);
         page.set_no_execute(false);
     }
@@ -134,4 +134,33 @@ pub fn add_thread(proc_data: &mut ProcessData, stack_size_pages: u8) -> &ThreadD
     proc_data.threads.push(thread_data);
 
     proc_data.threads.last_mut().unwrap()
+}
+
+pub fn remove_thread_context(proc_data: &mut ProcessData, thread_id: Tid) {
+    let mut page_tree_root = PageTree::new(proc_data.page_tree_root);
+    let thread = proc_data.threads.iter().position(|t| t.thread_id == thread_id);
+
+    //remove stack
+    if let Some(thread_index) = thread {
+        let thread = proc_data.threads.remove(thread_index);
+        let stack_base = thread.stack_base;
+        let stack_end = thread.stack_base - (thread.stack_size_pages as u64) * 0x1000;
+        for i in (stack_end.0..stack_base.0).step_by(0x1000) {
+            page_tree_root.unmap(VirtAddr(i));
+        }
+    }
+}
+
+pub fn remove_proc_context(proc_data: &mut ProcessData) {
+    //remove all threads
+    let thread_ids = proc_data.threads.iter().map(|t| t.thread_id).collect::<Vec<_>>();
+    for thread_id in thread_ids {
+        remove_thread_context(proc_data, thread_id)
+    }
+
+    //first unmap all pages that still need to be allocated in physical allocator
+
+
+    //then remove all left over pages
+    let mut page_tree = PageTree::new(proc_data.page_tree_root);
 }

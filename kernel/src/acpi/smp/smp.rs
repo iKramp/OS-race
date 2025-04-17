@@ -1,16 +1,19 @@
 use crate::{
     interrupts::{
-        idt::{TablePointer, IDT_POINTER},
         GDT_POINTER,
+        idt::{IDT_POINTER, TablePointer},
     },
-    memory::{paging::{LiminePat, PageTree}, PAGE_TREE_ALLOCATOR},
+    memory::{
+        PAGE_TREE_ALLOCATOR,
+        paging::{LiminePat, PageTree},
+    },
     msr::{get_msr, get_mtrr_cap, get_mtrr_def_type},
     println,
 };
 use core::sync::atomic::{AtomicBool, AtomicU8};
 use std::{
-    mem_utils::{get_at_virtual_addr, VirtAddr},
     PageAllocator,
+    mem_utils::{VirtAddr, get_at_virtual_addr},
 };
 
 const STACK_SIZE_PAGES: usize = 2;
@@ -20,7 +23,7 @@ pub static mut CPU_LOCALS: Option<std::Vec<VirtAddr>> = None;
 
 //custom data starts at 0x4 from ap_startup
 
-use crate::acpi::{platform_info::PlatformInfo, LapicRegisters, LAPIC_REGISTERS};
+use crate::acpi::{LAPIC_REGISTERS, LapicRegisters, platform_info::PlatformInfo};
 
 pub fn wake_cpus(platform_info: &PlatformInfo) {
     copy_trampoline();
@@ -87,7 +90,7 @@ fn add_cpu_locals(locals: super::cpu_locals::CpuLocals) -> VirtAddr {
 
 fn copy_trampoline() {
     let destination = unsafe { crate::memory::TRAMPOLINE_RESERVED };
-    let destination_entry = unsafe { PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(VirtAddr(destination.0)) };
+    let destination_entry = unsafe { PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(VirtAddr(destination.0)).unwrap() };
     destination_entry.set_pat(LiminePat::UC);
     println!("copying trampoline to {:x?}", destination);
 
@@ -113,7 +116,9 @@ fn copy_trampoline() {
         let page_tree_root = PageTree::get_level4_addr();
         let gdt_ptr = TablePointer {
             limit: gdt_ptr.limit,
-            base: std::mem_utils::translate_virt_phys_addr(VirtAddr(gdt_ptr.base), page_tree_root).unwrap().0,
+            base: std::mem_utils::translate_virt_phys_addr(VirtAddr(gdt_ptr.base), page_tree_root)
+                .unwrap()
+                .0,
         };
         let wait_loop_ptr = super::ap_startup::ap_started_wait_loop as *const () as u64;
 

@@ -3,17 +3,20 @@
 
 use core::fmt::Debug;
 use std::{
-    mem_utils::{get_at_physical_addr, get_at_virtual_addr, memset_virtual_addr, PhysAddr, VirtAddr},
+    PageAllocator,
+    mem_utils::{PhysAddr, VirtAddr, get_at_physical_addr, get_at_virtual_addr, memset_virtual_addr},
     println,
     vec::Vec,
-    PageAllocator,
 };
 
 use bitfield::bitfield;
 
 use crate::{
-    drivers::{ahci::fis::{D2HRegisterFis, IdentifyStructure, PioSetupFis}, disk::Disk},
-    memory::{paging::LiminePat, physical_allocator, PAGE_TREE_ALLOCATOR},
+    drivers::{
+        ahci::fis::{D2HRegisterFis, IdentifyStructure, PioSetupFis},
+        disk::Disk,
+    },
+    memory::{PAGE_TREE_ALLOCATOR, paging::LiminePat, physical_allocator},
     pci::device_config::{self, Bar},
 };
 
@@ -158,7 +161,7 @@ impl AhciController {
                 port_command.SetST(false);
                 port.set_property(0x18, port_command.0);
                 unsafe { core::arch::asm!("hlt") }; //i need to find a better system to sleep, 1ms
-                                                    //is too long
+                //is too long
             }
             while port_command.CR() {
                 unsafe { core::arch::asm!("hlt") };
@@ -237,9 +240,15 @@ impl VirtualPort {
         };
 
         unsafe {
-            PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(clb_virt).set_pat(LiminePat::UC);
+            PAGE_TREE_ALLOCATOR
+                .get_page_table_entry_mut(clb_virt)
+                .unwrap()
+                .set_pat(LiminePat::UC);
             if FIS_SWITCHING {
-                PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(fis_virt).set_pat(LiminePat::UC);
+                PAGE_TREE_ALLOCATOR
+                    .get_page_table_entry_mut(fis_virt)
+                    .unwrap()
+                    .set_pat(LiminePat::UC);
             }
         }
 
@@ -397,6 +406,7 @@ impl VirtualPort {
             let cmd_table_virt = PAGE_TREE_ALLOCATOR.allocate(Some(cmd_table_page));
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(cmd_table_virt)
+                .unwrap()
                 .set_pat(LiminePat::UC);
             let cmd_table_raw = cmd_table_virt.0 as *mut u8;
             for (i, byte) in cfis.iter().enumerate() {

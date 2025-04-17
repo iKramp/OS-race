@@ -1,5 +1,5 @@
 use std::arch::asm;
-use std::{print, printlnc};
+use std::{print, println, printlnc};
 
 use super::font::*;
 use super::vga_driver::VGA_BINDING;
@@ -141,6 +141,8 @@ pub fn clear_screen() {
         display.line = 0;
         display.char = 0;
     }
+    let vga_buffer_addr = unsafe { VGA_BINDING.buffer };
+    println!("VGA buffer address: {:#x?}", vga_buffer_addr);
 }
 
 pub fn hello_message() {

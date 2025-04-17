@@ -1,6 +1,5 @@
-
-use bitfield::bitfield;
 use crate::vfs::{self, InodeType};
+use bitfield::bitfield;
 
 mod btree;
 #[allow(clippy::module_inception)]
@@ -25,7 +24,7 @@ struct SuperBlock {
 #[derive(Debug, Clone)]
 struct DirEntry {
     pub inode: u32,
-    pub name: [u8; 128], 
+    pub name: [u8; 128],
 }
 
 //1 inode per block, contains the file if it's small enough, otherwise pointers to blocks, pointers
@@ -62,7 +61,6 @@ impl Inode {
         }
     }
 
-
     ///only for changing permissions and similar. Does not update size, link count and other things
     ///100% dependent on the filesystem
     fn from_vfs_old(&mut self, vfs_inode: vfs::Inode) {
@@ -92,9 +90,7 @@ struct GroupHeader {
 
 impl GroupHeader {
     pub fn new() -> Self {
-        Self {
-            bitmask: [0; 4096],
-        }
+        Self { bitmask: [0; 4096] }
     }
 
     pub fn find_empty(&self) -> Option<usize> {

@@ -119,7 +119,8 @@ impl WriteFileOperation {
             frame_bindings.push(frame_binding);
             unsafe {
                 PAGE_TREE_ALLOCATOR
-                    .get_page_table_entry_mut(frame_binding)
+                    .get_page_table_entry_mut(frame_binding).unwrap()
+
                     .set_pat(crate::memory::paging::LiminePat::UC);
             }
         }

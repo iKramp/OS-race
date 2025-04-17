@@ -3,6 +3,7 @@
 
 use crate::limine::{self, LIMINE_BOOTLOADER_REQUESTS};
 use core::arch::asm;
+use std::println;
 
 #[derive(Debug)]
 pub struct FrameBuffer {

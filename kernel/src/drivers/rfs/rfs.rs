@@ -14,7 +14,11 @@ use crate::{
 };
 use core::str;
 use std::{
-    boxed::Box, collections::btree_map::BTreeMap, mem_utils::{get_at_physical_addr, get_at_virtual_addr, memset_virtual_addr, set_at_virtual_addr, PhysAddr, VirtAddr}, vec::Vec, PAGE_ALLOCATOR
+    PAGE_ALLOCATOR,
+    boxed::Box,
+    collections::btree_map::BTreeMap,
+    mem_utils::{PhysAddr, VirtAddr, get_at_physical_addr, get_at_virtual_addr, memset_virtual_addr, set_at_virtual_addr},
+    vec::Vec,
 };
 
 const GROUP_BLOCK_SIZE: u64 = 4096 * 8;
@@ -71,6 +75,7 @@ impl Rfs {
         unsafe {
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(working_block_binding)
+                .unwrap()
                 .set_pat(LiminePat::UC);
         }
 
@@ -78,8 +83,6 @@ impl Rfs {
         let header = unsafe { get_at_virtual_addr::<SuperBlock>(working_block_binding) };
         let root_block = header.inode_tree;
         unsafe { PAGE_ALLOCATOR.deallocate(working_block_binding) };
-
-
 
         // driver.format_partition();
 
@@ -98,6 +101,7 @@ impl Rfs {
         unsafe {
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(group_mem_binding)
+                .unwrap()
                 .set_pat(LiminePat::UC);
         }
         for i in 0..self.groups {
@@ -133,6 +137,7 @@ impl Rfs {
         unsafe {
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(group_mem_binding)
+                .unwrap()
                 .set_pat(LiminePat::UC);
         }
         let group = block / GROUP_BLOCK_SIZE as u32;
@@ -156,6 +161,7 @@ impl Rfs {
         unsafe {
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(block_mem_binding)
+                .unwrap()
                 .set_pat(LiminePat::UC);
         }
         self.partition.read(BLOCK_SIZE_SECTORS, 1, &[block_memory]);
@@ -200,6 +206,7 @@ impl Rfs {
         unsafe {
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(block_mem_binding)
+                .unwrap()
                 .set_pat(LiminePat::UC);
         }
         self.partition.read(1, 1, &[block_memory]);
@@ -267,6 +274,7 @@ impl Rfs {
         unsafe {
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(group_mem_binding)
+                .unwrap()
                 .set_pat(LiminePat::UC);
         }
         unsafe {
@@ -371,6 +379,7 @@ impl Rfs {
         unsafe {
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(working_block_binding)
+                .unwrap()
                 .set_pat(LiminePat::UC);
         }
         //increase file depth
@@ -406,13 +415,15 @@ impl Rfs {
         }
         if levels_new == 1 {
             assert!(blocks_new <= 512 * 7 / 4, "Function did not increase levels enough");
-            self.partition.read(inode_block as usize * BLOCK_SIZE_SECTORS + 1, 7, &[working_block]);
+            self.partition
+                .read(inode_block as usize * BLOCK_SIZE_SECTORS + 1, 7, &[working_block]);
             let pointers = unsafe { get_at_virtual_addr::<[u32; 512 / 4 * 7]>(working_block_binding) };
             for i in blocks_old..blocks_new {
                 let new_block = self.allocate_block();
                 pointers[i as usize] = new_block;
             }
-            self.partition.write(inode_block as usize * BLOCK_SIZE_SECTORS + 1, 7, &[working_block]);
+            self.partition
+                .write(inode_block as usize * BLOCK_SIZE_SECTORS + 1, 7, &[working_block]);
         } else {
             //level = 2 or 3
             todo!("This probably doesn't work");
@@ -433,6 +444,7 @@ impl Rfs {
                 unsafe {
                     PAGE_TREE_ALLOCATOR
                         .get_page_table_entry_mut(lower_frame_binding)
+                        .unwrap()
                         .set_pat(LiminePat::UC);
                 }
 
@@ -508,6 +520,7 @@ impl Rfs {
                 unsafe {
                     PAGE_TREE_ALLOCATOR
                         .get_page_table_entry_mut(lower_frame_binding)
+                        .unwrap()
                         .set_pat(LiminePat::UC);
                 }
                 self.partition.read(pointers[i as usize] as usize * 8, 8, &[lower_frame]);
@@ -520,6 +533,7 @@ impl Rfs {
                 unsafe {
                     PAGE_TREE_ALLOCATOR
                         .get_page_table_entry_mut(lower_frame_binding)
+                        .unwrap()
                         .set_pat(LiminePat::UC);
                 }
             }
@@ -542,6 +556,7 @@ impl Rfs {
         unsafe {
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(working_block_binding)
+                .unwrap()
                 .set_pat(LiminePat::UC);
         }
         self.partition.read(block_index as usize * 8, 8, &[working_block]);
@@ -576,6 +591,7 @@ impl FileSystem for Rfs {
         unsafe {
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(inode_block_binding)
+                .unwrap()
                 .set_pat(LiminePat::UC);
         }
         self.partition.read(inode_block_index as usize * 8, 1, &[inode_block]);
@@ -620,8 +636,11 @@ impl FileSystem for Rfs {
         for i in first_relevant..=last_relevant {
             let i = i as usize;
             let buf_index = i - first_relevant as usize;
-            self.partition
-                .read(pointers[i] as usize * BLOCK_SIZE_SECTORS, BLOCK_SIZE_SECTORS, &buffer[buf_index..=buf_index]);
+            self.partition.read(
+                pointers[i] as usize * BLOCK_SIZE_SECTORS,
+                BLOCK_SIZE_SECTORS,
+                &buffer[buf_index..=buf_index],
+            );
         }
         unsafe { PAGE_ALLOCATOR.deallocate(inode_block_binding) };
 
@@ -639,6 +658,7 @@ impl FileSystem for Rfs {
         unsafe {
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(inode_block_binding)
+                .unwrap()
                 .set_pat(LiminePat::UC);
         }
         self.partition.read(inode_block_index as usize * 8, 8, &[inode_block]);
@@ -650,7 +670,8 @@ impl FileSystem for Rfs {
             self.increase_file_size(inode_block_binding, inode_block, inode_block_index, size_new);
         }
 
-        self.partition.read(inode_block_index as usize * BLOCK_SIZE_SECTORS, 8, &[inode_block]);
+        self.partition
+            .read(inode_block_index as usize * BLOCK_SIZE_SECTORS, 8, &[inode_block]);
         //create a new reference to avoid rustc optimization issues. This is really a no-op anyway
         let inode_data: &mut Inode = unsafe { get_at_virtual_addr(inode_block_binding) };
 
@@ -728,6 +749,7 @@ impl FileSystem for Rfs {
         unsafe {
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(inode_block_binding)
+                .unwrap()
                 .set_pat(LiminePat::UC);
         }
         self.partition.read(inode_block_index as usize * 8, 1, &[inode_block]);
@@ -746,6 +768,7 @@ impl FileSystem for Rfs {
         unsafe {
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(inode_block_binding)
+                .unwrap()
                 .set_pat(LiminePat::UC);
         }
         self.partition.read(inode_block_index as usize * 8, 1, &[inode_block]);
@@ -781,6 +804,7 @@ impl FileSystem for Rfs {
         unsafe {
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(inode_block_binding)
+                .unwrap()
                 .set_pat(LiminePat::UC);
         }
         let vfs_inode = inode.to_vfs(inode_index, &self.partition.partition);
@@ -811,6 +835,7 @@ impl FileSystem for Rfs {
         unsafe {
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(working_block_binding)
+                .unwrap()
                 .set_pat(LiminePat::UC);
         }
         let root = self.get_node(self.root_block).1;
@@ -850,6 +875,7 @@ impl FileSystem for Rfs {
         unsafe {
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(working_block_binding)
+                .unwrap()
                 .set_pat(LiminePat::UC);
         }
 
@@ -867,6 +893,7 @@ impl FileSystem for Rfs {
             unsafe {
                 PAGE_TREE_ALLOCATOR
                     .get_page_table_entry_mut(second_block_binding)
+                    .unwrap()
                     .set_pat(LiminePat::UC);
             }
         } else {
@@ -938,6 +965,7 @@ impl FileSystem for Rfs {
         unsafe {
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(working_block_binding)
+                .unwrap()
                 .set_pat(LiminePat::UC);
         }
         self.partition
@@ -955,6 +983,7 @@ impl FileSystem for Rfs {
             unsafe {
                 PAGE_TREE_ALLOCATOR
                     .get_page_table_entry_mut(folder_binding + i * 4096)
+                    .unwrap()
                     .set_pat(LiminePat::UC);
             }
         }

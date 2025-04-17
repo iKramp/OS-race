@@ -26,13 +26,13 @@ pub fn init() {
             (*crate::LIMINE_BOOTLOADER_REQUESTS.memory_map_request.info).memory_map_count as usize,
         )
     };
-    let n_pages = find_max_usable_address(memory_regions).0 >> 12;
+    let n_pages = find_max_ram_address(memory_regions).0 >> 12;
     println!("n_pages: {}", n_pages);
     println!("max memory address: {:#X}", n_pages * 4096);
 
     let binary_tree_size_elements = get_binary_tree_size(n_pages);
     // div by 8 for 8 bits in a byte  (also rounded up), times 2 for binary tree
-    let space_needed_bytes = binary_tree_size_elements.div_ceil(8);
+    let space_needed_bytes = binary_tree_size_elements.div_ceil(8) * 2;
     let entry_to_shrink = find_mem_region_to_shrink(memory_regions, space_needed_bytes);
 
     let tree_allocator = PhysAddr(memory_regions[entry_to_shrink].base);
@@ -164,8 +164,7 @@ impl BuddyAllocator {
             //is in second half of the tree, so last level
             return curr_index;
         }
-        #[cfg(debug_assertions)]
-        assert!(
+        debug_assert!(
             !self.get_at_index(curr_index),
             "asked to find empty page from this index {} but all sub-regions are filled",
             curr_index
@@ -341,32 +340,31 @@ impl BuddyAllocator {
     }
 
     fn update_all(&self) {
-        for i in (0..self.binary_tree_size / 2).rev() {
+        for i in (1..self.binary_tree_size / 2).rev() {
             self.set_at_index(i, self.get_at_index(i << 1) && self.get_at_index((i << 1) + 1));
         }
     }
 }
 
 fn find_mem_region_to_shrink(memory_regions: &[&mut limine::MemoryMapEntry], space_needed_bytes: u64) -> usize {
-    let mut entry_to_shrink: Option<usize> = None;
-    for region in memory_regions.iter().enumerate() {
+    //we search from the last region, to preserve memory for smp code
+    for region in memory_regions.iter().enumerate().rev() {
         if !is_memory_region_usable(region.1) {
             continue;
         }
         let empty_space = region.1.length;
         if empty_space >= space_needed_bytes {
-            entry_to_shrink = Some(region.0);
-            break;
+            return region.0;
         }
     }
 
-    entry_to_shrink.unwrap()
+    panic!("Not enough ram for physical allocator")
 }
 
-fn find_max_usable_address(memory_regions: &[&mut limine::MemoryMapEntry]) -> PhysAddr {
+fn find_max_ram_address(memory_regions: &[&mut limine::MemoryMapEntry]) -> PhysAddr {
     let mut highest = 0;
     for region in memory_regions {
-        if is_memory_region_usable(region) {
+        if can_mem_region_be_usable(region) {
             highest = region.base + region.length;
         }
     }
@@ -374,7 +372,13 @@ fn find_max_usable_address(memory_regions: &[&mut limine::MemoryMapEntry]) -> Ph
 }
 
 fn is_memory_region_usable(entry: &limine::MemoryMapEntry) -> bool {
-    entry.entry_type == limine::LIMINE_MEMMAP_USABLE // || entry.entry_type == limine::LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE //if we want to use bootloader reclaimable move bootloader structures to our own memory
+    entry.entry_type == limine::LIMINE_MEMMAP_USABLE
+}
+
+///This function returns if a region can EVER be usable, even if it's currently not (includes
+///bootloader reclaimable memory)
+fn can_mem_region_be_usable(entry: &limine::MemoryMapEntry) -> bool {
+    entry.entry_type == limine::LIMINE_MEMMAP_USABLE || entry.entry_type == limine::LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE
 }
 
 ///rounded up to power of 2

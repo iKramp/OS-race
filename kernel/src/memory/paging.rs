@@ -1,9 +1,13 @@
+use core::fmt::Display;
+use std::{print, println};
+
 use super::{mem_utils::*, physical_allocator};
 
 #[derive(Clone, Copy)]
 pub struct PageTableEntry(u64);
 
 //first 4 are identical as at power-on/reset
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LiminePat {
     WB = 0,
     WT = 1,
@@ -98,6 +102,17 @@ impl PageTableEntry {
         //table, but huge-huge tables (1GB) also have huge tables, and don't have pat bit
 
         PageTree::reload();
+    }
+
+    pub fn pat(&self) -> LiminePat {
+        let pwt = self.0 & (1 << 3) != 0;
+        let pcd = self.0 & (1 << 4) != 0;
+        match (pwt, pcd) {
+            (false, false) => LiminePat::WB,
+            (false, true) => LiminePat::UCMinus,
+            (true, false) => LiminePat::WP,
+            (true, true) => LiminePat::WC,
+        }
     }
 
     pub fn accessed(&self) -> bool {
@@ -205,6 +220,83 @@ impl PageTable {
         for entry in &mut self.entries {
             *entry = PageTableEntry(0);
         }
+    }
+
+    fn print_range(&self, mut current_range: Option<MapRange>, level: u64, mut self_virt_addr: VirtAddr) -> Option<MapRange> {
+        for entry in self.entries {
+            if !entry.present() {
+                if let Some(range) = &current_range {
+                    println!("{range}");
+                    current_range = None;
+                }
+                self_virt_addr += 1 << (3 + level * 9);
+                continue;
+            }
+            if level == 1 || entry.huge_page() {
+                if let Some(curr_range) = current_range.clone() {
+                    if curr_range.pat != entry.pat()
+                        || curr_range.write != entry.writeable()
+                        || curr_range.execute == entry.no_execute()
+                    {
+                        println!("{curr_range}");
+                        current_range = None
+                    }
+                }
+
+                if let Some(curr_range) = current_range.clone() {
+                    let new_range = MapRange {
+                        len: curr_range.len + (1 << (3 + level * 9)),
+                        ..curr_range
+                    };
+                    current_range = Some(new_range);
+                } else {
+                    let new_range = MapRange {
+                        virt: self_virt_addr,
+                        len: 1 << (3 + level * 9),
+                        pat: entry.pat(),
+                        write: entry.writeable(),
+                        execute: !entry.no_execute(),
+                    };
+                    current_range = Some(new_range);
+                }
+            } else {
+                let lower_level_table = unsafe { get_at_physical_addr::<PageTable>(entry.address()) };
+                let new_range = lower_level_table.print_range(current_range.clone(), level - 1, self_virt_addr);
+                current_range = new_range;
+            }
+            self_virt_addr += 1 << (3 + level * 9);
+        }
+        current_range
+    }
+
+    pub fn print_entry_bitmask(&self) {
+        for chunk in self.entries.chunks(128) {
+            for entry in chunk {
+                print!("{}", if entry.present() { 1 } else { 0 });
+            }
+            println!("");
+        }
+    }
+
+    pub fn unmap_lower_half(&mut self, level: u64) {
+        let entris_to_remove = if level == 4 {
+            &mut self.entries[..256]
+        } else {
+            &mut self.entries
+        };
+        for entry in entris_to_remove {
+            if !entry.present() {
+                continue;
+            }
+            if level == 1 || entry.huge_page() {
+                entry.set_present(false);
+                continue;
+            }
+            let lower_level_table = unsafe { get_at_physical_addr::<PageTable>(entry.address()) };
+            lower_level_table.unmap_lower_half(level - 1);
+            unsafe { physical_allocator::deallocate_frame(entry.address()) };
+        }
+
     }
 
     ///returns entry index at which a page is available. If no such address exists, it panics
@@ -423,6 +515,8 @@ impl PageTable {
         entry.num_of_available_pages() == 1
     }
 
+    //TODO: when unmapping lowest pages, also unmap higher pages
+
     //returns if there was no space but now there is
     pub unsafe fn unmap(&mut self, address: VirtAddr, level: u64) -> bool {
         let entry = &mut self.entries[(address.0 >> (3 + level * 9) & 0b111_111_111) as usize];
@@ -488,12 +582,15 @@ impl PageTable {
         sum
     }
 
-    fn get_page_table_entry(&mut self, addr: VirtAddr, level: u64) -> &mut PageTableEntry {
+    fn get_page_table_entry(&mut self, addr: VirtAddr, level: u64) -> Option<&mut PageTableEntry> {
         unsafe {
             let entry = (addr.0 >> (12 + 9 * (level - 1))) & 0x1FF;
             let entry = &mut self.entries[entry as usize];
-            if level == 1 {
-                entry
+            if !entry.present() {
+                return None;
+            }
+            if level == 1 || entry.huge_page() {
+                Some(entry)
             } else {
                 let lower_table = get_at_physical_addr::<PageTable>(entry.address());
                 lower_table.get_page_table_entry(addr, level - 1)
@@ -529,6 +626,15 @@ impl PageTree {
         Self { level_4_table }
     }
 
+    pub fn print_mapping(&mut self) {
+        unsafe {
+            let level_4_table = get_at_physical_addr::<PageTable>(self.level_4_table);
+            if let Some(range) = level_4_table.print_range(None, 4, VirtAddr(0)) {
+                println!("{range}");
+            }
+        }
+    }
+
     ///This function walks the page table and sets the number of available spaces in the lower
     ///level pages. It also maps addr 0 as user inaccessible, not writable and not executable.
     ///Kernel can still read, but by mapping it to physical address 0 and not using it it's fine
@@ -536,11 +642,12 @@ impl PageTree {
         unsafe {
             let level_4_table = get_at_physical_addr::<PageTable>(self.level_4_table);
             level_4_table.set_num_of_available_spaces(4);
-            level_4_table.mmap(VirtAddr(0), PhysAddr(0));
-            let entry = level_4_table.get_page_table_entry(VirtAddr(0), 4);
-            entry.set_user_accessible(false);
-            entry.set_writeable(false);
-            entry.set_no_execute(true);
+            // level_4_table.mmap(VirtAddr(0), PhysAddr(0));
+            // entry.set_user_accessible(false);
+            // entry.set_writeable(false);
+            // entry.set_no_execute(true);
+
+            level_4_table.unmap_lower_half(4);
         }
     }
 
@@ -570,7 +677,7 @@ impl PageTree {
         }
     }
 
-    pub fn get_page_table_entry_mut(&mut self, addr: std::mem_utils::VirtAddr) -> &mut PageTableEntry {
+    pub fn get_page_table_entry_mut(&mut self, addr: std::mem_utils::VirtAddr) -> Option<&mut PageTableEntry> {
         unsafe {
             let level_4_table = get_at_physical_addr::<PageTable>(self.level_4_table);
             level_4_table.get_page_table_entry(VirtAddr(addr.0 & !0xFFF), 4)
@@ -636,7 +743,7 @@ impl std::PageAllocator for PageTree {
             let addr = level_4_table.get_available_entry_pages(4, physical_addresses.len() as u64);
             for i in 0..physical_addresses.len() {
                 level_4_table.mmap(VirtAddr(addr + i as u64 * 4096), physical_addresses[i]);
-            };
+            }
             VirtAddr(addr)
         }
     }
@@ -644,5 +751,43 @@ impl std::PageAllocator for PageTree {
     fn find_contigious_pages(&mut self, n_pages: usize) -> std::mem_utils::VirtAddr {
         let level_4_table = unsafe { get_at_physical_addr::<PageTable>(self.level_4_table) };
         unsafe { VirtAddr(level_4_table.get_available_entry_pages(4, n_pages as u64)) }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MapRange {
+    pub virt: VirtAddr,
+    pub len: u64,
+    pub pat: LiminePat,
+    pub write: bool,
+    pub execute: bool,
+}
+
+impl Display for MapRange {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let rwx = match (self.write, self.execute) {
+            (true, true) => "RWX",
+            (true, false) => "RW-",
+            (false, true) => "RWX",
+            (false, false) => "R--",
+        };
+        let addr_start = if self.virt.0 & (1 << 47) != 0 {
+            self.virt.0 + (0xFFFF << 48)
+        } else {
+            self.virt.0
+        };
+        let addr_end = if self.virt.0 & (1 << 47) != 0 {
+            self.virt.0 + (0xFFFF << 48) + self.len
+        } else {
+            self.virt.0 + self.len
+        };
+        write!(
+            f,
+            "Range: virt: {:016x}, end: {:016x}, pat: {:?}, rwx: {:?}",
+            addr_start,
+            addr_end,
+            self.pat,
+            rwx
+        )
     }
 }

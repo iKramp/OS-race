@@ -1,9 +1,13 @@
 use std::{PAGE_ALLOCATOR, mem_utils::VirtAddr};
 
-use super::{Rfs, BLOCK_SIZE_SECTORS};
+use super::{BLOCK_SIZE_SECTORS, Rfs};
 use crate::{
     drivers::disk::MountedPartition,
-    memory::{paging::{self, PageTree}, physical_allocator, PAGE_TREE_ALLOCATOR},
+    memory::{
+        PAGE_TREE_ALLOCATOR,
+        paging::{self, PageTree},
+        physical_allocator,
+    },
 };
 
 ///Takes up exactly 1 block or physical frame
@@ -23,6 +27,7 @@ impl BtreeNode {
         unsafe {
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(virt_ptr)
+                .unwrap()
                 .set_pat(paging::LiminePat::UC);
         }
         partition.read(sector, BLOCK_SIZE_SECTORS, &[phys_ptr]);

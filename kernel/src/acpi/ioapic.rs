@@ -1,6 +1,6 @@
 use std::{
-    mem_utils::{get_at_virtual_addr, PhysAddr},
     PageAllocator,
+    mem_utils::{PhysAddr, get_at_virtual_addr},
 };
 
 use super::platform_info::PlatformInfo;
@@ -11,7 +11,9 @@ pub fn init_ioapic(platform_info: &PlatformInfo) {
         for io_apic_info in &platform_info.apic.io_apics {
             physical_allocator::mark_addr(PhysAddr(io_apic_info.address.into()), true);
             let io_apic_address = crate::memory::PAGE_TREE_ALLOCATOR.allocate(Some(PhysAddr(io_apic_info.address.into())));
-            let apic_registers_page_entry = crate::memory::PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(io_apic_address);
+            let apic_registers_page_entry = crate::memory::PAGE_TREE_ALLOCATOR
+                .get_page_table_entry_mut(io_apic_address)
+                .unwrap();
             apic_registers_page_entry.set_pat(LiminePat::UC);
             core::arch::asm!(
                 "mov rax, cr3",

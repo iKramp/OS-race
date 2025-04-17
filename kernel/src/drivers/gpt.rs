@@ -8,7 +8,14 @@ use std::{
 
 use uuid::Uuid;
 
-use crate::{memory::{paging::{LiminePat, PageTree}, physical_allocator, PAGE_TREE_ALLOCATOR}, vfs::VFS};
+use crate::{
+    memory::{
+        PAGE_TREE_ALLOCATOR,
+        paging::{LiminePat, PageTree},
+        physical_allocator,
+    },
+    vfs::VFS,
+};
 
 use super::disk::{Disk, Partition, PartitionSchemeDriver};
 
@@ -22,6 +29,7 @@ impl PartitionSchemeDriver for GPTDriver {
         unsafe {
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(first_lba_binding)
+                .unwrap()
                 .set_pat(LiminePat::UC);
         }
         let command_slot = disk.read(1, 1, &[first_lba]);
@@ -40,6 +48,7 @@ impl PartitionSchemeDriver for GPTDriver {
             .inspect(|i| unsafe {
                 PAGE_TREE_ALLOCATOR
                     .get_page_table_entry_mut(buffer + (*i as u64 * 4096))
+                    .unwrap()
                     .set_pat(LiminePat::UC)
             })
             .map(|i| translate_virt_phys_addr(buffer + (i as u64 * 4096), page_tree_root).unwrap())
@@ -95,6 +104,7 @@ impl PartitionSchemeDriver for GPTDriver {
         unsafe {
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(first_lba_binding)
+                .unwrap()
                 .set_pat(LiminePat::UC);
         }
         let command_slot = disk.read(1, 1, &[first_lba]);
