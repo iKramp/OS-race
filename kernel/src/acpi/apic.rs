@@ -3,7 +3,6 @@
 use std::{
     printlnc,
     mem_utils::{PhysAddr, VirtAddr},
-    PageAllocator,
 };
 
 use unroll::unroll_for_loops;
@@ -89,7 +88,7 @@ pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo, processor
 
 fn map_lapic_registers(lapic_address: PhysAddr) {
     unsafe {
-        LAPIC_REGISTERS = crate::memory::PAGE_TREE_ALLOCATOR.allocate(Some(lapic_address));
+        LAPIC_REGISTERS = crate::memory::PAGE_TREE_ALLOCATOR.allocate(Some(lapic_address), false);
         let apic_registers_page_entry = crate::memory::PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(LAPIC_REGISTERS).unwrap();
         apic_registers_page_entry.set_pat(LiminePat::UC);
         core::arch::asm!(

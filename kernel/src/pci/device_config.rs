@@ -5,10 +5,9 @@ use std::{
     mem_utils::{PhysAddr, VirtAddr},
     println,
     vec::Vec,
-    PageAllocator,
 };
 
-use crate::memory::{paging::LiminePat, physical_allocator, PAGE_TREE_ALLOCATOR};
+use crate::memory::{PAGE_TREE_ALLOCATOR, paging::LiminePat, physical_allocator};
 
 use super::port_access;
 
@@ -92,7 +91,8 @@ impl Bar {
                 assert!(offset + data.len() as u64 <= *limit, "Data exceeds BAR size");
                 unsafe {
                     for i in 0..core::mem::size_of::<T>() {
-                        data.push(address.add(i).read_volatile());
+                        let byte = address.add(i).read_volatile();
+                        data.push(byte);
                     }
                 }
             }
@@ -223,11 +223,10 @@ impl PciDevice {
                 for i in 0..num {
                     physical_allocator::mark_addr(physical_bar_addr + PhysAddr(i * 0x1000), true);
                 }
-                let address = PAGE_TREE_ALLOCATOR.allocate_contigious(num, Some(physical_bar_addr));
+                let address = PAGE_TREE_ALLOCATOR.allocate_contigious(num, Some(physical_bar_addr), false);
                 //mark caching as uncacheable, unless prefetchable, then write-through
                 for i in 0..num {
-                    let page_entry = PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(address + (i * 4096)).unwrap()
-;
+                    let page_entry = PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(address + (i * 4096)).unwrap();
                     if prefetchable {
                         page_entry.set_pat(LiminePat::WT);
                     } else {

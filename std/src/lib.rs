@@ -21,12 +21,7 @@ pub mod print;
 pub use print::set_print;
 pub use print::Print;
 
-pub mod heap;
 pub mod mem_utils;
-mod page_allocator;
-use heap::HEAP;
-pub use page_allocator::PageAllocator;
-pub use page_allocator::PAGE_ALLOCATOR;
 
 pub use core::any;
 pub use core::arch;

@@ -1,6 +1,4 @@
-use core::alloc::{GlobalAlloc, Layout};
-
-use crate::mem_utils::VirtAddr;
+use alloc::boxed::Box;
 
 #[derive(Debug)]
 struct RcInner<T: crate::fmt::Debug> {
@@ -19,9 +17,7 @@ where
 impl<T: crate::fmt::Debug> Rc<T> {
     pub fn new(data: T) -> Self {
         unsafe {
-            let layout = Layout::new::<RcInner<T>>();
-            let address = crate::HEAP.alloc(layout);
-            crate::mem_utils::set_at_virtual_addr(VirtAddr(address as u64), RcInner { data, count: 1 });
+            let address = Box::into_raw(Box::new(RcInner {data, count: 1})) as usize;
             Self {
                 inner: &mut *(address as *mut RcInner<T>),
             }
@@ -38,8 +34,8 @@ impl<T: crate::fmt::Debug> Drop for Rc<T> {
     fn drop(&mut self) {
         self.inner.count -= 1;
         if self.inner.count == 0 {
-            let layout = Layout::new::<RcInner<T>>();
-            unsafe { crate::HEAP.dealloc(self.inner as *mut _ as *mut u8, layout) }
+            let address = self.inner as *mut RcInner<T>;
+            let _ = unsafe { Box::from_raw(address) };
         }
     }
 }

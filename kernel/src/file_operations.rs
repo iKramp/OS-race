@@ -1,4 +1,4 @@
-use std::{PageAllocator, mem_utils::get_at_physical_addr, println, printlnc, string::String, vec::Vec};
+use std::{mem_utils::get_at_physical_addr, println, printlnc, string::String, vec::Vec};
 
 use crate::{
     memory::PAGE_TREE_ALLOCATOR,
@@ -115,7 +115,7 @@ impl WriteFileOperation {
         for _ in 0..(content.len().div_ceil(4096)) {
             let frame = crate::memory::physical_allocator::allocate_frame();
             frames.push(frame);
-            let frame_binding = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(frame)) };
+            let frame_binding = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(frame), false) };
             frame_bindings.push(frame_binding);
             unsafe {
                 PAGE_TREE_ALLOCATOR

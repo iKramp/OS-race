@@ -29,6 +29,7 @@ mod cmd_args;
 mod file_operations;
 mod proc;
 use limine::LIMINE_BOOTLOADER_REQUESTS;
+use memory::PAGE_TREE_ALLOCATOR;
 
 pub struct BootInfo {}
 
@@ -68,8 +69,8 @@ extern "C" fn _start() -> ! {
     }
 
     println!("{:?}", vfs::get_dir_entries(vfs::resolve_path("/", "/")));
-    //
-    // file_operations::do_file_operations();
+
+    file_operations::do_file_operations();
 
     // vga_text::hello_message();
 

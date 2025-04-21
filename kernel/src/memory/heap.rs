@@ -1,5 +1,7 @@
-use crate::{mem_utils, sync::mutex::Mutex};
-use mem_utils::*;
+use std::mem_utils::*;
+use std::sync::mutex::Mutex;
+
+use super::PAGE_TREE_ALLOCATOR;
 
 //min allocation is 16 bytes
 //16
@@ -26,7 +28,7 @@ impl HeapPageMetadata {
     pub fn populate(&mut self, page_addr: VirtAddr) {
         unsafe {
             let size_of_object = u64::pow(2, self.size_order_of_objects as u32);
-            let addr_of_first = page_addr + 4096 - size_of_object * self.max_allocations as u64;
+            let addr_of_first = page_addr + (4096 - size_of_object * self.max_allocations as u64);
             for i in (addr_of_first.0..(page_addr.0 + 4096)).step_by(size_of_object as usize) {
                 let empty_block = get_at_virtual_addr::<EmptyBlock>(VirtAddr(i));
                 empty_block.ptr_to_prev = VirtAddr(i - size_of_object);
@@ -81,11 +83,11 @@ impl HeapAllocationData {
     pub fn allocate(&mut self) -> VirtAddr {
         unsafe {
             if self.free_objects == 0 {
-                let new_page = crate::PAGE_ALLOCATOR.allocate(None);
+                let new_page = PAGE_TREE_ALLOCATOR.allocate(None, false);
                 let mut metadata = HeapPageMetadata {
                     size_order_of_objects: self.size_order_of_objects,
                     number_of_allocations: 0,
-                    max_allocations: ((4096 - crate::mem::size_of::<HeapPageMetadata>()) as u64
+                    max_allocations: ((4096 - std::mem::size_of::<HeapPageMetadata>()) as u64
                         / (u64::pow(2, self.size_order_of_objects as u32))) as u8,
                     ptr_to_first: VirtAddr(0),
                     ptr_to_last: VirtAddr(0),
@@ -186,7 +188,6 @@ impl HeapAllocationData {
     }
 }
 
-
 pub struct Heap {
     allocation_data: [HeapAllocationData; 7],
 }
@@ -208,7 +209,6 @@ impl Default for HeapWrapper {
         Self::new()
     }
 }
-
 
 #[global_allocator]
 pub static HEAP: HeapWrapper = HeapWrapper::new();
@@ -234,8 +234,8 @@ impl Heap {
         } else if size > 1024 {
             //allocate whole page/pages
             let n_of_pages = size.div_ceil(4096);
-            
-            unsafe { crate::PAGE_ALLOCATOR.allocate_contigious(n_of_pages, None) }
+
+            unsafe { PAGE_TREE_ALLOCATOR.allocate_contigious(n_of_pages, None, false) }
         } else {
             let size_order = log2_rounded_up(size);
             let index = u64::max(4, size_order) - 4;
@@ -253,7 +253,7 @@ impl Heap {
             if size > 1024 {
                 let pages_allocated = size.div_ceil(4096);
                 for i in 0..pages_allocated {
-                    crate::PAGE_ALLOCATOR.deallocate(page_addr + (i * 4096));
+                    PAGE_TREE_ALLOCATOR.deallocate(page_addr + (i * 4096));
                 }
             } else {
                 let metadata = get_at_virtual_addr::<HeapPageMetadata>(page_addr);

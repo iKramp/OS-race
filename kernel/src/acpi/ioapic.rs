@@ -1,7 +1,4 @@
-use std::{
-    PageAllocator,
-    mem_utils::{PhysAddr, get_at_virtual_addr},
-};
+use std::mem_utils::{PhysAddr, get_at_virtual_addr};
 
 use super::platform_info::PlatformInfo;
 use crate::memory::{paging::LiminePat, physical_allocator};
@@ -10,7 +7,7 @@ pub fn init_ioapic(platform_info: &PlatformInfo) {
     unsafe {
         for io_apic_info in &platform_info.apic.io_apics {
             physical_allocator::mark_addr(PhysAddr(io_apic_info.address.into()), true);
-            let io_apic_address = crate::memory::PAGE_TREE_ALLOCATOR.allocate(Some(PhysAddr(io_apic_info.address.into())));
+            let io_apic_address = crate::memory::PAGE_TREE_ALLOCATOR.allocate(Some(PhysAddr(io_apic_info.address.into())), false);
             let apic_registers_page_entry = crate::memory::PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(io_apic_address)
                 .unwrap();

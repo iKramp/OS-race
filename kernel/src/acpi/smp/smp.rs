@@ -11,10 +11,7 @@ use crate::{
     println,
 };
 use core::sync::atomic::{AtomicBool, AtomicU8};
-use std::{
-    PageAllocator,
-    mem_utils::{VirtAddr, get_at_virtual_addr},
-};
+use std::mem_utils::{VirtAddr, get_at_virtual_addr};
 
 const STACK_SIZE_PAGES: usize = 2;
 pub static mut CPU_LOCK: AtomicBool = AtomicBool::new(false);
@@ -26,6 +23,9 @@ pub static mut CPU_LOCALS: Option<std::Vec<VirtAddr>> = None;
 use crate::acpi::{LAPIC_REGISTERS, LapicRegisters, platform_info::PlatformInfo};
 
 pub fn wake_cpus(platform_info: &PlatformInfo) {
+    let trampoline_reserved = unsafe { crate::memory::TRAMPOLINE_RESERVED };
+    //identity map
+    unsafe { PAGE_TREE_ALLOCATOR.allocate_set_virtual(Some(trampoline_reserved), VirtAddr(trampoline_reserved.0))}
     copy_trampoline();
 
     let start_page = unsafe { crate::memory::TRAMPOLINE_RESERVED.0 } >> 12;
@@ -43,7 +43,7 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
         let destination = crate::memory::TRAMPOLINE_RESERVED.0 as *mut u8;
         let comm_lock = destination.add(56);
         for cpu in platform_info.application_processors.iter().enumerate() {
-            let stack_addr = crate::memory::PAGE_TREE_ALLOCATOR.allocate_contigious(STACK_SIZE_PAGES as u64, None); //2 pages
+            let stack_addr = crate::memory::PAGE_TREE_ALLOCATOR.allocate_contigious(STACK_SIZE_PAGES as u64, None, false); //2 pages
             (destination.add(32) as *mut u64).write_volatile(stack_addr.0 + (STACK_SIZE_PAGES * 0x1000) as u64);
             let lapic_registers = get_at_virtual_addr::<LapicRegisters>(LAPIC_REGISTERS);
             println!("Waking up CPU {}", cpu.1.apic_id);
@@ -73,6 +73,7 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
             send_cpu_locals(ap_local_ptr.0, comm_lock);
             wait_for_cpus(cpu.0 as u8 + 1);
         }
+        PAGE_TREE_ALLOCATOR.deallocate(VirtAddr(trampoline_reserved.0));
     }
 }
 

@@ -1,4 +1,6 @@
-use std::{heap::log2_rounded_up, printlnc, sync::mutex::Mutex};
+use std::sync::mutex::Mutex;
+
+use crate::memory::{heap::log2_rounded_up, printlnc};
 
 use crate::{limine, println};
 
@@ -11,8 +13,16 @@ static BUDDY_ALLOCATOR: Mutex<BuddyAllocator> = Mutex::new(BuddyAllocator {
     tree_allocator: VirtAddr(0),
 });
 
+pub static mut MAX_RAM_ADDR: PhysAddr = PhysAddr(0);
+
+pub fn is_on_ram(addr: PhysAddr) -> bool {
+    addr.0 <= unsafe { MAX_RAM_ADDR.0 }
+}
+
 pub struct BuddyAllocator {
+    ///number of pages that can be allocated in physical address space. Is not a power of 2
     pub n_pages: u64,
+    ///number of nodes this binary tree has, plus the zero-th node (unused). IS always a power of 2
     binary_tree_size: u64,
     allocated_pages: u64,
     tree_allocator: VirtAddr,
@@ -27,12 +37,14 @@ pub fn init() {
         )
     };
     let n_pages = find_max_ram_address(memory_regions).0 >> 12;
+    unsafe { MAX_RAM_ADDR = PhysAddr(n_pages << 12) };
     println!("n_pages: {}", n_pages);
     println!("max memory address: {:#X}", n_pages * 4096);
 
-    let binary_tree_size_elements = get_binary_tree_size(n_pages);
+    //is a power of 2
+    let binary_tree_size_elements = get_binary_tree_element_cnt(n_pages);
     // div by 8 for 8 bits in a byte  (also rounded up), times 2 for binary tree
-    let space_needed_bytes = binary_tree_size_elements.div_ceil(8) * 2;
+    let space_needed_bytes = binary_tree_size_elements / 8 * 2;
     let entry_to_shrink = find_mem_region_to_shrink(memory_regions, space_needed_bytes);
 
     let tree_allocator = PhysAddr(memory_regions[entry_to_shrink].base);
@@ -44,15 +56,14 @@ pub fn init() {
             allocated_pages += 4;
         }
     }
-    let mut size_to_shrink = space_needed_bytes & !0xFFF;
-    if space_needed_bytes & 0xFFF > 0 {
-        size_to_shrink += 0x1000;
-    }
-    //we essentially round up to a whole page
+
+    //at least one page, space_needed is a multiple of that if bigger
+    let size_to_shrink = u64::max(0x1000, space_needed_bytes);
     memory_regions[entry_to_shrink].base += size_to_shrink;
+    memory_regions[entry_to_shrink].length -= size_to_shrink;
     let mut allocator = BuddyAllocator {
         n_pages,
-        binary_tree_size: binary_tree_size_elements,
+        binary_tree_size: binary_tree_size_elements * 2,
         allocated_pages,
         tree_allocator: translate_phys_virt_addr(tree_allocator),
     };
@@ -60,12 +71,7 @@ pub fn init() {
         if !is_memory_region_usable(entry) {
             continue;
         }
-        let start = if entry.base & 0xFFF == 0 {
-            entry.base
-        } else {
-            (entry.base & !0xFFF) + 0x1000
-        };
-        for addr in (start..((start + entry.length) & !0xFFF)).step_by(4096) {
+        for addr in (entry.base..(entry.base + entry.length)).step_by(0x1000) {
             let index = (addr >> 12) + (allocator.binary_tree_size / 2);
             allocator.set_at_index(index, false);
             allocator.allocated_pages -= 1;
@@ -111,7 +117,12 @@ pub fn allocate_contiguius_low(n_pages: u64) -> PhysAddr {
 ///# Safety
 ///addr must be a page aligned physical frame address
 pub unsafe fn mark_addr(addr: PhysAddr, allocated: bool) {
-    BUDDY_ALLOCATOR.lock().mark_addr(addr, allocated)
+    let allocator = BUDDY_ALLOCATOR.lock();
+    if (addr.0 >> 12) >= allocator.n_pages {
+        //we're dealing with mmio
+        return;
+    }
+    allocator.mark_addr(addr, allocated)
 }
 
 impl BuddyAllocator {
@@ -382,19 +393,7 @@ fn can_mem_region_be_usable(entry: &limine::MemoryMapEntry) -> bool {
 }
 
 ///rounded up to power of 2
-fn get_binary_tree_size(mut n_pages: u64) -> u64 {
-    let mut first_bit = 0;
-    for i in 0..64 {
-        let mask = 1 << (63 - i);
-        if n_pages & mask != 0 {
-            first_bit = i;
-            break;
-        }
-    }
-    let mask = u64::MAX >> (first_bit + 1);
-    if n_pages & mask != 0 {
-        //needs rounding up
-        n_pages = 1 << (63 - first_bit + 1);
-    }
-    n_pages * 2
+fn get_binary_tree_element_cnt(n_pages: u64) -> u64 {
+    let power = log2_rounded_up(n_pages);
+    1 << power
 }

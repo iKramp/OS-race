@@ -3,7 +3,6 @@
 
 use core::fmt::Debug;
 use std::{
-    PageAllocator,
     mem_utils::{PhysAddr, VirtAddr, get_at_physical_addr, get_at_virtual_addr, memset_virtual_addr},
     println,
     vec::Vec,
@@ -229,12 +228,12 @@ impl VirtualPort {
         self.set_property(8, fis_base.0 as u32);
         self.set_property(12, (fis_base.0 >> 32) as u32);
 
-        let clb_virt = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(cmd_list_base)) };
+        let clb_virt = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(cmd_list_base), false) };
         unsafe { memset_virtual_addr(clb_virt, 0, 0x1000) };
         let fis_virt = if !FIS_SWITCHING {
             clb_virt + 0x400
         } else {
-            let temp = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(fis_base)) };
+            let temp = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(fis_base), false) };
             unsafe { memset_virtual_addr(temp, 0, 0x1000) };
             temp
         };
@@ -403,7 +402,7 @@ impl VirtualPort {
             let cmd_header_ptr = (self.command_list.0 as *mut CmdHeader).add(index as usize * 4);
             cmd_header_ptr.write_volatile(cmd_header);
 
-            let cmd_table_virt = PAGE_TREE_ALLOCATOR.allocate(Some(cmd_table_page));
+            let cmd_table_virt = PAGE_TREE_ALLOCATOR.allocate(Some(cmd_table_page), false);
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(cmd_table_virt)
                 .unwrap()

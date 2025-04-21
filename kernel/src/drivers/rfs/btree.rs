@@ -1,4 +1,4 @@
-use std::{PAGE_ALLOCATOR, mem_utils::VirtAddr};
+use std::mem_utils::VirtAddr;
 
 use super::{BLOCK_SIZE_SECTORS, Rfs};
 use crate::{
@@ -23,7 +23,7 @@ impl BtreeNode {
         let sector = block as usize * BLOCK_SIZE_SECTORS;
 
         let phys_ptr = physical_allocator::allocate_frame();
-        let virt_ptr = unsafe { PAGE_ALLOCATOR.allocate(Some(phys_ptr)) };
+        let virt_ptr = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(phys_ptr), false) };
         unsafe {
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(virt_ptr)
@@ -36,7 +36,7 @@ impl BtreeNode {
 
     pub fn drop(self: *mut Self) {
         unsafe {
-            PAGE_ALLOCATOR.deallocate(VirtAddr(self as u64));
+            PAGE_TREE_ALLOCATOR.deallocate(VirtAddr(self as u64));
         }
     }
 
@@ -50,7 +50,7 @@ impl BtreeNode {
     }
 
     pub fn new() -> *mut Self {
-        let virt_ptr = unsafe { PAGE_ALLOCATOR.allocate(None) };
+        let virt_ptr = unsafe { PAGE_TREE_ALLOCATOR.allocate(None, false) };
         unsafe {
             std::mem_utils::memset_virtual_addr(virt_ptr, 0, 4096);
         }

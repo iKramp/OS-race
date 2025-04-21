@@ -1,5 +1,4 @@
 use std::{
-    PAGE_ALLOCATOR, PageAllocator,
     mem_utils::{PhysAddr, get_at_virtual_addr, translate_virt_phys_addr},
     println,
     string::String,
@@ -25,7 +24,7 @@ impl PartitionSchemeDriver for GPTDriver {
     fn partitions(&self, disk: &mut dyn Disk) -> Vec<(Uuid, Partition)> {
         println!("GPT partitions");
         let first_lba = physical_allocator::allocate_frame();
-        let first_lba_binding = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(first_lba)) };
+        let first_lba_binding = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(first_lba), false) };
         unsafe {
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(first_lba_binding)
@@ -42,7 +41,7 @@ impl PartitionSchemeDriver for GPTDriver {
         let num_entries = header.num_partition_entries as usize;
         let entry_size = header.size_partition_entry as usize;
         let entry_num_lbas = (num_entries * entry_size).div_ceil(512);
-        let buffer = unsafe { PAGE_ALLOCATOR.allocate_contigious(entry_num_lbas as u64 / 8, None) };
+        let buffer = unsafe { PAGE_TREE_ALLOCATOR.allocate_contigious(entry_num_lbas as u64 / 8, None, false) };
         let page_tree_root = PageTree::get_level4_addr();
         let physical_addresses: Vec<PhysAddr> = (0..entry_num_lbas / 8)
             .inspect(|i| unsafe {
@@ -88,9 +87,9 @@ impl PartitionSchemeDriver for GPTDriver {
         unsafe {
             //free memory
             for i in 0..(entry_num_lbas / 8) {
-                PAGE_ALLOCATOR.deallocate(buffer + (i as u64 * 4096));
+                PAGE_TREE_ALLOCATOR.deallocate(buffer + (i as u64 * 4096));
             }
-            PAGE_ALLOCATOR.deallocate(first_lba_binding);
+            PAGE_TREE_ALLOCATOR.deallocate(first_lba_binding);
         }
 
         println!("Partitions: {:#?}", partitions);
@@ -100,7 +99,7 @@ impl PartitionSchemeDriver for GPTDriver {
 
     fn guid(&self, disk: &mut dyn Disk) -> Uuid {
         let first_lba = physical_allocator::allocate_frame();
-        let first_lba_binding = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(first_lba)) };
+        let first_lba_binding = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(first_lba), false) };
         unsafe {
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(first_lba_binding)
@@ -111,7 +110,7 @@ impl PartitionSchemeDriver for GPTDriver {
         disk.clean_after_read(command_slot);
         let header = unsafe { get_at_virtual_addr::<GptHeader>(first_lba_binding) };
         let guid = header.disk_guid;
-        unsafe { PAGE_ALLOCATOR.deallocate(first_lba_binding) };
+        unsafe { PAGE_TREE_ALLOCATOR.deallocate(first_lba_binding) };
         Uuid::from_bytes(guid)
     }
 }

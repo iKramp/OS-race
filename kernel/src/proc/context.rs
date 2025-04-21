@@ -1,5 +1,5 @@
 use core::sync::atomic::{AtomicU32, Ordering};
-use std::{boxed::Box, mem_utils::{self, VirtAddr}, vec::Vec, PageAllocator};
+use std::{boxed::Box, mem_utils::{self, VirtAddr}, vec::Vec};
 
 use super::{ProcessData, ThreadData, ThreadState, Tid};
 use crate::{memory::{self, paging::PageTree}, proc::{Pid, ProcessState}};

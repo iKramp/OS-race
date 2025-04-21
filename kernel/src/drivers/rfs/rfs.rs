@@ -14,10 +14,9 @@ use crate::{
 };
 use core::str;
 use std::{
-    PAGE_ALLOCATOR,
     boxed::Box,
     collections::btree_map::BTreeMap,
-    mem_utils::{PhysAddr, VirtAddr, get_at_physical_addr, get_at_virtual_addr, memset_virtual_addr, set_at_virtual_addr},
+    mem_utils::{PhysAddr, VirtAddr, get_at_virtual_addr, memset_virtual_addr, set_at_virtual_addr},
     vec::Vec,
 };
 
@@ -66,23 +65,28 @@ pub struct Rfs {
 //this is dafe because the inode tree cache really behaves like it had Box<BtreeNode>
 unsafe impl Send for Rfs {}
 
+fn get_working_block() -> (PhysAddr, VirtAddr) {
+    let working_block = physical_allocator::allocate_frame();
+    let working_block_binding = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(working_block), false) };
+    unsafe {
+        PAGE_TREE_ALLOCATOR
+            .get_page_table_entry_mut(working_block_binding)
+            .unwrap()
+            .set_pat(LiminePat::UC);
+    }
+    (working_block, working_block_binding)
+}
+
 impl Rfs {
     pub fn new(mut partition: MountedPartition) -> Self {
         let blocks = partition.partition.size_sectors as u32 / 8;
         let groups = blocks.div_ceil(GROUP_BLOCK_SIZE as u32);
-        let working_block = physical_allocator::allocate_frame();
-        let working_block_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(working_block)) };
-        unsafe {
-            PAGE_TREE_ALLOCATOR
-                .get_page_table_entry_mut(working_block_binding)
-                .unwrap()
-                .set_pat(LiminePat::UC);
-        }
+        let (working_block, working_block_binding) = get_working_block();
 
         partition.read(BLOCK_SIZE_SECTORS, 1, &[working_block]);
         let header = unsafe { get_at_virtual_addr::<SuperBlock>(working_block_binding) };
         let root_block = header.inode_tree;
-        unsafe { PAGE_ALLOCATOR.deallocate(working_block_binding) };
+        unsafe { PAGE_TREE_ALLOCATOR.deallocate(working_block_binding) };
 
         // driver.format_partition();
 
@@ -96,14 +100,7 @@ impl Rfs {
     }
 
     pub fn allocate_block(&mut self) -> u32 {
-        let group_memory = physical_allocator::allocate_frame();
-        let group_mem_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(group_memory)) };
-        unsafe {
-            PAGE_TREE_ALLOCATOR
-                .get_page_table_entry_mut(group_mem_binding)
-                .unwrap()
-                .set_pat(LiminePat::UC);
-        }
+        let (group_memory, group_mem_binding) = get_working_block();
         for i in 0..self.groups {
             self.partition.read(
                 i as usize * GROUP_BLOCK_SIZE as usize * BLOCK_SIZE_SECTORS,
@@ -132,14 +129,7 @@ impl Rfs {
     }
 
     pub fn free_block(&mut self, block: u32) {
-        let group_memory = physical_allocator::allocate_frame();
-        let group_mem_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(group_memory)) };
-        unsafe {
-            PAGE_TREE_ALLOCATOR
-                .get_page_table_entry_mut(group_mem_binding)
-                .unwrap()
-                .set_pat(LiminePat::UC);
-        }
+        let (group_memory, group_mem_binding) = get_working_block();
         let group = block / GROUP_BLOCK_SIZE as u32;
         let block_in_group = block % GROUP_BLOCK_SIZE as u32;
         let qword = block_in_group / 64;
@@ -156,14 +146,7 @@ impl Rfs {
     }
 
     pub fn allocate_inode(&mut self) -> u32 {
-        let block_memory = physical_allocator::allocate_frame();
-        let block_mem_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(block_memory)) };
-        unsafe {
-            PAGE_TREE_ALLOCATOR
-                .get_page_table_entry_mut(block_mem_binding)
-                .unwrap()
-                .set_pat(LiminePat::UC);
-        }
+        let (block_memory, block_mem_binding) = get_working_block();
         self.partition.read(BLOCK_SIZE_SECTORS, 1, &[block_memory]);
         let superblock: &mut SuperBlock = unsafe { get_at_virtual_addr(block_mem_binding) };
         let mut next_ptr = superblock.inode_bitmask;
@@ -192,7 +175,7 @@ impl Rfs {
                 unsafe { std::mem_utils::memset_virtual_addr(block_mem_binding, 0, 4096) };
                 self.partition.write(new_block as usize * 8, 1, &[block_memory]);
                 bitmask.inodes[0] = 1;
-                unsafe { PAGE_ALLOCATOR.deallocate(block_mem_binding) };
+                unsafe { PAGE_TREE_ALLOCATOR.deallocate(block_mem_binding) };
                 return block_index as u32 * 8 * bitmask.inodes.len() as u32;
             } else {
                 next_ptr = bitmask.next_ptr;
@@ -201,14 +184,7 @@ impl Rfs {
     }
 
     pub fn remove_inode_from_bitmask(&mut self, inode_index: u32) {
-        let block_memory = physical_allocator::allocate_frame();
-        let block_mem_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(block_memory)) };
-        unsafe {
-            PAGE_TREE_ALLOCATOR
-                .get_page_table_entry_mut(block_mem_binding)
-                .unwrap()
-                .set_pat(LiminePat::UC);
-        }
+        let (block_memory, block_mem_binding) = get_working_block();
         self.partition.read(1, 1, &[block_memory]);
         let superblock: &mut SuperBlock = unsafe { get_at_virtual_addr(block_mem_binding) };
         let mut next_ptr = superblock.inode_bitmask;
@@ -224,7 +200,7 @@ impl Rfs {
         let bit_index = (inode_index % (inode_bitmask.inodes.len() as u32 * 8)) % 8;
         inode_bitmask.inodes[byte_index as usize] &= !(1 << bit_index);
         self.partition.write(next_ptr as usize * 8, 8, &[block_memory]);
-        unsafe { PAGE_ALLOCATOR.deallocate(block_mem_binding) };
+        unsafe { PAGE_TREE_ALLOCATOR.deallocate(block_mem_binding) };
     }
 
     pub fn get_node(&mut self, node_block: u32) -> &mut (bool, *mut BtreeNode) {
@@ -269,14 +245,7 @@ impl Rfs {
         assert!(whole_blocks >= 4, "Partition too small");
         let whole_groups = whole_blocks / GROUP_BLOCK_SIZE;
         let last_group_blocks = whole_blocks % GROUP_BLOCK_SIZE;
-        let group_memory = physical_allocator::allocate_frame();
-        let group_mem_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(group_memory)) };
-        unsafe {
-            PAGE_TREE_ALLOCATOR
-                .get_page_table_entry_mut(group_mem_binding)
-                .unwrap()
-                .set_pat(LiminePat::UC);
-        }
+        let (group_memory, group_mem_binding) = get_working_block();
         unsafe {
             memset_virtual_addr(group_mem_binding, 0, 4096);
 
@@ -357,10 +326,11 @@ impl Rfs {
         self.partition.write(4 * BLOCK_SIZE_SECTORS, 1, &[group_memory]);
 
         unsafe {
-            PAGE_ALLOCATOR.deallocate(group_mem_binding);
+            PAGE_TREE_ALLOCATOR.deallocate(group_mem_binding);
         }
     }
 
+    #[allow(unreachable_code)]
     fn increase_file_size(&mut self, inode_frame_binding: VirtAddr, inode_frame: PhysAddr, inode_block: u32, size_new: u64) {
         let inode_data: &mut Inode = unsafe { get_at_virtual_addr(inode_frame_binding) };
         let mut levels_curr = inode_data.size.ptr_levels() as u32;
@@ -374,14 +344,7 @@ impl Rfs {
         }
         assert!(levels_new <= 3, "File too big");
 
-        let working_block = physical_allocator::allocate_frame();
-        let working_block_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(working_block)) };
-        unsafe {
-            PAGE_TREE_ALLOCATOR
-                .get_page_table_entry_mut(working_block_binding)
-                .unwrap()
-                .set_pat(LiminePat::UC);
-        }
+        let (working_block, working_block_binding) = get_working_block();
         //increase file depth
         {
             while levels_new > levels_curr {
@@ -410,7 +373,7 @@ impl Rfs {
 
         if levels_new == 0 {
             //no allocation is necessary
-            unsafe { PAGE_ALLOCATOR.deallocate(working_block_binding) };
+            unsafe { PAGE_TREE_ALLOCATOR.deallocate(working_block_binding) };
             return;
         }
         if levels_new == 1 {
@@ -439,14 +402,7 @@ impl Rfs {
                     continue;
                 }
 
-                let lower_frame = physical_allocator::allocate_frame();
-                let lower_frame_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(lower_frame)) };
-                unsafe {
-                    PAGE_TREE_ALLOCATOR
-                        .get_page_table_entry_mut(lower_frame_binding)
-                        .unwrap()
-                        .set_pat(LiminePat::UC);
-                }
+                let (lower_frame, lower_frame_binding) = get_working_block();
 
                 if pointer_capacity * i < blocks_old {
                     //lower is partially allocated
@@ -464,11 +420,11 @@ impl Rfs {
                     blocks_old as u32,
                 );
                 self.partition.write(pointers[i as usize] as usize * 8, 8, &[lower_frame]);
-                unsafe { PAGE_ALLOCATOR.deallocate(lower_frame_binding) };
+                unsafe { PAGE_TREE_ALLOCATOR.deallocate(lower_frame_binding) };
                 blocks_old = pointer_capacity * (i + 1);
             }
         }
-        unsafe { PAGE_ALLOCATOR.deallocate(working_block_binding) };
+        unsafe { PAGE_TREE_ALLOCATOR.deallocate(working_block_binding) };
     }
 
     ///Block index must point to a block of only pointers. Will loop through pointers, skip any
@@ -477,6 +433,7 @@ impl Rfs {
     ///not write it to disk or deallocate it by itself
     ///index of the pointer to this block in the level of that pointer, globally, not just in
     ///that pointer set (eg. sizes go beyond 1023)
+    ///Pointer capacity is in blocks, not bytes
     fn allocate_blocks_for_size_increase(
         &mut self,
         level: u32,
@@ -490,52 +447,36 @@ impl Rfs {
         let blocks_before_current = pointer_capacity * ptr_index;
 
         if level == 1 {
+            if blocks_old >= blocks_new {
+                return;
+            }
             for i in 0..1024 {
                 //ptr capacity is 1
-                if blocks_old >= blocks_new {
-                    break;
-                }
-                if blocks_before_current + i < blocks_old {
+                if ptr_index + i < blocks_old {
                     continue;
                 }
                 let new_block = self.allocate_block();
                 pointers[i as usize] = new_block;
-                blocks_old += 1;
             }
+            return;
         }
 
         for i in 0..1024 {
             if blocks_old >= blocks_new {
-                break;
+                return;
             }
-            if blocks_before_current + i * pointer_capacity < blocks_old {
+            if blocks_before_current + (i + 1) * pointer_capacity <= blocks_old {
                 continue;
             }
 
-            let (lower_frame, lower_frame_binding);
+            let (lower_frame, lower_frame_binding) = get_working_block();
             if blocks_before_current + pointer_capacity * i < blocks_old {
                 //lower is partially allocated
-                lower_frame = physical_allocator::allocate_frame();
-                lower_frame_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(lower_frame)) };
-                unsafe {
-                    PAGE_TREE_ALLOCATOR
-                        .get_page_table_entry_mut(lower_frame_binding)
-                        .unwrap()
-                        .set_pat(LiminePat::UC);
-                }
                 self.partition.read(pointers[i as usize] as usize * 8, 8, &[lower_frame]);
             } else {
                 //lower did not exist yet
                 let lower_block_index = self.allocate_block();
                 pointers[i as usize] = lower_block_index;
-                lower_frame = physical_allocator::allocate_frame();
-                lower_frame_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(lower_frame)) };
-                unsafe {
-                    PAGE_TREE_ALLOCATOR
-                        .get_page_table_entry_mut(lower_frame_binding)
-                        .unwrap()
-                        .set_pat(LiminePat::UC);
-                }
             }
             self.allocate_blocks_for_size_increase(
                 level - 1,
@@ -545,20 +486,13 @@ impl Rfs {
                 blocks_old,
             );
             self.partition.write(pointers[i as usize] as usize * 8, 8, &[lower_frame]);
-            unsafe { PAGE_ALLOCATOR.deallocate(lower_frame_binding) };
-            blocks_old = pointer_capacity * (i + 1);
+            unsafe { PAGE_TREE_ALLOCATOR.deallocate(lower_frame_binding) };
+            blocks_old = blocks_before_current + pointer_capacity * (i + 1);
         }
     }
 
     fn delete_block(&mut self, level: u32, block_index: u32) {
-        let working_block = physical_allocator::allocate_frame();
-        let working_block_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(working_block)) };
-        unsafe {
-            PAGE_TREE_ALLOCATOR
-                .get_page_table_entry_mut(working_block_binding)
-                .unwrap()
-                .set_pat(LiminePat::UC);
-        }
+        let (working_block, working_block_binding) = get_working_block();
         self.partition.read(block_index as usize * 8, 8, &[working_block]);
         let pointers = unsafe { get_at_virtual_addr::<[u32; 1024]>(working_block_binding) };
         for i in 0..1024 {
@@ -586,28 +520,20 @@ impl FileSystem for Rfs {
         let aligned_size = size_bytes.div_ceil(4096) * 4096;
         let root = self.get_node(self.root_block).1;
         let inode_block_index = root.find_inode_block(inode, self).unwrap();
-        let inode_block = physical_allocator::allocate_frame();
-        let inode_block_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(inode_block)) };
-        unsafe {
-            PAGE_TREE_ALLOCATOR
-                .get_page_table_entry_mut(inode_block_binding)
-                .unwrap()
-                .set_pat(LiminePat::UC);
-        }
+        let (inode_block, inode_block_binding) = get_working_block();
         self.partition.read(inode_block_index as usize * 8, 1, &[inode_block]);
         let inode_data: &mut Inode = unsafe { get_at_virtual_addr(inode_block_binding) };
         assert!(size_bytes + offset_bytes <= inode_data.size.size());
         let mut levels = inode_data.size.ptr_levels();
         if levels == 0 {
             self.partition.read(inode_block_index as usize * 8 + 1, 7, buffer);
-            unsafe { PAGE_ALLOCATOR.deallocate(inode_block_binding) };
+            unsafe { PAGE_TREE_ALLOCATOR.deallocate(inode_block_binding) };
             return;
         }
         //read first level pointers
         self.partition.read(inode_block_index as usize * 8 + 1, 7, &[inode_block]);
-        let pointers = unsafe { get_at_virtual_addr::<[u32; 512 / 4 * 7]>(inode_block_binding) };
 
-        let mut pointers: Vec<u32> = std::Vec::with_capacity(512 * 7);
+        let mut pointers: Vec<u32> = std::Vec::with_capacity(512 / 4 * 7);
         for i in (0..(512 * 7)).step_by(4) {
             pointers.push(unsafe { *get_at_virtual_addr(inode_block_binding + i) });
         }
@@ -642,7 +568,7 @@ impl FileSystem for Rfs {
                 &buffer[buf_index..=buf_index],
             );
         }
-        unsafe { PAGE_ALLOCATOR.deallocate(inode_block_binding) };
+        unsafe { PAGE_TREE_ALLOCATOR.deallocate(inode_block_binding) };
 
         self.clean_after_operation();
     }
@@ -653,14 +579,7 @@ impl FileSystem for Rfs {
         //get info about file currently
         let root = self.get_node(self.root_block).1;
         let inode_block_index = root.find_inode_block(inode, self).unwrap();
-        let inode_block = physical_allocator::allocate_frame();
-        let inode_block_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(inode_block)) };
-        unsafe {
-            PAGE_TREE_ALLOCATOR
-                .get_page_table_entry_mut(inode_block_binding)
-                .unwrap()
-                .set_pat(LiminePat::UC);
-        }
+        let (inode_block, inode_block_binding) = get_working_block();
         self.partition.read(inode_block_index as usize * 8, 8, &[inode_block]);
         let inode_data: &mut Inode = unsafe { get_at_virtual_addr(inode_block_binding) };
 
@@ -686,7 +605,7 @@ impl FileSystem for Rfs {
             assert!(size <= 512 * 7);
             self.partition.write(inode_block_index as usize * 8 + 1, 7, buffer);
             self.partition.write(inode_block_index as usize * 8, 1, &[inode_block]);
-            unsafe { PAGE_ALLOCATOR.deallocate(inode_block_binding) };
+            unsafe { PAGE_TREE_ALLOCATOR.deallocate(inode_block_binding) };
             self.clean_after_operation();
             return vfs_inode;
         }
@@ -726,15 +645,13 @@ impl FileSystem for Rfs {
         for i in first_relevant..=last_relevant {
             let i = i as usize;
             let buffer_index = i - first_relevant as usize;
-            let data_ptr = buffer[buffer_index];
-            let data = unsafe { get_at_physical_addr::<[u8; 4096]>(data_ptr) };
             self.partition.write(
                 pointers[i] as usize * BLOCK_SIZE_SECTORS,
                 8,
                 &buffer[buffer_index..=buffer_index],
             );
         }
-        unsafe { PAGE_ALLOCATOR.deallocate(inode_block_binding) };
+        unsafe { PAGE_TREE_ALLOCATOR.deallocate(inode_block_binding) };
 
         self.clean_after_operation();
 
@@ -744,18 +661,11 @@ impl FileSystem for Rfs {
     fn stat(&mut self, inode: u32) -> crate::vfs::Inode {
         let root = self.get_node(self.root_block).1;
         let inode_block_index = root.find_inode_block(inode, self).unwrap();
-        let inode_block = physical_allocator::allocate_frame();
-        let inode_block_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(inode_block)) };
-        unsafe {
-            PAGE_TREE_ALLOCATOR
-                .get_page_table_entry_mut(inode_block_binding)
-                .unwrap()
-                .set_pat(LiminePat::UC);
-        }
+        let (inode_block, inode_block_binding) = get_working_block();
         self.partition.read(inode_block_index as usize * 8, 1, &[inode_block]);
         let inode_data: &mut Inode = unsafe { get_at_virtual_addr(inode_block_binding) };
         let vfs_inode = inode_data.to_vfs(inode, &self.partition.partition);
-        unsafe { PAGE_ALLOCATOR.deallocate(inode_block_binding) };
+        unsafe { PAGE_TREE_ALLOCATOR.deallocate(inode_block_binding) };
         self.clean_after_operation();
         vfs_inode
     }
@@ -763,19 +673,12 @@ impl FileSystem for Rfs {
     fn set_stat(&mut self, inode_index: u32, vfs_inode_data: vfs::Inode) {
         let root = self.get_node(self.root_block).1;
         let inode_block_index = root.find_inode_block(inode_index, self).unwrap();
-        let inode_block = physical_allocator::allocate_frame();
-        let inode_block_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(inode_block)) };
-        unsafe {
-            PAGE_TREE_ALLOCATOR
-                .get_page_table_entry_mut(inode_block_binding)
-                .unwrap()
-                .set_pat(LiminePat::UC);
-        }
+        let (inode_block, inode_block_binding) = get_working_block();
         self.partition.read(inode_block_index as usize * 8, 1, &[inode_block]);
         let inode_data: &mut Inode = unsafe { get_at_virtual_addr(inode_block_binding) };
         inode_data.from_vfs_old(vfs_inode_data);
         self.partition.write(inode_block_index as usize * 8, 1, &[inode_block]);
-        unsafe { PAGE_ALLOCATOR.deallocate(inode_block_binding) };
+        unsafe { PAGE_TREE_ALLOCATOR.deallocate(inode_block_binding) };
         self.clean_after_operation();
     }
 
@@ -799,14 +702,7 @@ impl FileSystem for Rfs {
             modification_time: 0,
             stat_change_time: 0,
         };
-        let inode_block = physical_allocator::allocate_frame();
-        let inode_block_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(inode_block)) };
-        unsafe {
-            PAGE_TREE_ALLOCATOR
-                .get_page_table_entry_mut(inode_block_binding)
-                .unwrap()
-                .set_pat(LiminePat::UC);
-        }
+        let (inode_block, inode_block_binding) = get_working_block();
         let vfs_inode = inode.to_vfs(inode_index, &self.partition.partition);
         unsafe { set_at_virtual_addr(inode_block_binding, inode) };
         self.partition.write(new_inode_block_index as usize * 8, 1, &[inode_block]);
@@ -823,21 +719,15 @@ impl FileSystem for Rfs {
 
         let parent_vfs_inode = self.link(inode_index, parent_dir, name);
 
-        unsafe { PAGE_ALLOCATOR.deallocate(inode_block_binding) };
+        unsafe { PAGE_TREE_ALLOCATOR.deallocate(inode_block_binding) };
 
         (vfs_inode, parent_vfs_inode)
     }
 
+    #[allow(unreachable_code, unused)]
     fn remove(&mut self, inode: u32) {
         todo!("this is wrong, unlink and delete only if link count is 0");
-        let working_block = physical_allocator::allocate_frame();
-        let working_block_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(working_block)) };
-        unsafe {
-            PAGE_TREE_ALLOCATOR
-                .get_page_table_entry_mut(working_block_binding)
-                .unwrap()
-                .set_pat(LiminePat::UC);
-        }
+        let (working_block, working_block_binding) = get_working_block();
         let root = self.get_node(self.root_block).1;
         let inode_block_index = root.find_inode_block(inode, self).unwrap();
         self.partition.read(inode_block_index as usize * 8, 8, &[working_block]);
@@ -860,7 +750,7 @@ impl FileSystem for Rfs {
                 }
             }
         }
-        unsafe { PAGE_ALLOCATOR.deallocate(working_block_binding) };
+        unsafe { PAGE_TREE_ALLOCATOR.deallocate(working_block_binding) };
         self.remove_inode_cache_entry(inode);
         root.delete_key_root(self.root_block, inode, self);
         self.remove_inode_from_bitmask(inode);
@@ -870,14 +760,7 @@ impl FileSystem for Rfs {
     fn link(&mut self, inode_index: u32, parent_inode_index: u32, name: &str) -> vfs::Inode {
         //TODO: i don't increase link count ??
         let root = self.get_node(self.root_block).1;
-        let working_block = physical_allocator::allocate_frame();
-        let working_block_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(working_block)) };
-        unsafe {
-            PAGE_TREE_ALLOCATOR
-                .get_page_table_entry_mut(working_block_binding)
-                .unwrap()
-                .set_pat(LiminePat::UC);
-        }
+        let (working_block, working_block_binding) = get_working_block();
 
         let parent_inode_block_index = root.find_inode_block(parent_inode_index, self).unwrap();
         self.partition
@@ -888,14 +771,7 @@ impl FileSystem for Rfs {
         let needs_second_block = (offset + core::mem::size_of::<DirEntry>() as u64) % 4096 < (offset % 4096);
         let (second_block, second_block_binding);
         if needs_second_block {
-            second_block = physical_allocator::allocate_frame();
-            second_block_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(second_block)) };
-            unsafe {
-                PAGE_TREE_ALLOCATOR
-                    .get_page_table_entry_mut(second_block_binding)
-                    .unwrap()
-                    .set_pat(LiminePat::UC);
-            }
+            (second_block, second_block_binding) = get_working_block();
         } else {
             second_block = PhysAddr(0);
             second_block_binding = VirtAddr(0);
@@ -946,28 +822,21 @@ impl FileSystem for Rfs {
         let vfs_inode = self.write(parent_inode_index, offset & (!0xFFF), write_size, buffers);
 
         if needs_second_block {
-            unsafe { PAGE_ALLOCATOR.deallocate(second_block_binding) };
+            unsafe { PAGE_TREE_ALLOCATOR.deallocate(second_block_binding) };
         }
-        unsafe { PAGE_ALLOCATOR.deallocate(working_block_binding) };
+        unsafe { PAGE_TREE_ALLOCATOR.deallocate(working_block_binding) };
         self.clean_after_operation();
         vfs_inode
     }
 
-    fn truncate(&mut self, inode: u32, size: u64) {
+    fn truncate(&mut self, _inode: u32, _size: u64) {
         todo!()
     }
 
     fn rename(&mut self, inode: u32, parent_inode: u32, name: &str) {
         let root_block_index = self.get_node(self.root_block).1;
         let parent_inode_block_index = root_block_index.find_inode_block(parent_inode, self).unwrap();
-        let working_block = physical_allocator::allocate_frame();
-        let working_block_binding = unsafe { PAGE_ALLOCATOR.allocate(Some(working_block)) };
-        unsafe {
-            PAGE_TREE_ALLOCATOR
-                .get_page_table_entry_mut(working_block_binding)
-                .unwrap()
-                .set_pat(LiminePat::UC);
-        }
+        let (working_block, working_block_binding) = get_working_block();
         self.partition
             .read(parent_inode_block_index as usize * 8, 1, &[working_block]);
         let parent_inode_data = unsafe { get_at_virtual_addr::<Inode>(working_block_binding) };
@@ -978,7 +847,7 @@ impl FileSystem for Rfs {
         for _ in 0..dir_block_count {
             frames.push(physical_allocator::allocate_frame());
         }
-        let folder_binding = unsafe { PAGE_ALLOCATOR.mmap_contigious(&frames) };
+        let folder_binding = unsafe { PAGE_TREE_ALLOCATOR.mmap_contigious(&frames, false) };
         for i in 0..dir_block_count {
             unsafe {
                 PAGE_TREE_ALLOCATOR
@@ -1020,10 +889,10 @@ impl FileSystem for Rfs {
         self.write(parent_inode, affected_block * 4096, write_size, buffers);
 
         for i in 0..dir_block_count {
-            unsafe { PAGE_ALLOCATOR.deallocate(folder_binding + i * 4096) };
+            unsafe { PAGE_TREE_ALLOCATOR.deallocate(folder_binding + i * 4096) };
         }
-        unsafe { PAGE_ALLOCATOR.deallocate(folder_binding) };
-        unsafe { PAGE_ALLOCATOR.deallocate(working_block_binding) };
+        unsafe { PAGE_TREE_ALLOCATOR.deallocate(folder_binding) };
+        unsafe { PAGE_TREE_ALLOCATOR.deallocate(working_block_binding) };
 
         self.clean_after_operation();
     }
@@ -1037,7 +906,7 @@ impl FileSystem for Rfs {
         let phys_addresses = (0..needed_blocks)
             .map(|_| physical_allocator::allocate_frame())
             .collect::<Box<[_]>>();
-        let virt_addr_start = unsafe { PAGE_ALLOCATOR.mmap_contigious(&phys_addresses) };
+        let virt_addr_start = unsafe { PAGE_TREE_ALLOCATOR.mmap_contigious(&phys_addresses, false) };
         self.read(inode.index, 0, inode.size, &phys_addresses);
         let mut entries = Vec::new();
         let mut offset = 0;

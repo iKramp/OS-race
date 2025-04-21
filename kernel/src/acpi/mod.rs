@@ -70,7 +70,6 @@ pub fn init_acpi() {
     //override madt apic address if it exists in entries
     println!("initing APIC");
     let platform_info = unsafe {
-        physical_allocator::mark_addr(platform_info.apic.lapic_address, true);
         PLATFORM_INFO = Some(platform_info);
         let Some(platform_info) = &PLATFORM_INFO else {
             panic!("a");
