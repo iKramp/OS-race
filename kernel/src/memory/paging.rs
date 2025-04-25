@@ -259,6 +259,7 @@ impl PageTable {
                         pat: entry.pat(),
                         write: entry.writeable(),
                         execute: !entry.no_execute(),
+                        user: entry.user_accessible(),
                     };
                     current_range = Some(new_range);
                 }
@@ -727,6 +728,26 @@ impl PageTree {
             );
         }
     }
+
+    pub fn copy_higher_half(&self, new_page_tree: &mut PageTree) {
+        unsafe {
+            let level_4_table = get_at_physical_addr::<PageTable>(self.level_4_table);
+            let new_level_4_table = get_at_physical_addr::<PageTable>(new_page_tree.level_4_table);
+            for i in 256..512 {
+                new_level_4_table.entries[i] = level_4_table.entries[i];
+            }
+        }
+    }
+
+    pub fn unmap_higher_half(&mut self) {
+        unsafe {
+            let level_4_table = get_at_physical_addr::<PageTable>(self.level_4_table);
+            for i in 256..512 {
+                let entry = &mut level_4_table.entries[i];
+                entry.set_present(false);
+            }
+        }
+    }
 }
 
 //public API
@@ -833,6 +854,7 @@ pub struct MapRange {
     pub pat: LiminePat,
     pub write: bool,
     pub execute: bool,
+    pub user: bool,
 }
 
 impl Display for MapRange {
@@ -855,8 +877,8 @@ impl Display for MapRange {
         };
         write!(
             f,
-            "Range: virt: {:016x}, end: {:016x}, pat: {:?}, rwx: {:?}",
-            addr_start, addr_end, self.pat, rwx
+            "Range: virt: {:016x}, end: {:016x}, pat: {:?}, rwx: {:?}, user: {:?}",
+            addr_start, addr_end, self.pat, rwx, self.user
         )
     }
 }

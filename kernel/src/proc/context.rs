@@ -41,8 +41,12 @@ pub fn build_context(context: ContextInfo) -> ProcessData {
     let mut page_tree = PageTree::new(page_tree_root);
     page_tree.init();
 
-    // Map any syscall or interrupt regions. Change IDT and similar structures to be page aligned
-    // and have padding, as to not expose any other static kernel data to the process
+    // Map the kernel
+    let existing_page_tree = PageTree::new(PageTree::get_level4_addr());
+    existing_page_tree.copy_higher_half(&mut page_tree);
+
+    
+
     // Don't forget to respect the 32 bit option
 
     for region in context.mem_regions.iter() {
@@ -79,15 +83,16 @@ pub fn build_context(context: ContextInfo) -> ProcessData {
 }
 
 pub fn add_thread(proc_data: &mut ProcessData, stack_size_pages: u8) -> &ThreadData {
-    let stack_search = if proc_data.is_32_bit {
-        //highest address is 0xFFFF_FFFF
-        0xFFFF_FFFF - KERNEL_DATA_SIZE_PAGES * 0x1000
+    let stack_search: u64 = if proc_data.is_32_bit {
+        //highest address is 0xFFFF_FFFF, highest quarter is kernel on 32 bit applications
+        //The kernel here will STILL be in higher half of 64(48) bit address space, but maybe
+        //applications assume their address can't be in the highest qurter
+        0xBFFF_FFFF
     } else {
-        //just in case, we will NOT use higher half, that is kernel exclusive memory
-        //48 bits for addressing, so highest addr is 0x7FFF_FFFF_FFFF
-        0x7FFF_FFFF_FFFF - KERNEL_DATA_SIZE_PAGES * 0x1000
+        //48 bits for addressing, so highest userspace addr is 0x7FFF_FFFF_FFFF
+        0x7FFF_FFFF_FFFF
     };
-    let mut stack_search = VirtAddr(stack_search as u64);
+    let mut stack_search = VirtAddr(stack_search);
 
     'outer: loop {
         for thread in proc_data.threads.iter() {
@@ -158,9 +163,11 @@ pub fn remove_proc_context(proc_data: &mut ProcessData) {
         remove_thread_context(proc_data, thread_id)
     }
 
+    let mut page_tree = PageTree::new(proc_data.page_tree_root);
     //first unmap all pages that still need to be allocated in physical allocator
+    //Don't forget the kernel
+    page_tree.unmap_higher_half();
 
 
     //then remove all left over pages
-    let mut page_tree = PageTree::new(proc_data.page_tree_root);
 }
