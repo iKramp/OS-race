@@ -1,8 +1,15 @@
 use core::sync::atomic::{AtomicU32, Ordering};
-use std::{boxed::Box, mem_utils::{self, VirtAddr}, vec::Vec};
+use std::{
+    boxed::Box,
+    mem_utils::{self, VirtAddr},
+    vec::Vec,
+};
 
-use super::{ProcessData, ThreadData, ThreadState, Tid};
-use crate::{memory::{self, paging::PageTree}, proc::{Pid, ProcessState}};
+use super::ProcessData;
+use crate::{
+    memory::{self, paging::PageTree},
+    proc::{Pid, ProcessState},
+};
 use bitfield::bitfield;
 
 const DEFAULT_STACK_SIZE: usize = 0x1000; // 4KB
@@ -11,7 +18,6 @@ const MAX_STACK_SIZE: usize = 0x2111; // 8KB
 const KERNEL_DATA_SIZE_PAGES: usize = 0;
 
 static PROCESS_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
-
 
 bitfield! {
     #[derive(Copy, Clone)]
@@ -45,8 +51,6 @@ pub fn build_context(context: ContextInfo) -> ProcessData {
     let existing_page_tree = PageTree::new(PageTree::get_level4_addr());
     existing_page_tree.copy_higher_half(&mut page_tree);
 
-    
-
     // Don't forget to respect the 32 bit option
 
     for region in context.mem_regions.iter() {
@@ -75,8 +79,7 @@ pub fn build_context(context: ContextInfo) -> ProcessData {
         is_32_bit: context.is_32_bit,
         cmdline: context.cmdline,
         page_tree_root,
-        threads: Vec::new(),
-        state: ProcessState::Running,
+        state: ProcessState::Paused,
     };
     add_thread(&mut proc_data, context.stack_size_pages.unwrap_or(DEFAULT_STACK_SIZE as u8));
     proc_data
@@ -167,7 +170,6 @@ pub fn remove_proc_context(proc_data: &mut ProcessData) {
     //first unmap all pages that still need to be allocated in physical allocator
     //Don't forget the kernel
     page_tree.unmap_higher_half();
-
 
     //then remove all left over pages
 }

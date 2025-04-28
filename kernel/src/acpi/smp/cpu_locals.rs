@@ -26,3 +26,6 @@ impl CpuLocals {
         }
     }
 }
+
+
+//FS register contains thread local storage of a process

@@ -696,11 +696,17 @@ impl PageTree {
         unsafe {
             let level_4_table = get_at_physical_addr::<PageTable>(self.level_4_table);
 
-            level_4_table.unmap_lower_half();
             level_4_table.prepare_higher_half();
             level_4_table.set_num_of_available_spaces(4);
         }
         PageTree::reload();
+    }
+
+    pub fn unmap_lower_half(&mut self) {
+        unsafe {
+            let level_4_table = get_at_physical_addr::<PageTable>(self.level_4_table);
+            level_4_table.unmap_lower_half();
+        }
     }
 
     pub fn get_num_allocated_pages(&self) -> u64 {

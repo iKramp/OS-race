@@ -37,7 +37,7 @@ pub extern "C" fn ap_started_wait_loop() -> ! {
     crate::acpi::init_acpi_ap(processor_id);
 
     set_initialized();
-    println!("AP: cpu woke up and received all data");
+    println!("AP {}: cpu woke up and received all data", processor_id);
 
     loop {
         unsafe {

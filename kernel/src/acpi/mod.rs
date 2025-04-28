@@ -14,7 +14,7 @@ use std::{mem_utils::PhysAddr, Vec};
 pub use apic::{LapicRegisters, LAPIC_REGISTERS};
 use platform_info::PlatformInfo;
 
-use crate::{limine::LIMINE_BOOTLOADER_REQUESTS, memory::physical_allocator, println, printlnc};
+use crate::{limine::LIMINE_BOOTLOADER_REQUESTS, memory::{physical_allocator, PAGE_TREE_ALLOCATOR}, println, printlnc};
 
 static mut PLATFORM_INFO: Option<PlatformInfo> = None;
 pub fn get_platform_info() -> &'static PlatformInfo {
@@ -80,6 +80,8 @@ pub fn init_acpi() {
     ioapic::init_ioapic(platform_info);
     smp::wake_cpus(platform_info);
     printlnc!((0, 255, 0), "ACPI initialized and APs started");
+    unsafe { PAGE_TREE_ALLOCATOR.unmap_lower_half() };
+
 
     //after loading dsdt
     /*

@@ -29,8 +29,6 @@ pub fn init_memory() {
         printlnc!((255, 200, 100), "Limine mem map:");
         PAGE_TREE_ALLOCATOR.print_mapping();
         PAGE_TREE_ALLOCATOR.init();
-        printlnc!((255, 200, 100), "Fixed mem map:");
-        PAGE_TREE_ALLOCATOR.print_mapping();
         printlnc!((0, 255, 0), "memory initialized");
     }
 }

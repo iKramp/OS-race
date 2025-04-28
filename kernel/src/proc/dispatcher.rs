@@ -10,6 +10,7 @@ use super::ThreadData;
  * Push CR3
  * Update CPU locals to indicate a process being run?
  * Save fpu, mmx... state with fxsave64. Enable REX.W
+ * save/restore gs and fs registers  through MSRs and swapgs
  */
  
 //this function should NOT use the heap at all to prevent memory leaks by setting IP and SP

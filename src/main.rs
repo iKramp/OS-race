@@ -19,7 +19,7 @@ fn main() {
         cmd.arg("-S");
     }
     //cmd.arg("-cpu").arg("EPYC");
-    cmd.arg("-smp").arg("8");
+    cmd.arg("-smp").arg("4");
 
     #[cfg(test)]
     {

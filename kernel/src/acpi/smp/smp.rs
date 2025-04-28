@@ -23,9 +23,6 @@ pub static mut CPU_LOCALS: Option<std::Vec<VirtAddr>> = None;
 use crate::acpi::{LAPIC_REGISTERS, LapicRegisters, platform_info::PlatformInfo};
 
 pub fn wake_cpus(platform_info: &PlatformInfo) {
-    let trampoline_reserved = unsafe { crate::memory::TRAMPOLINE_RESERVED };
-    //identity map
-    unsafe { PAGE_TREE_ALLOCATOR.allocate_set_virtual(Some(trampoline_reserved), VirtAddr(trampoline_reserved.0))}
     copy_trampoline();
 
     let start_page = unsafe { crate::memory::TRAMPOLINE_RESERVED.0 } >> 12;
@@ -73,7 +70,6 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
             send_cpu_locals(ap_local_ptr.0, comm_lock);
             wait_for_cpus(cpu.0 as u8 + 1);
         }
-        PAGE_TREE_ALLOCATOR.deallocate(VirtAddr(trampoline_reserved.0));
     }
 }
 

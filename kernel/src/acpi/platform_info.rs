@@ -22,9 +22,12 @@ impl PlatformInfo {
                         apic_id: data.apic_id,
                         flags: data.flags,
                     };
-                    println!("processor {} apic id {} flags {:#x?}", processor.processor_id, processor.apic_id, processor.flags);
-                    if !processor.flags.online_capable() {
-                        println!("processor {} is not online capable", processor.apic_id);
+                    if !processor.flags.enabled() {
+                        if processor.flags.online_capable() {
+                            println!("processor {} is not enabled but online capable", processor.apic_id);
+                        } else {
+                            println!("processor {} is not enabled and not online capable", processor.apic_id);
+                        }
                         continue;
                     }
                     if unsafe { BOOT_FOUND } {

@@ -69,8 +69,7 @@ impl core::ops::Sub<u64> for VirtAddr {
 #[inline]
 pub unsafe fn get_at_physical_addr<T>(addr: PhysAddr) -> &'static mut T {
     unsafe {
-        #[cfg(debug_assertions)]
-        assert!(MEM_INITIALIZED);
+        debug_assert!(MEM_INITIALIZED);
         let data: *mut T = (addr + PHYSICAL_OFFSET).0 as *mut T;
         &mut *data
     }
