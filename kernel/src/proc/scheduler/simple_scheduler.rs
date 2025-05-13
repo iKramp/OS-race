@@ -1,10 +1,9 @@
-use std::vec::Vec;
-use crate::proc::{Pid, Tid};
 use super::Scheduler;
-
+use crate::proc::Pid;
+use std::vec::Vec;
 
 pub struct SimpleScheduler {
-    tasks: Vec<(Pid, Tid)>,
+    tasks: Vec<Pid>,
     current_task: usize,
 }
 
@@ -18,12 +17,12 @@ impl SimpleScheduler {
 }
 
 impl Scheduler for SimpleScheduler {
-    fn accept_new_thread(&mut self, pid: Pid, tid: Tid) {
+    fn accept_new_process(&mut self, pid: Pid) {
         // Add the new process to the scheduler
-        self.tasks.push((pid, tid));
+        self.tasks.push(pid);
     }
 
-    fn schedule(&mut self) -> Option<(Pid, Tid)> {
+    fn schedule(&mut self) -> Option<Pid> {
         if self.tasks.is_empty() {
             return None;
         }
@@ -37,11 +36,6 @@ impl Scheduler for SimpleScheduler {
 
     fn remove_process(&mut self, pid: crate::proc::Pid) {
         // Remove the process from the scheduler
-        self.tasks.retain(|&(p, _)| p != pid);
-    }
-
-    fn remove_thread(&mut self, pid: crate::proc::Pid, tid: crate::proc::Tid) {
-        // Remove the thread from the scheduler
-        self.tasks.retain(|&(p, t)| p != pid || t != tid);
+        self.tasks.retain(|&p| p != pid);
     }
 }

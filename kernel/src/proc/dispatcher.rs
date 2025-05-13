@@ -1,4 +1,5 @@
-use super::ThreadData;
+use super::ProcessData;
+
 
 /*
  * Things that need to be done: (Intel SDM, Vol 3, chapter 8.1.2
@@ -14,6 +15,6 @@ use super::ThreadData;
  */
  
 //this function should NOT use the heap at all to prevent memory leaks by setting IP and SP
-pub(super) fn dispatch(thread: ThreadData) {
-    todo!("dispatch process {:?}, thread {:?}", thread.pid, thread.thread_id);
+pub(super) fn dispatch(proc: &ProcessData) {
+    todo!("dispatch process {:?}", proc.pid);
 }

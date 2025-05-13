@@ -1,20 +1,19 @@
 use alloc::boxed::Box;
 
 #[derive(Debug)]
-struct RcInner<T: crate::fmt::Debug> {
+struct RcInner<T> {
     data: T,
     count: u64,
 }
 
-#[derive(Debug)]
 pub struct Rc<T>
 where
-    T: 'static + crate::fmt::Debug,
+    T: 'static
 {
     inner: &'static mut RcInner<T>,
 }
 
-impl<T: crate::fmt::Debug> Rc<T> {
+impl<T> Rc<T> {
     pub fn new(data: T) -> Self {
         unsafe {
             let address = Box::into_raw(Box::new(RcInner {data, count: 1})) as usize;
@@ -29,7 +28,7 @@ impl<T: crate::fmt::Debug> Rc<T> {
     }
 }
 
-impl<T: crate::fmt::Debug> Drop for Rc<T> {
+impl<T> Drop for Rc<T> {
     #[inline]
     fn drop(&mut self) {
         self.inner.count -= 1;

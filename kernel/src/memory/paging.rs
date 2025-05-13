@@ -672,12 +672,16 @@ fn dealloc_huge_page(entry: &PageTableEntry, level: u64) {
 }
 
 pub struct PageTree {
-    pub level_4_table: PhysAddr,
+    level_4_table: PhysAddr,
 }
 
 impl PageTree {
     pub fn new(level_4_table: PhysAddr) -> Self {
         Self { level_4_table }
+    }
+
+    pub fn root(&self) -> PhysAddr {
+        self.level_4_table
     }
 
     pub fn print_mapping(&mut self) {
