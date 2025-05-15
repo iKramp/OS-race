@@ -1,17 +1,22 @@
+use std::mem_utils::VirtAddr;
+
 pub struct CpuLocals {
     pub stack_addr: u64,
     pub stack_size: u64,
     pub apic_id: u8,
     pub processor_id: u8,
+    /// Points to TablePointer with base and limit of GDT
+    pub gdt_ptr: VirtAddr
 }
 
 impl CpuLocals {
-    pub fn new(stack_addr: u64, stack_size: u64, apic_id: u8, processor_id: u8) -> Self {
+    pub fn new(stack_addr: u64, stack_size: u64, apic_id: u8, processor_id: u8, gdt_ptr: VirtAddr) -> Self {
         Self {
             stack_addr,
             stack_size,
             apic_id,
             processor_id,
+            gdt_ptr,
         }
     }
 

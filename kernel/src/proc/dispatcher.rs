@@ -16,5 +16,10 @@ use super::ProcessData;
  
 //this function should NOT use the heap at all to prevent memory leaks by setting IP and SP
 pub(super) fn dispatch(proc: &ProcessData) {
+    //some kind of assert to make sure we really are the first kernel code from a user process (eg
+    //not from an interrupt from existing kernel code)
+    //TODO:
+    
+
     todo!("dispatch process {:?}", proc.pid);
 }

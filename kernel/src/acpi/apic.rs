@@ -8,7 +8,7 @@ use std::{
 use unroll::unroll_for_loops;
 
 use crate::{
-    apic_interrupt_vector, interrupts::{handlers::*, idt::{Entry, IDT}, LEGACY_PIC_TIMER_TICKS, PIC_TIMER_FREQUENCY, TIMER_TICKS}, memory::paging::LiminePat, println, utils::byte_to_port
+    apic_interrupt_vector, handler, interrupts::{self, handlers::*, idt::{Entry, IDT}, LEGACY_PIC_TIMER_TICKS, PIC_TIMER_FREQUENCY, TIMER_TICKS}, memory::paging::LiminePat, println, utils::byte_to_port
 };
 
 pub static mut LAPIC_REGISTERS: VirtAddr = VirtAddr(0);
@@ -149,7 +149,11 @@ fn activate_timer(lapic_registers: &mut LapicRegisters) {
     } else {
         disable_pic_completely();
         crate::interrupts::disable_timer();
-        unsafe { IDT.set(Entry::converging(apic_timer_tick), 32) };
+
+        // unsafe { IDT.set(Entry::converging(apic_timer_tick), 32) };
+        unsafe {
+            IDT.set(Entry::naked(handler!(apic_timer_tick, false)), 32);
+        }
     }
 
     timer_conf |= 0b01 << 17; // set to periodic

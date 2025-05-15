@@ -6,9 +6,7 @@ use crate::LIMINE_BOOTLOADER_REQUESTS;
 use crate::{println, printlnc};
 use std::mem_utils::{self, PhysAddr};
 
-pub static mut PAGE_TREE_ALLOCATOR: paging::PageTree = paging::PageTree {
-    level_4_table: std::mem_utils::PhysAddr(0),
-};
+pub static mut PAGE_TREE_ALLOCATOR: paging::PageTree = paging::PageTree::new(PhysAddr(0));
 
 pub static mut TRAMPOLINE_RESERVED: PhysAddr = PhysAddr(0);
 

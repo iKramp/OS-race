@@ -1,12 +1,27 @@
+use core::alloc::{GlobalAlloc, Layout};
+use std::{boxed::Box, mem_utils::VirtAddr};
+
+use crate::memory::heap;
+
 use super::idt::TablePointer;
 
 pub const DOUBLE_FAULT_IST: u16 = 1;
 pub const NMI_IST: u16 = 2;
 pub const MACHINE_CHECK_IST: u16 = 3;
+pub static mut STATIC_GDT_PTR: TablePointer = TablePointer {
+    limit: 0,
+    base: 0,
+};
 
 const GDT_LEN: usize = 7;
-#[used]
-pub static mut GDT_POINTER: TablePointer = TablePointer { limit: 0, base: 0 };
+
+pub fn load_gdt(ptr: TablePointer) {
+    unsafe { core::arch::asm!("lgdt [{}]", in(reg) core::ptr::addr_of!(ptr), options(readonly, nostack, preserves_flags)) };
+    set_cs();
+    unsafe { core::arch::asm!("mov ax, 0x28", "ltr ax", out("ax") _, options(nostack, preserves_flags, raw)) };
+}
+
+pub const KERNEL_STACK_SIZE: usize = 4096 * 4;
 
 #[repr(C, packed)]
 struct TaskStateSegment {
@@ -19,13 +34,11 @@ struct TaskStateSegment {
     io_map_base_address: u16,
 }
 
-const STACK_SIZE: usize = 4096 * 5;
-
 //wrapped to align
 #[repr(align(16))]
 struct Ist {
     #[allow(unused)] //used
-    stack: [u8; STACK_SIZE],
+    stack: [u8; KERNEL_STACK_SIZE],
 }
 
 #[used]
@@ -39,24 +52,56 @@ static mut TSS: TaskStateSegment = TaskStateSegment {
     io_map_base_address: core::mem::size_of::<TaskStateSegment>() as u16,
 };
 
-fn init_tss() {
-    unsafe {
-        TSS.interrupt_stack_table[DOUBLE_FAULT_IST as usize - 1] = {
-            #[used]
-            static mut STACK: Ist = Ist { stack: [0; STACK_SIZE] };
-            core::ptr::addr_of!(STACK) as u64 + STACK_SIZE as u64
-        };
-        TSS.interrupt_stack_table[NMI_IST as usize - 1] = {
-            #[used]
-            static mut STACK: Ist = Ist { stack: [0; STACK_SIZE] };
-            core::ptr::addr_of!(STACK) as u64 + STACK_SIZE as u64
-        };
-        TSS.interrupt_stack_table[MACHINE_CHECK_IST as usize - 1] = {
-            #[used]
-            static mut STACK: Ist = Ist { stack: [0; STACK_SIZE] };
-            core::ptr::addr_of!(STACK) as u64 + STACK_SIZE as u64
-        };
-    }
+fn init_tss(tss: &mut TaskStateSegment, static_stacks: bool, kernel_stack: Option<u64>) {
+    tss.interrupt_stack_table[DOUBLE_FAULT_IST as usize - 1] = {
+        #[used]
+        static mut STACK: Ist = Ist { stack: [0; KERNEL_STACK_SIZE] };
+
+        if static_stacks {
+            core::ptr::addr_of!(STACK) as u64 + KERNEL_STACK_SIZE as u64
+        } else {
+            let stack = unsafe {
+                heap::HEAP.alloc_zeroed(Layout::from_size_align(KERNEL_STACK_SIZE, 16).unwrap())
+            };
+            unsafe { stack.add(KERNEL_STACK_SIZE) as u64 }
+        }
+    };
+    tss.interrupt_stack_table[NMI_IST as usize - 1] = {
+        #[used]
+        static mut STACK: Ist = Ist { stack: [0; KERNEL_STACK_SIZE] };
+
+        if static_stacks {
+            core::ptr::addr_of!(STACK) as u64 + KERNEL_STACK_SIZE as u64
+        } else {
+            let stack = unsafe {
+                heap::HEAP.alloc_zeroed(Layout::from_size_align(KERNEL_STACK_SIZE, 16).unwrap())
+            };
+            unsafe { stack.add(KERNEL_STACK_SIZE) as u64 }
+        }
+    };
+    tss.interrupt_stack_table[MACHINE_CHECK_IST as usize - 1] = {
+        #[used]
+        static mut STACK: Ist = Ist { stack: [0; KERNEL_STACK_SIZE] };
+
+        if static_stacks {
+            core::ptr::addr_of!(STACK) as u64 + KERNEL_STACK_SIZE as u64
+        } else {
+            let stack = unsafe {
+                heap::HEAP.alloc_zeroed(Layout::from_size_align(KERNEL_STACK_SIZE, 16).unwrap())
+            };
+            unsafe { stack.add(KERNEL_STACK_SIZE) as u64 }
+        }
+    };
+    tss.privilege_stack_table[0] = {
+        #[used]
+        static mut STACK: Ist = Ist { stack: [0; KERNEL_STACK_SIZE] };
+
+        if let Some(kernel_stack) = kernel_stack {
+            kernel_stack
+        } else {
+            core::ptr::addr_of!(STACK) as u64 + KERNEL_STACK_SIZE as u64
+        } 
+    };
 }
 
 #[derive(Debug)]
@@ -66,28 +111,27 @@ struct GlobalDescriptorTable {
     len: usize,
 }
 
-#[used]
-static mut GDT: GlobalDescriptorTable = GlobalDescriptorTable {
-    table: [
-        create_segment_descriptor(0, 0, 0, 0),
-        create_segment_descriptor(0, 0xFFFFF, 0x9A, 0xA),
-        create_segment_descriptor(0, 0xFFFFF, 0x92, 0xC),
-        create_segment_descriptor(0, 0xFFFFF, 0xFB, 0xA),
-        create_segment_descriptor(0, 0xFFFFF, 0xF2, 0xC),
-        create_segment_descriptor(0, 0x0, 0x0, 0x0),
-        create_segment_descriptor(0, 0x0, 0x0, 0x0),
-    ],
-    len: 5,
-};
-
 impl GlobalDescriptorTable {
-    fn load(&'static self) {
-        unsafe {
-            GDT_POINTER = self.pointer();
-            core::arch::asm!("lgdt [{}]", in(reg) core::ptr::addr_of!(GDT_POINTER), options(readonly, nostack, preserves_flags));
+    const fn default() -> Self {
+        GlobalDescriptorTable {
+            table: [
+                create_segment_descriptor(0, 0, 0, 0),            //null descriptor
+                create_segment_descriptor(0, 0xFFFFF, 0x9A, 0xA), //code segment
+                create_segment_descriptor(0, 0xFFFFF, 0x92, 0xC), //data segment
+                create_segment_descriptor(0, 0xFFFFF, 0xFB, 0xA), //user code segment
+                create_segment_descriptor(0, 0xFFFFF, 0xF2, 0xC), //user data segment
+                create_segment_descriptor(0, 0x0, 0x0, 0x0),      //TSS segment placeholder
+                create_segment_descriptor(0, 0x0, 0x0, 0x0),      //TSS segment placeholder
+            ],
+            len: 5, //len is 2 shorter to account for tss placeholders
         }
     }
+}
 
+#[used]
+static mut GDT: GlobalDescriptorTable = GlobalDescriptorTable::default();
+
+impl GlobalDescriptorTable {
     fn pointer(&self) -> TablePointer {
         TablePointer {
             limit: (GDT_LEN * 8 - 1) as u16,
@@ -118,10 +162,15 @@ struct SegmentDescriptor {
     base_high: u8,
 }
 
-const fn create_128_segment_descriptor(base: u64, limit: u32, access_byte: u8, flags: u8) -> (SegmentDescriptor, SegmentDescriptor) {
+const fn create_128_segment_descriptor(
+    base: u64,
+    limit: u32,
+    access_byte: u8,
+    flags: u8,
+) -> (SegmentDescriptor, SegmentDescriptor) {
     let low = create_segment_descriptor(base, limit, access_byte, flags);
     let high = create_segment_descriptor((base >> 48) & 0xFFFF, ((base >> 32) & 0xFFFF) as u32, 0, 0); //a bit of a hack, we're actually
-                                                                                                       //doing a 32 bit base
+    //doing a 32 bit base
     (low, high)
 }
 
@@ -136,22 +185,42 @@ const fn create_segment_descriptor(base: u64, limit: u32, access_byte: u8, flags
     }
 }
 
-pub fn init_gdt() {
-    init_tss();
+pub fn init_boot_gdt() {
     unsafe {
+        init_tss(&mut TSS, true, None);
         GDT.append_128(create_128_segment_descriptor(
             core::ptr::addr_of!(TSS) as u64,
             (core::mem::size_of::<TaskStateSegment>() - 1) as u32,
             0x89,
             0x0,
         ));
+        STATIC_GDT_PTR = GDT.pointer();
+        load_gdt(GDT.pointer());
     };
+}
 
-    unsafe {
-        GDT.load();
-        set_cs();
-        core::arch::asm!("mov ax, 0x28", "ltr ax", out("ax") _, options(nostack, preserves_flags, raw));
-    }
+pub fn create_new_gdt(kernel_stack: VirtAddr) -> TablePointer {
+        let mut gdt = Box::new(GlobalDescriptorTable::default());
+        let mut tss = Box::new(TaskStateSegment {
+            padding_1: 0,
+            privilege_stack_table: [0; 3],
+            padding_2: 0,
+            interrupt_stack_table: [0; 7],
+            padding_3: 0,
+            padding_4: 0,
+            io_map_base_address: core::mem::size_of::<TaskStateSegment>() as u16,
+        });
+        init_tss(tss.as_mut(), false, Some(kernel_stack.0));
+        gdt.append_128(create_128_segment_descriptor(
+            tss.as_ref() as *const _ as u64,
+            (core::mem::size_of::<TaskStateSegment>() - 1) as u32,
+            0x89,
+            0x0,
+        ));
+        let ptr = gdt.pointer();
+        let _ = Box::leak(gdt);
+        let _ = Box::leak(tss);
+        ptr
 }
 
 pub fn set_cs() {

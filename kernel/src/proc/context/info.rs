@@ -3,7 +3,7 @@ use bitfield::bitfield;
 
 use crate::proc::MemoryContext;
 
-pub const MAX_STACK_SIZE_PAGES: usize = 0x4; // 16KB
+pub const MAX_PROC_STACK_SIZE_PAGES: usize = 0x4; // 16KB
 
 bitfield! {
     #[derive(Copy, Clone)]
@@ -90,7 +90,7 @@ impl<'a> ContextInfo<'a> {
             }
         }
         if let Some(stack_size) = stack_size_pages {
-            if stack_size > MAX_STACK_SIZE_PAGES as u8 {
+            if stack_size > MAX_PROC_STACK_SIZE_PAGES as u8 {
                 return Err(ContextInfoError::StackSizeTooBig);
             }
         }

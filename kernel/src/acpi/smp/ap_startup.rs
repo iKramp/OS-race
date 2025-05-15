@@ -1,14 +1,16 @@
 #![allow(clippy::erasing_op)]
 
-use crate::interrupts::idt::IDT_POINTER;
-use crate::interrupts::GDT_POINTER;
+use crate::interrupts::{self, idt::IDT_POINTER};
 use crate::println;
 use core::arch::asm;
+use std::mem_utils::get_at_virtual_addr;
 
 use crate::{
     memory::paging::PageTree,
     msr::{get_mtrr_cap, set_msr, set_mtrr_def_type},
 };
+
+use super::cpu_locals;
 
 #[link(name = "trampoline", kind = "static")]
 unsafe extern "C" {
@@ -27,7 +29,6 @@ pub extern "C" fn ap_started_wait_loop() -> ! {
 
     set_mtrrs(comm_lock);
     set_cr_registers(comm_lock);
-    set_gdt();
     set_idt();
     PageTree::reload();
 
@@ -60,13 +61,12 @@ fn set_initialized() {
 fn set_cpu_local(comm_lock: *mut u8) {
     let cpu_local_ptr = read_8_bytes(comm_lock);
     crate::msr::set_msr(0xC0000101, cpu_local_ptr);
-}
+    let cpu_locals = cpu_locals::CpuLocals::get();
+    let gdt_ptr = unsafe { get_at_virtual_addr(cpu_locals.gdt_ptr) };
+    interrupts::load_gdt(*gdt_ptr);
 
-fn set_gdt() {
-    unsafe {
-        core::arch::asm!("lgdt [{}]", in(reg) core::ptr::addr_of!(GDT_POINTER), options(readonly, nostack, preserves_flags));
-    }
-    crate::interrupts::set_cs();
+    //set again because setting gdt clears gs register
+    crate::msr::set_msr(0xC0000101, cpu_local_ptr);
 }
 
 fn set_idt() {

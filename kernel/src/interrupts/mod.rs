@@ -1,16 +1,17 @@
 mod gdt;
 use std::{println, printlnc};
-pub use gdt::{set_cs, GDT_POINTER};
+pub use gdt::{create_new_gdt, load_gdt, STATIC_GDT_PTR, KERNEL_STACK_SIZE};
 #[macro_use]
 pub mod handlers;
 pub mod idt;
+mod macros;
 use crate::utils::byte_to_port;
 
 pub fn init_interrupts() {
     println!("initializing PIC");
     init_pic();
     println!("initializing GDT");
-    gdt::init_gdt(); //add a separate TSS for each core
+    gdt::init_boot_gdt(); //add a separate TSS for each core
     println!("initializing IDT");
     idt::init_idt();
     unsafe { core::arch::asm!("hlt") };

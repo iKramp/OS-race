@@ -676,7 +676,7 @@ pub struct PageTree {
 }
 
 impl PageTree {
-    pub fn new(level_4_table: PhysAddr) -> Self {
+    pub const fn new(level_4_table: PhysAddr) -> Self {
         Self { level_4_table }
     }
 

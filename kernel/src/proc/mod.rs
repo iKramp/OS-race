@@ -48,7 +48,7 @@ struct ProcessData {
 
 /// notes:
 /// page tree root should always be unique
-/// stack size pages should not be larger than [`context::info::MAX_STACK_SIZE_PAGES`]
+/// stack size pages should not be larger than [`context::info::MAX_PROC_STACK_SIZE_PAGES`]
 struct MemoryContext {
     is_32_bit: bool,
     page_tree: PageTree,

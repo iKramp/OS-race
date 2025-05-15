@@ -187,6 +187,18 @@ impl Entry {
         }
     }
 
+    pub fn naked(handler: extern "C" fn() -> !) -> Self {
+        let pointer = handler as usize;
+        Self {
+            gdt_selector: 0x8,
+            pointer_low: (pointer & 0xFFFF) as u16,
+            pointer_middle: ((pointer & 0xFFFF0000) >> 16) as u16,
+            pointer_high: ((pointer & 0xFFFFFFFF00000000) >> 32) as u32,
+            options: construct_entry_options(0, false, 0, true),
+            reserved: 0,
+        }
+    }
+
     pub fn converging(handler: extern "x86-interrupt" fn(_: ExceptionStackFrame)) -> Self {
         Self::new_converging(0x8, handler, construct_entry_options(0, false, 0, true))
     }
@@ -207,6 +219,10 @@ impl Entry {
     }
 }
 
+//privilige level is always 0 (kernel)
+//always interrupt gate, which clears IF
+//type bits 11 10 9 8 
+//
 const fn construct_entry_options(
     interrupt_stack_table_index: u16,
     interrupt_gate: bool,
@@ -215,7 +231,7 @@ const fn construct_entry_options(
 ) -> u16 {
     assert!(interrupt_stack_table_index < 8);
     assert!(descriptor_privilege_level < 4);
-    let mut num: u16 = 0b0000111000000000 | interrupt_stack_table_index | (descriptor_privilege_level << 13);
+    let mut num: u16 = 0b0000_1110_0000_0000 | interrupt_stack_table_index | (descriptor_privilege_level << 13);
     if present {
         num |= 1 << 15;
     }

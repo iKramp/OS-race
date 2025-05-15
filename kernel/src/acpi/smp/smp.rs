@@ -1,22 +1,20 @@
 use crate::{
     interrupts::{
-        GDT_POINTER,
-        idt::{IDT_POINTER, TablePointer},
+        self, idt::{TablePointer, IDT_POINTER}
     },
     memory::{
-        PAGE_TREE_ALLOCATOR,
-        paging::{LiminePat, PageTree},
+        paging::{LiminePat, PageTree}, PAGE_TREE_ALLOCATOR
     },
     msr::{get_msr, get_mtrr_cap, get_mtrr_def_type},
     println,
 };
 use core::sync::atomic::{AtomicBool, AtomicU8};
-use std::mem_utils::{VirtAddr, get_at_virtual_addr};
+use std::{boxed::Box, mem_utils::{get_at_virtual_addr, VirtAddr}};
 
-const STACK_SIZE_PAGES: usize = 2;
 pub static mut CPU_LOCK: AtomicBool = AtomicBool::new(false);
 pub static mut CPUS_INITIALIZED: AtomicU8 = AtomicU8::new(0);
 pub static mut CPU_LOCALS: Option<std::Vec<VirtAddr>> = None;
+const STACK_SIZE_PAGES: u8 = (interrupts::KERNEL_STACK_SIZE / 0x1000) as u8; //4KB
 
 //custom data starts at 0x4 from ap_startup
 
@@ -28,11 +26,22 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
     let start_page = unsafe { crate::memory::TRAMPOLINE_RESERVED.0 } >> 12;
     unsafe {
         CPU_LOCALS = Some(std::Vec::with_capacity(platform_info.application_processors.len() + 1));
+
+        //change bsp's gdt, the static one will be used by each AP before switching to their own
+        //GDTs
+        //i could probably reuse current stack, as kernel doesn't preserve stack across task
+        //switches
+        let bsp_stack_addr = crate::memory::PAGE_TREE_ALLOCATOR.allocate_contigious(STACK_SIZE_PAGES as u64, None, false);
+        let bsp_gdt = interrupts::create_new_gdt(bsp_stack_addr);
+        interrupts::load_gdt(bsp_gdt);
+        let bsp_gdt_ptr = Box::leak(Box::new(bsp_gdt)) as *const _ as u64;
         let bsp_local = super::cpu_locals::CpuLocals::new(
             0,
             0,
             platform_info.boot_processor.apic_id,
             platform_info.boot_processor.processor_id,
+            VirtAddr(bsp_gdt_ptr),
+
         );
         let bsp_local_ptr = add_cpu_locals(bsp_local);
         crate::msr::set_msr(0xC0000101, bsp_local_ptr.0);
@@ -41,7 +50,7 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
         let comm_lock = destination.add(56);
         for cpu in platform_info.application_processors.iter().enumerate() {
             let stack_addr = crate::memory::PAGE_TREE_ALLOCATOR.allocate_contigious(STACK_SIZE_PAGES as u64, None, false); //2 pages
-            (destination.add(32) as *mut u64).write_volatile(stack_addr.0 + (STACK_SIZE_PAGES * 0x1000) as u64);
+            (destination.add(32) as *mut u64).write_volatile(stack_addr.0 + STACK_SIZE_PAGES as u64 * 0x1000);
             let lapic_registers = get_at_virtual_addr::<LapicRegisters>(LAPIC_REGISTERS);
             println!("Waking up CPU {}", cpu.1.apic_id);
             if cpu.1.apic_id == 255 {
@@ -59,11 +68,14 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
             send_mtrrs(comm_lock);
             send_cr_registers(comm_lock);
 
+            let ap_gdt = interrupts::create_new_gdt(stack_addr);
+            let ap_gdt_ptr = Box::leak(Box::new(ap_gdt)) as *const _ as u64;
             let ap_local = super::cpu_locals::CpuLocals::new(
                 stack_addr.0,
                 STACK_SIZE_PAGES as u64 * 0x1000,
                 cpu.1.apic_id,
                 cpu.1.processor_id,
+                VirtAddr(ap_gdt_ptr),
             );
             let ap_local_ptr = add_cpu_locals(ap_local);
 
@@ -109,7 +121,7 @@ fn copy_trampoline() {
             "mov {}, cr3",
             out(reg) cr3,
         );
-        let gdt_ptr = crate::interrupts::GDT_POINTER;
+        let gdt_ptr = crate::interrupts::STATIC_GDT_PTR;
         let page_tree_root = PageTree::get_level4_addr();
         let gdt_ptr = TablePointer {
             limit: gdt_ptr.limit,
@@ -186,12 +198,7 @@ fn send_cr_registers(comm_lock: *mut u8) {
     }
 }
 
-fn send_dts(comm_lock: *mut u8) {
-    unsafe {
-        send_u16(GDT_POINTER.limit, comm_lock);
-        send_u64(GDT_POINTER.base, comm_lock);
-    }
-
+fn send_idt(comm_lock: *mut u8) {
     let idt_ptr_addr = core::ptr::addr_of!(IDT_POINTER);
     send_u64(idt_ptr_addr as u64, comm_lock);
 }
