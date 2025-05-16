@@ -36,12 +36,12 @@ pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo, processor
 
     if bsp {
         unsafe {
-            IDT.set(Entry::new(handler!(other_apic_interrupt, needs_code)), 64);
-            IDT.set(Entry::new(handler!(other_apic_interrupt, needs_code)), 65);
-            IDT.set(Entry::new(handler!(other_apic_interrupt, needs_code)), 66);
-            IDT.set(Entry::new(handler!(apic_error, needs_code)), 67);
-            IDT.set(Entry::new(handler!(other_apic_interrupt, needs_code)), 68);
-            IDT.set(Entry::new(handler!(other_apic_interrupt, needs_code)), 69);
+            IDT.set(Entry::new(handler!(other_apic_interrupt)), 64);
+            IDT.set(Entry::new(handler!(other_apic_interrupt)), 65);
+            IDT.set(Entry::new(handler!(other_apic_interrupt)), 66);
+            IDT.set(Entry::new(handler!(apic_error)), 67);
+            IDT.set(Entry::new(handler!(other_apic_interrupt)), 68);
+            IDT.set(Entry::new(handler!(other_apic_interrupt)), 69);
         }
     }
 
@@ -88,7 +88,7 @@ pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo, processor
                 printlnc!((0, 0, 255), "interrupt vector {}", $num);
                 apic_eoi();
             }
-            IDT.set(Entry::new(handler!(wrapper, needs_code)), $num);
+            IDT.set(Entry::new(handler!(wrapper)), $num);
         }};
     }
 
@@ -96,12 +96,12 @@ pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo, processor
         for i in 38..255 {
             apic_interrupt_vector!(i);
         }
-        IDT.set(Entry::new(handler!(apic_error, needs_code)), 67);
+        IDT.set(Entry::new(handler!(apic_error)), 67);
 
-        IDT.set(Entry::new(handler!(apic_keyboard_interrupt, needs_code)), 32 + 1);
-        IDT.set(Entry::new(handler!(ps2_mouse_interrupt, needs_code)), 32 + 12);
-        IDT.set(Entry::new(handler!(fpu_interrupt, needs_code)), 32 + 13);
-        IDT.set(Entry::new(handler!(primary_ata_hard_disk, needs_code)), 32 + 14);
+        IDT.set(Entry::new(handler!(apic_keyboard_interrupt)), 32 + 1);
+        IDT.set(Entry::new(handler!(ps2_mouse_interrupt)), 32 + 12);
+        IDT.set(Entry::new(handler!(fpu_interrupt)), 32 + 13);
+        IDT.set(Entry::new(handler!(primary_ata_hard_disk)), 32 + 14);
     }
     disable_pic_completely();
 }
@@ -165,12 +165,12 @@ fn activate_timer(lapic_registers: &mut LapicRegisters) {
 
     if USE_LEGACY_TIMER {
         timer_conf |= 1 << 16; //mask
-        unsafe { IDT.set(Entry::new(handler!(legacy_timer_tick, needs_code)), 32) };
+        unsafe { IDT.set(Entry::new(handler!(legacy_timer_tick)), 32) };
     } else {
         disable_pic_completely();
         crate::interrupts::disable_timer();
 
-        unsafe { IDT.set(Entry::new(handler!(apic_timer_tick, needs_code)), 32) };
+        unsafe { IDT.set(Entry::new(handler!(apic_timer_tick)), 32) };
     }
 
     timer_conf |= 0b01 << 17; // set to periodic

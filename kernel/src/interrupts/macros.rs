@@ -20,7 +20,7 @@ macro_rules! handler {
                     //
                     //possibly error code
 
-                    handler!(@if_flag needs_code, $($flag)* {
+                    handler!(@if_not_flag has_code, $($flag)* {
                         "push 0"
                     }),
 
@@ -116,7 +116,7 @@ macro_rules! handler {
                     "pop rax",
 
                     //remove err code from stack
-                    "add rsp, rsp, 8",
+                    "add rsp, 8",
 
                     "iretq",
                     sym $name,
@@ -131,6 +131,12 @@ macro_rules! handler {
         handler!(@match_flag $target, $($flag)*, {
             $($true)*
         } {""})
+    };
+
+    (@if_not_flag $target:ident, $($flag:ident)* { $($true:tt)* }) => {
+        handler!(@match_flag $target, $($flag)*, {""} {
+            $($true)*
+        })
     };
 
     (@if_else_flag $target:ident, $($flag:ident)*, { $($true:tt)* } { $($false:tt)* }) => {
@@ -159,7 +165,7 @@ macro_rules! handler {
     (@flag_check slow_swap slow_swap { $($true:tt)* } { $($false:tt)* }) => {
         $($true)*
     };
-    (@flag_check needs_code needs_code { $($true:tt)* } { $($false:tt)* }) => {
+    (@flag_check has_code has_code { $($true:tt)* } { $($false:tt)* }) => {
         $($true)*
     };
 

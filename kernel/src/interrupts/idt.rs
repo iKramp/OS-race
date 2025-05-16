@@ -8,8 +8,9 @@ use std::printlnc;
 
 macro_rules! never_exit_interrupt_message {
     ($message:expr, $func_name:ident) => {
-        extern "C" fn $func_name(_proc_data: &mut ProcData) -> ! {
+        extern "C" fn $func_name(proc_data: &mut ProcData) -> ! {
             printlnc!((0, 0, 255), "{} exception", $message);
+            printlnc!((0, 0, 255), "segmetn:instruction: {:x}:{:x}", proc_data.cs, proc_data.rip);
             loop {}
         }
     };
@@ -81,45 +82,45 @@ impl Idt {
     }
 
     pub fn set_entries(&mut self) {
-        self.set(Entry::new(handler!(divide_by_zero_handler, needs_code)), 0);
-        self.set(Entry::new(handler!(debug_handler, needs_code, slow_swap)), 1);
-        self.set(Entry::ist_index(NMI_IST, handler!(nmi_handler, slow_swap, needs_code)), 2);
+        self.set(Entry::new(handler!(divide_by_zero_handler)), 0);
+        self.set(Entry::new(handler!(debug_handler, slow_swap)), 1);
+        self.set(Entry::ist_index(NMI_IST, handler!(nmi_handler, slow_swap)), 2);
         self.set(Entry::new(handler!(breakpoint)), 3);
-        self.set(Entry::new(handler!(overflow_handler, needs_code)), 4);
-        self.set(Entry::new(handler!(bound_handler, needs_code)), 5);
-        self.set(Entry::new(handler!(invalid_opcode_handler, needs_code)), 6);
-        self.set(Entry::new(handler!(device_not_available_handler, needs_code)), 7);
-        self.set(Entry::ist_index(DOUBLE_FAULT_IST, handler!(double_fault_handler, slow_swap)), 8);
-        self.set(Entry::new(handler!(coprocessor_segment_overrun_handler, needs_code)), 9);
-        self.set(Entry::new(handler!(invalid_tss_handler)), 10);
-        self.set(Entry::new(handler!(segment_not_present_handler)), 11);
-        self.set(Entry::new(handler!(ss_fault_handler)), 12);
-        self.set(Entry::new(handler!(general_protection_fault)), 13);
-        self.set(Entry::new(handler!(page_fault)), 14);
-        self.set(Entry::new(handler!(reserved_handler, needs_code)), 15);
-        self.set(Entry::new(handler!(fpu_error_handler, needs_code)), 16);
-        self.set(Entry::new(handler!(alignment_check_handler)), 17);
-        self.set(Entry::ist_index(MACHINE_CHECK_IST, handler!(machine_check_handler, needs_code, slow_swap)), 18);
-        self.set(Entry::new(handler!(simd_fp_handler, needs_code)), 19);
-        self.set(Entry::new(handler!(virtualization_handler, needs_code)), 20);
-        self.set(Entry::new(handler!(control_handler, needs_code)), 21);
-        self.set(Entry::new(handler!(reserved_handler, needs_code)), 22);
-        self.set(Entry::new(handler!(reserved_handler, needs_code)), 23);
-        self.set(Entry::new(handler!(reserved_handler, needs_code)), 24);
-        self.set(Entry::new(handler!(reserved_handler, needs_code)), 25);
-        self.set(Entry::new(handler!(reserved_handler, needs_code)), 26);
-        self.set(Entry::new(handler!(reserved_handler, needs_code)), 27);
-        self.set(Entry::new(handler!(reserved_handler, needs_code)), 28);
-        self.set(Entry::new(handler!(reserved_handler, needs_code)), 29);
-        self.set(Entry::new(handler!(reserved_handler, needs_code)), 30);
-        self.set(Entry::new(handler!(reserved_handler, needs_code)), 31);
+        self.set(Entry::new(handler!(overflow_handler)), 4);
+        self.set(Entry::new(handler!(bound_handler)), 5);
+        self.set(Entry::new(handler!(invalid_opcode_handler)), 6);
+        self.set(Entry::new(handler!(device_not_available_handler)), 7);
+        self.set(Entry::ist_index(DOUBLE_FAULT_IST, handler!(double_fault_handler, slow_swap, has_code)), 8);
+        self.set(Entry::new(handler!(coprocessor_segment_overrun_handler)), 9);
+        self.set(Entry::new(handler!(invalid_tss_handler, has_code)), 10);
+        self.set(Entry::new(handler!(segment_not_present_handler, has_code)), 11);
+        self.set(Entry::new(handler!(ss_fault_handler, has_code)), 12);
+        self.set(Entry::new(handler!(general_protection_fault, has_code)), 13);
+        self.set(Entry::new(handler!(page_fault, has_code)), 14);
+        self.set(Entry::new(handler!(reserved_handler)), 15);
+        self.set(Entry::new(handler!(fpu_error_handler)), 16);
+        self.set(Entry::new(handler!(alignment_check_handler, has_code)), 17);
+        self.set(Entry::ist_index(MACHINE_CHECK_IST, handler!(machine_check_handler, slow_swap)), 18);
+        self.set(Entry::new(handler!(simd_fp_handler)), 19);
+        self.set(Entry::new(handler!(virtualization_handler)), 20);
+        self.set(Entry::new(handler!(control_handler, has_code)), 21);
+        self.set(Entry::new(handler!(reserved_handler)), 22);
+        self.set(Entry::new(handler!(reserved_handler)), 23);
+        self.set(Entry::new(handler!(reserved_handler)), 24);
+        self.set(Entry::new(handler!(reserved_handler)), 25);
+        self.set(Entry::new(handler!(reserved_handler)), 26);
+        self.set(Entry::new(handler!(reserved_handler)), 27);
+        self.set(Entry::new(handler!(reserved_handler)), 28);
+        self.set(Entry::new(handler!(reserved_handler)), 29);
+        self.set(Entry::new(handler!(reserved_handler)), 30);
+        self.set(Entry::new(handler!(reserved_handler)), 31);
 
         for i in 32..256 {
-            self.set(Entry::new(handler!(other_legacy_interrupt, needs_code)), i);
+            self.set(Entry::new(handler!(other_legacy_interrupt)), i);
         }
 
-        self.set(Entry::new(handler!(legacy_timer_tick_testing, needs_code)), 32);
-        self.set(Entry::new(handler!(legacy_keyboard_interrupt, needs_code)), 33);
+        self.set(Entry::new(handler!(legacy_timer_tick_testing)), 32);
+        self.set(Entry::new(handler!(legacy_keyboard_interrupt)), 33);
 
         self.set(Entry::new(handler!(apic_timer_tick)), 100);
         self.set(Entry::new(handler!(spurious_interrupt)), 255);
