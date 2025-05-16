@@ -3,22 +3,14 @@ use crate::utils::{byte_from_port, byte_to_port};
 use core::arch::asm;
 use std::printlnc;
 
-#[derive(Debug)]
-#[repr(C)]
-pub struct ExceptionStackFrame {
-    instruction_pointer: u64,
-    code_segment: u64,
-    cpu_flags: u64,
-    stack_pointer: u64,
-    stack_segment: u64,
-}
+use super::macros::ProcData;
 
-pub extern "x86-interrupt" fn invalid_opcode(stack_frame: ExceptionStackFrame) -> ! {
+pub extern "C" fn invalid_opcode(proc_data: &mut ProcData) {
     printlnc!(
         (0, 0, 255),
-        "EXCEPTION: INVALID OPCODE at {:#X}\n{:#X?}",
-        stack_frame.instruction_pointer,
-        stack_frame
+        "EXCEPTION: INVALID OPCODE at {:#X}:{:#X}",
+        proc_data.cs,
+        proc_data.rip
     );
     unsafe {
         loop {
@@ -27,8 +19,8 @@ pub extern "x86-interrupt" fn invalid_opcode(stack_frame: ExceptionStackFrame) -
     }
 }
 
-pub extern "x86-interrupt" fn breakpoint(stack_frame: ExceptionStackFrame) {
-    printlnc!((0, 255, 255), "Breakpoint reached at {:#X}", stack_frame.instruction_pointer);
+pub extern "C" fn breakpoint(proc_data: &mut ProcData) {
+    printlnc!((0, 255, 255), "Breakpoint reached at {:#X}:{:#X}", proc_data.cs, proc_data.rip);
     apic_eoi();
     legacy_eoi();
 }
@@ -55,12 +47,11 @@ impl From<u64> for PageFaultErrorCode {
     }
 }
 
-pub extern "x86-interrupt" fn page_fault(stack_frame: ExceptionStackFrame, error_code: u64) -> ! {
+pub extern "C" fn page_fault(proc_data: &mut ProcData) {
     printlnc!(
         (0, 0, 255),
-        "EXCEPTION: PAGE FAULT with error code\n{:#X?}\n{:#X?}",
-        PageFaultErrorCode::from(error_code),
-        stack_frame
+        "EXCEPTION: PAGE FAULT. error code: {:#X?}",
+        PageFaultErrorCode::from(proc_data.err_code),
     );
     unsafe {
         loop {
@@ -70,8 +61,9 @@ pub extern "x86-interrupt" fn page_fault(stack_frame: ExceptionStackFrame, error
 }
 
 //gpf
-pub extern "x86-interrupt" fn general_protection_fault(stack_frame: ExceptionStackFrame, error_code: u64) -> ! {
-    printlnc!((0, 0, 255), "EXCEPTION: GPF\n{:#X?}\n{:#x?}", stack_frame, error_code);
+pub extern "C" fn general_protection_fault(proc_data: &mut ProcData) {
+    printlnc!((0, 0, 255), "EXCEPTION: GPF. err code: {:#X?}", proc_data.err_code);
+    printlnc!((0, 0, 255), "EXCEPTION: GPF. proc_data: {:#X?}", proc_data);
     unsafe {
         loop {
             asm!("hlt");
@@ -79,7 +71,8 @@ pub extern "x86-interrupt" fn general_protection_fault(stack_frame: ExceptionSta
     }
 }
 
-pub extern "x86-interrupt" fn other_legacy_interrupt(_stack_frame: ExceptionStackFrame) {
+pub extern "C" fn other_legacy_interrupt(_proc_data: &mut ProcData) {
+    printlnc!((0, 0, 255), "interrupt: OTHER LEGACY INTERRUPT");
     legacy_eoi();
 }
 
@@ -96,32 +89,32 @@ fn legacy_eoi() {
     byte_to_port(0x20, 0x20);
 }
 
-pub extern "x86-interrupt" fn other_apic_interrupt(_stack_frame: ExceptionStackFrame) {
+pub extern "C" fn other_apic_interrupt(_proc_data: &mut ProcData) {
     apic_eoi();
 }
 
-pub extern "x86-interrupt" fn apic_timer_tick(_stack_frame: ExceptionStackFrame) {
+pub extern "C" fn apic_timer_tick(_proc_data: &mut ProcData) {
     unsafe {
         super::TIMER_TICKS += 1;
         apic_eoi();
     }
 }
 
-pub extern "x86-interrupt" fn legacy_timer_tick_testing(_stack_frame: ExceptionStackFrame) {
+pub extern "C" fn legacy_timer_tick_testing(_proc_data: &mut ProcData) {
     unsafe {
         super::LEGACY_PIC_TIMER_TICKS += 1;
     }
     legacy_eoi();
 }
 
-pub extern "x86-interrupt" fn legacy_timer_tick(_stack_frame: ExceptionStackFrame) {
+pub extern "C" fn legacy_timer_tick(_proc_data: &mut ProcData) {
     unsafe {
         super::TIMER_TICKS += 1;
     }
     legacy_eoi();
 }
 
-pub extern "x86-interrupt" fn apic_error(_stack_frame: ExceptionStackFrame) {
+pub extern "C" fn apic_error(_proc_data: &mut ProcData) {
     unsafe {
         let lapic_registers = std::mem_utils::get_at_virtual_addr::<crate::acpi::LapicRegisters>(crate::acpi::LAPIC_REGISTERS);
         lapic_registers.error_status.bytes = 0; //activate it to load the real value
@@ -131,32 +124,34 @@ pub extern "x86-interrupt" fn apic_error(_stack_frame: ExceptionStackFrame) {
     }
 }
 
-pub extern "x86-interrupt" fn spurious_interrupt(_stack_frame: ExceptionStackFrame) {
+pub extern "C" fn spurious_interrupt(_proc_data: &mut ProcData) {
     apic_eoi();
 }
 
-pub extern "x86-interrupt" fn legacy_keyboard_interrupt(_stack_frame: ExceptionStackFrame) {
+pub extern "C" fn legacy_keyboard_interrupt(_proc_data: &mut ProcData) {
     let code = byte_from_port(0x60);
     //println!("{code}");
     crate::keyboard::handle_key(code);
     legacy_eoi();
 }
 
-pub extern "x86-interrupt" fn apic_keyboard_interrupt(_stack_frame: ExceptionStackFrame) {
+pub extern "C" fn apic_keyboard_interrupt(_proc_data: &mut ProcData) {
     apic_eoi();
     let code = byte_from_port(0x60);
     crate::keyboard::handle_key(code);
     //println!("{code}");
 }
 
-pub extern "x86-interrupt" fn ps2_mouse_interrupt(_stack_frame: ExceptionStackFrame) {
+pub extern "C" fn ps2_mouse_interrupt(_proc_data: &mut ProcData) {
     apic_eoi();
 }
 
-pub extern "x86-interrupt" fn fpu_interrupt(_stack_frame: ExceptionStackFrame) {
+pub extern "C" fn fpu_interrupt(_proc_data: &mut ProcData) {
     apic_eoi();
 }
 
-pub extern "x86-interrupt" fn primary_ata_hard_disk(_stack_frame: ExceptionStackFrame) {
+pub extern "C" fn primary_ata_hard_disk(_proc_data: &mut ProcData) {
     apic_eoi();
 }
+
+

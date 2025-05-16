@@ -2,7 +2,7 @@ use std::{boxed::Box, println, printlnc};
 
 use device_config::{MassStorageController, RegularPciDevice};
 
-use crate::{drivers::ahci::disk::AhciController, interrupts::handlers::{apic_eoi, ExceptionStackFrame}};
+use crate::{drivers::ahci::disk::AhciController, interrupts::{handlers::apic_eoi, ProcData}};
 
 pub mod device_config;
 mod port_access;
@@ -19,7 +19,7 @@ pub fn enumerate_devices() {
 
         device.init_msi_interrupt();
         let device = RegularPciDevice::new(device.clone());
-        
+
         if matches!(
             class,
             device_config::PciClass::MassStorageController(MassStorageController::SerialATAController)
@@ -34,11 +34,10 @@ pub fn enumerate_devices() {
     }
 }
 
-
 pub static mut PCI_DEVICE_INTERRUPTS: [(u8, u8, u8); 256] = [(255, 255, 255); 256];
 
 //pci interrupt handler
-pub extern "x86-interrupt" fn pci_interrupt(_stack_frame: ExceptionStackFrame) {
+pub extern "C" fn pci_interrupt(_proc_data: &mut ProcData) {
     println!("PCI interrupt. HOW THE HELL DO I KNOW WHAT DEVICE THIS IS FOR?");
     apic_eoi();
 }

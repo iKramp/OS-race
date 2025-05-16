@@ -1,28 +1,40 @@
+use crate::handler;
+use crate::interrupts::macros::ProcData;
+
 use super::gdt::{DOUBLE_FAULT_IST, MACHINE_CHECK_IST, NMI_IST};
 use super::handlers::*;
 use core::arch::asm;
 use std::printlnc;
 
-macro_rules! interrupt_message {
-    ($name: expr) => {{
-        extern "x86-interrupt" fn wrapper(_stack_frame: ExceptionStackFrame) -> ! {
-            printlnc!((0, 0, 255), "{} exception", $name);
+macro_rules! never_exit_interrupt_message {
+    ($message:expr, $func_name:ident) => {
+        extern "C" fn $func_name(_proc_data: &mut ProcData) -> ! {
+            printlnc!((0, 0, 255), "{} exception", $message);
             loop {}
         }
-        wrapper
-    }};
+    };
 }
 
-#[macro_export]
-macro_rules! apic_interrupt_vector {
-    ($num: expr) => {{
-        extern "x86-interrupt" fn wrapper(_stack_frame: ExceptionStackFrame) {
-            printlnc!((0, 0, 255), "interrupt vector {}", $num);
-            apic_eoi();
-        }
-        wrapper
-    }};
-}
+never_exit_interrupt_message!("divide_by_zero", divide_by_zero_handler);
+never_exit_interrupt_message!("debug", debug_handler);
+never_exit_interrupt_message!("non maskable interrupt", nmi_handler);
+never_exit_interrupt_message!("overflow", overflow_handler);
+never_exit_interrupt_message!("bound range exceeded", bound_handler);
+never_exit_interrupt_message!("invalid opcode", invalid_opcode_handler);
+never_exit_interrupt_message!("device not available", device_not_available_handler);
+never_exit_interrupt_message!("double fault", double_fault_handler);
+never_exit_interrupt_message!("coprocessor segment overrun", coprocessor_segment_overrun_handler);
+never_exit_interrupt_message!("invalid TSS", invalid_tss_handler);
+never_exit_interrupt_message!("segment not present", segment_not_present_handler);
+never_exit_interrupt_message!("stack segment fault", ss_fault_handler);
+never_exit_interrupt_message!("reserved", reserved_handler);
+never_exit_interrupt_message!("fpu error", fpu_error_handler);
+never_exit_interrupt_message!("alignment check", alignment_check_handler);
+never_exit_interrupt_message!("machine check", machine_check_handler);
+never_exit_interrupt_message!("simd fp", simd_fp_handler);
+never_exit_interrupt_message!("virtualization", virtualization_handler);
+never_exit_interrupt_message!("control", control_handler);
+
 
 
 
@@ -69,48 +81,48 @@ impl Idt {
     }
 
     pub fn set_entries(&mut self) {
-        self.set(Entry::diverging_(interrupt_message!("Divide by zero")), 0);
-        self.set(Entry::diverging_(interrupt_message!("bebug")), 1);
-        self.set(Entry::ist_index_(NMI_IST, interrupt_message!("non maskable interrupt")), 2);
-        self.set(Entry::converging(breakpoint), 3);
-        self.set(Entry::diverging_(interrupt_message!("overflow")), 4);
-        self.set(Entry::diverging_(interrupt_message!("bound range exceeded")), 5);
-        self.set(Entry::diverging_(invalid_opcode), 6);
-        self.set(Entry::diverging_(interrupt_message!("device not available")), 7);
-        self.set(Entry::ist_index_(DOUBLE_FAULT_IST, interrupt_message!("double fault")), 8);
-        self.set(Entry::diverging_(interrupt_message!("coprocessor segment overrun")), 9);
-        self.set(Entry::diverging_(interrupt_message!("invalid tss")), 10);
-        self.set(Entry::diverging_(interrupt_message!("segment not present")), 11);
-        self.set(Entry::diverging_(interrupt_message!("stack segment fault")), 12);
-        self.set(Entry::with_error(general_protection_fault), 13);
-        self.set(Entry::with_error(page_fault), 14);
-        self.set(Entry::diverging_(interrupt_message!("reserved")), 15);
-        self.set(Entry::diverging_(interrupt_message!("FPU error")), 16);
-        self.set(Entry::diverging_(interrupt_message!("alignment check")), 17);
-        self.set(Entry::ist_index_(MACHINE_CHECK_IST, interrupt_message!("machine check")), 18);
-        self.set(Entry::diverging_(interrupt_message!("simd fp")), 19);
-        self.set(Entry::diverging_(interrupt_message!("virtualization")), 20);
-        self.set(Entry::diverging_(interrupt_message!("control")), 21);
-        self.set(Entry::diverging_(interrupt_message!("reserved")), 22);
-        self.set(Entry::diverging_(interrupt_message!("reserved")), 23);
-        self.set(Entry::diverging_(interrupt_message!("reserved")), 24);
-        self.set(Entry::diverging_(interrupt_message!("reserved")), 25);
-        self.set(Entry::diverging_(interrupt_message!("reserved")), 26);
-        self.set(Entry::diverging_(interrupt_message!("reserved")), 27);
-        self.set(Entry::diverging_(interrupt_message!("reserved")), 28);
-        self.set(Entry::diverging_(interrupt_message!("reserved")), 29);
-        self.set(Entry::diverging_(interrupt_message!("reserved")), 30);
-        self.set(Entry::diverging_(interrupt_message!("reserved")), 31);
+        self.set(Entry::new(handler!(divide_by_zero_handler, needs_code)), 0);
+        self.set(Entry::new(handler!(debug_handler, needs_code, slow_swap)), 1);
+        self.set(Entry::ist_index(NMI_IST, handler!(nmi_handler, slow_swap, needs_code)), 2);
+        self.set(Entry::new(handler!(breakpoint)), 3);
+        self.set(Entry::new(handler!(overflow_handler, needs_code)), 4);
+        self.set(Entry::new(handler!(bound_handler, needs_code)), 5);
+        self.set(Entry::new(handler!(invalid_opcode_handler, needs_code)), 6);
+        self.set(Entry::new(handler!(device_not_available_handler, needs_code)), 7);
+        self.set(Entry::ist_index(DOUBLE_FAULT_IST, handler!(double_fault_handler, slow_swap)), 8);
+        self.set(Entry::new(handler!(coprocessor_segment_overrun_handler, needs_code)), 9);
+        self.set(Entry::new(handler!(invalid_tss_handler)), 10);
+        self.set(Entry::new(handler!(segment_not_present_handler)), 11);
+        self.set(Entry::new(handler!(ss_fault_handler)), 12);
+        self.set(Entry::new(handler!(general_protection_fault)), 13);
+        self.set(Entry::new(handler!(page_fault)), 14);
+        self.set(Entry::new(handler!(reserved_handler, needs_code)), 15);
+        self.set(Entry::new(handler!(fpu_error_handler, needs_code)), 16);
+        self.set(Entry::new(handler!(alignment_check_handler)), 17);
+        self.set(Entry::ist_index(MACHINE_CHECK_IST, handler!(machine_check_handler, needs_code, slow_swap)), 18);
+        self.set(Entry::new(handler!(simd_fp_handler, needs_code)), 19);
+        self.set(Entry::new(handler!(virtualization_handler, needs_code)), 20);
+        self.set(Entry::new(handler!(control_handler, needs_code)), 21);
+        self.set(Entry::new(handler!(reserved_handler, needs_code)), 22);
+        self.set(Entry::new(handler!(reserved_handler, needs_code)), 23);
+        self.set(Entry::new(handler!(reserved_handler, needs_code)), 24);
+        self.set(Entry::new(handler!(reserved_handler, needs_code)), 25);
+        self.set(Entry::new(handler!(reserved_handler, needs_code)), 26);
+        self.set(Entry::new(handler!(reserved_handler, needs_code)), 27);
+        self.set(Entry::new(handler!(reserved_handler, needs_code)), 28);
+        self.set(Entry::new(handler!(reserved_handler, needs_code)), 29);
+        self.set(Entry::new(handler!(reserved_handler, needs_code)), 30);
+        self.set(Entry::new(handler!(reserved_handler, needs_code)), 31);
 
         for i in 32..256 {
-            self.set(Entry::converging(other_legacy_interrupt), i);
+            self.set(Entry::new(handler!(other_legacy_interrupt, needs_code)), i);
         }
 
-        self.set(Entry::converging(legacy_timer_tick_testing), 32);
-        self.set(Entry::converging(legacy_keyboard_interrupt), 33);
+        self.set(Entry::new(handler!(legacy_timer_tick_testing, needs_code)), 32);
+        self.set(Entry::new(handler!(legacy_keyboard_interrupt, needs_code)), 33);
 
-        self.set(Entry::converging(apic_timer_tick), 100);
-        self.set(Entry::converging(spurious_interrupt), 255);
+        self.set(Entry::new(handler!(apic_timer_tick)), 100);
+        self.set(Entry::new(handler!(spurious_interrupt)), 255);
 
         //entries set by other files: 
         //38-255 other apic interrupt (blank)
@@ -143,9 +155,9 @@ pub struct Entry {
 }
 
 impl Entry {
-    pub fn new_diverging(
+    pub fn new_custom(
         gdt_selector: u16,
-        handler: extern "x86-interrupt" fn(stack_frame: ExceptionStackFrame) -> !,
+        handler: extern "C" fn() -> !,
         options: u16,
     ) -> Self {
         let pointer = handler as usize;
@@ -159,52 +171,12 @@ impl Entry {
         }
     }
 
-    pub fn new_converging(gdt_selector: u16, handler: extern "x86-interrupt" fn(_: ExceptionStackFrame), options: u16) -> Self {
-        let pointer = handler as usize;
-        Self {
-            gdt_selector,
-            pointer_low: (pointer & 0xFFFF) as u16,
-            pointer_middle: ((pointer & 0xFFFF0000) >> 16) as u16,
-            pointer_high: ((pointer & 0xFFFFFFFF00000000) >> 32) as u32,
-            options,
-            reserved: 0,
-        }
+    pub fn new(handler: extern "C" fn() -> !) -> Self {
+        Self::new_custom(0x8, handler, construct_entry_options(0, false, 0, true))
     }
 
-    pub fn diverging_(handler: extern "x86-interrupt" fn(_: ExceptionStackFrame) -> !) -> Self {
-        Self::new_diverging(0x8, handler, construct_entry_options(0, false, 0, true))
-    }
-
-    pub fn with_error(handler: extern "x86-interrupt" fn(_: ExceptionStackFrame, _: u64) -> !) -> Self {
-        let pointer = handler as usize;
-        Self {
-            gdt_selector: 0x8,
-            pointer_low: (pointer & 0xFFFF) as u16,
-            pointer_middle: ((pointer & 0xFFFF0000) >> 16) as u16,
-            pointer_high: ((pointer & 0xFFFFFFFF00000000) >> 32) as u32,
-            options: construct_entry_options(0, false, 0, true),
-            reserved: 0,
-        }
-    }
-
-    pub fn naked(handler: extern "C" fn() -> !) -> Self {
-        let pointer = handler as usize;
-        Self {
-            gdt_selector: 0x8,
-            pointer_low: (pointer & 0xFFFF) as u16,
-            pointer_middle: ((pointer & 0xFFFF0000) >> 16) as u16,
-            pointer_high: ((pointer & 0xFFFFFFFF00000000) >> 32) as u32,
-            options: construct_entry_options(0, false, 0, true),
-            reserved: 0,
-        }
-    }
-
-    pub fn converging(handler: extern "x86-interrupt" fn(_: ExceptionStackFrame)) -> Self {
-        Self::new_converging(0x8, handler, construct_entry_options(0, false, 0, true))
-    }
-
-    pub fn ist_index_(ist_index: u16, handler: extern "x86-interrupt" fn(stack_frame: ExceptionStackFrame) -> !) -> Self {
-        Self::new_diverging(0x8, handler, construct_entry_options(ist_index, false, 0, true))
+    pub fn ist_index(ist_index: u16, handler: extern "C" fn() -> !) -> Self {
+        Self::new_custom(0x8, handler, construct_entry_options(ist_index, false, 0, true))
     }
 
     const fn missing() -> Self {

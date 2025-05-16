@@ -20,9 +20,9 @@ macro_rules! handler {
                     //
                     //possibly error code
 
-                    // handler!(@if_flag needs_code, $($flag)* => {
-                    //     "push 0"
-                    // }),
+                    handler!(@if_flag needs_code, $($flag)* {
+                        "push 0"
+                    }),
 
                     //save all general purpose registers
                     "push rax",
@@ -42,26 +42,62 @@ macro_rules! handler {
                     "push r14",
                     "push r15",
 
-                    //mov pushed cs to register by offsetting from rsp
-                    "xor rax, rax",
-                    "mov rax, [rsp + 8 * 17] //cs",
 
-                    handler!(@if_else_flag rax, $($flag)* => {
-                        //check if we need to swap gs_base
-                        "je 2b"
-                    }, else => {
-                        //skip swapgs
-                        "jmp 2b",
+                    handler!(@if_else_flag slow_swap, $($flag)*, {
+                        "
+                            mov ebx, 1 //idk some flag linux sets
+                            mov ecx, 0xc0000101 //gs_base
+                            rdmsr
+                            test edx, edx
+                            js 3f
+
+                            swapgs
+                            3:
+                            push rdx //save for later
+                        "
+                    } {
+                        //mov pushed cs to register by offsetting from rsp
+                        "
+                            xor rax, rax
+                            mov rax, [rsp + 8 * 17] //cs
+                                                    //skip swap if rax == 8
+                            cmp rax, 8
+                            je 3f
+
+                            swapgs
+                            3:
+                            push rax //save for later
+                        "
                     }),
-
-                    //skip swapgs
-                    "2:",
-                    "jmp 2b",
 
                     //check for swapping gs_base
 
                     "mov rdi, rsp",
+                    "add rdi, 16", //start of proc data
+
+                    //stack should be aligned
+
                     "call {}",
+
+                    handler!(@if_else_flag slow_swap, $($flag)*, {
+                        "
+                            pop rdx //restore gsbase
+                            test edx, edx
+                            js 4f
+
+                            swapgs
+                            4:
+                        "
+                    } {
+                        "
+                            pop rax
+                            cmp rax, 8
+                            je 4f
+
+                            swapgs
+                            4:
+                        "
+                    }),
 
                     "pop r15",
                     "pop r14",
@@ -79,6 +115,9 @@ macro_rules! handler {
                     "pop rbx",
                     "pop rax",
 
+                    //remove err code from stack
+                    "add rsp, rsp, 8",
+
                     "iretq",
                     sym $name,
                 )
@@ -88,78 +127,68 @@ macro_rules! handler {
         wrapper
     }};
 
-    // (@push_err_code true) => {
-    //     ""
-    // };
-    //
-    // (@push_err_code false) => {
-    //     "push 0"
-    // };
-
-    (@if_flag $target:ident, $($flag:ident)* => { $($true:tt)* }) => {
-        handler!(@match_flag $target, $($flag)* => {
+    (@if_flag $target:ident, $($flag:ident)* { $($true:tt)* }) => {
+        handler!(@match_flag $target, $($flag)*, {
             $($true)*
-        }, else => {})
+        } {""})
     };
 
-    (@if_else_flag $target:ident, $($flag:ident)* => { $($true:tt)* }, else => { $($false:tt)* }) => {
-        handler!(@match_flag $target, $($flag)* => {
+    (@if_else_flag $target:ident, $($flag:ident)*, { $($true:tt)* } { $($false:tt)* }) => {
+        handler!(@match_flag $target, $($flag)*, {
             $($true)*
-        }, else => {
+        } {
             $($false)*
         })
     };
 
-    (@match_flag $target:ident, $head:ident $($rest:ident)* => { $($true:tt)* }, else => { $($false:tt)* }) => {
-        static_cond!(if $target == $head $($true)* else {
-            handler!(@match_flag $target, $($rest)* => {
+    (@match_flag $target:ident, $head:ident $($rest:ident)*, { $($true:tt)* } { $($false:tt)* }) => {
+        handler!(@flag_check $target $head { $($true)* } {
+            handler!(@match_flag $target, $($rest)*, {
                 $($true)*
-            }, else => {
+            } {
                 $($false)*
             })
         })
     };
 
-    // (@is_same $a:ident, $b:ident => { $($true:tt)* }, else => { $($false:tt)* }) => {
-    //     macro_rules! __inner {
-    //         ($a $a) => { $($true)* };
-    //         ($a $b) => { $($false)* };
-    //     }
-    //
-    //     __inner!($a $b)
-    // };
+    (@match_flag $target:ident,, { $($true:tt)* } { $($false:tt)* }) => {
+        $($false)*
+    };
+
+
+    (@flag_check slow_swap slow_swap { $($true:tt)* } { $($false:tt)* }) => {
+        $($true)*
+    };
+    (@flag_check needs_code needs_code { $($true:tt)* } { $($false:tt)* }) => {
+        $($true)*
+    };
+
+    (@flag_check $target:ident $head:ident { $($true:tt)* } { $($false:tt)* }) => {
+        $($false)*
+    };
 }
 
-//write types that reference the stack
-
-
-macro_rules! static_cond {
-    // private rule to define and call the local macro
-    // we evaluate a conditional by generating a new macro (in an inner scope, so name shadowing is
-    // not a big concern) and calling it
-    (@expr $lhs:tt $rhs:tt $($arm1:tt)* else $($arm2:tt)*) => {{
-        // note that the inner macro has no captures (it can't, because there's no way to escape `$`)
-        macro_rules! __static_cond {
-            ($lhs $lhs) => $arm1;
-            ($lhs $rhs) => $arm2;
-        }
-
-        __static_cond!($lhs $rhs)
-    }};
-
-    // no else condition provided: fall through with empty else
-    (if $lhs:tt == $rhs:tt $($then:tt)*) => {
-        $crate::static_cond!(if $lhs == $rhs $($then)* else "",)
-    };
-    (if $lhs:tt != $rhs:tt $($then:tt)*) => {
-        $crate::static_cond!(if $lhs != $rhs $($then)* else "",)
-    };
-
-    // main entry point with then and else arms
-    (if $lhs:tt == $rhs:tt $($then:tt)* else $($els:tt)*) => {
-        $crate::static_cond!(@expr $lhs $rhs $($then)* else $($els)*)
-	};
-    (if $lhs:tt != $rhs:tt $($then:tt)* else $($els:tt)*) => {
-        $crate::static_cond!(@expr $lhs $rhs $($els)* else $($then)*)
-    };
+#[derive(Debug)]
+#[repr(C)]
+pub struct ProcData {
+    pub r15: u64,
+    pub r14: u64,
+    pub r13: u64,
+    pub r12: u64,
+    pub r11: u64,
+    pub r10: u64,
+    pub r9: u64,
+    pub r8: u64,
+    pub rbp: u64,
+    pub rdi: u64,
+    pub rsi: u64,
+    pub rdx: u64,
+    pub rcx: u64,
+    pub rbx: u64,
+    pub err_code: u64,
+    pub rip: u64,
+    pub cs: u64,
+    pub rflags: u64,
+    pub rsp: u64,
+    pub ss: u64,
 }
