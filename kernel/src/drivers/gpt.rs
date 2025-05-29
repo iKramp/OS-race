@@ -91,8 +91,8 @@ impl PartitionSchemeDriver for GPTDriver {
             }
             PAGE_TREE_ALLOCATOR.deallocate(first_lba_binding);
         }
-
-        println!("Partitions: {:#?}", partitions);
+        //
+        // println!("Partitions: {:#?}", partitions);
 
         partitions
     }

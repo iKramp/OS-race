@@ -1,14 +1,14 @@
 use crate::handler;
-use crate::interrupts::macros::ProcData;
+use crate::interrupts::macros::ProcessorState;
 
-use super::gdt::{DOUBLE_FAULT_IST, MACHINE_CHECK_IST, NMI_IST};
+use super::gdt::{DOUBLE_FAULT_IST, FIRST_CONTEXT_SWITCH_IST, MACHINE_CHECK_IST, NMI_IST};
 use super::handlers::*;
 use core::arch::asm;
 use std::printlnc;
 
 macro_rules! never_exit_interrupt_message {
     ($message:expr, $func_name:ident) => {
-        extern "C" fn $func_name(proc_data: &mut ProcData) -> ! {
+        extern "C" fn $func_name(proc_data: &mut ProcessorState) -> ! {
             printlnc!((0, 0, 255), "{} exception", $message);
             printlnc!((0, 0, 255), "segmetn:instruction: {:x}:{:x}", proc_data.cs, proc_data.rip);
             loop {}
@@ -128,12 +128,18 @@ impl Idt {
         //entries set by other files: 
         //38-255 other apic interrupt (blank)
         //67 - apic error
+        //32: selected timer (100 is free to use after apic init)
         //33 - apic keyboard
         //32 + 12 (44) - ps2 mouse
         //32 + 13 (45) - fpu
         //32 + 14 (46) - ata????
-        //32: selected timer (100 is free to use)
+        //254 first context switch
         //use anything above 128 for pci devices for now
+    }
+
+    //apic sets everything from 38 to 254. Here be other handlers
+    pub fn set_after_apic(&mut self) {
+        self.set(Entry::ist_index(FIRST_CONTEXT_SWITCH_IST, handler!(first_context_switch)), 254);
     }
 }
 

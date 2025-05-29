@@ -8,29 +8,31 @@
 #![feature(arbitrary_self_types)]
 #![feature(arbitrary_self_types_pointers)]
 
-#[macro_use] extern crate static_cond;
+#[macro_use]
+extern crate static_cond;
 
 use core::ffi;
 use std::{println, printlnc};
 
 mod acpi;
+mod cmd_args;
 mod cpuid;
 mod drivers;
+mod file_operations;
 mod interrupts;
 mod keyboard;
 mod limine;
 mod memory;
 mod msr;
 mod pci;
+mod proc;
 #[allow(unused_imports)]
 mod tests;
 mod utils;
 mod vfs;
 mod vga;
-mod cmd_args;
-mod file_operations;
-mod proc;
 use limine::LIMINE_BOOTLOADER_REQUESTS;
+use memory::paging::PageTree;
 
 pub struct BootInfo {}
 
@@ -71,6 +73,8 @@ extern "C" fn _start() -> ! {
 
     println!("{:?}", vfs::get_dir_entries(vfs::resolve_path("/", "/")));
 
+    proc::init();
+
     // file_operations::do_file_operations();
 
     // vga_text::hello_message();
@@ -82,6 +86,9 @@ extern "C" fn _start() -> ! {
         test_runner();
         println!("Finished running tests");
     }
+
+    //start first proc
+    unsafe { core::arch::asm!("int 254") };
 
     println!("looping infinitely now");
     let mut a = 0;

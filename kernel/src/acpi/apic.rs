@@ -13,7 +13,7 @@ use crate::{
         handlers::*,
         handlers::apic_eoi,
         idt::{Entry, IDT},
-        ProcData,
+        ProcessorState,
     },
     memory::paging::LiminePat,
     println,
@@ -84,7 +84,7 @@ pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo, processor
 
     macro_rules! apic_interrupt_vector {
         ($num: ident) => {{
-            extern "C" fn wrapper(_proc_data: &mut ProcData) {
+            extern "C" fn wrapper(_proc_data: &mut ProcessorState) {
                 printlnc!((0, 0, 255), "interrupt vector {}", $num);
                 apic_eoi();
             }
@@ -102,6 +102,7 @@ pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo, processor
         IDT.set(Entry::new(handler!(ps2_mouse_interrupt)), 32 + 12);
         IDT.set(Entry::new(handler!(fpu_interrupt)), 32 + 13);
         IDT.set(Entry::new(handler!(primary_ata_hard_disk)), 32 + 14);
+        IDT.set_after_apic();
     }
     disable_pic_completely();
 }
@@ -113,6 +114,9 @@ fn map_lapic_registers(lapic_address: PhysAddr) {
             .get_page_table_entry_mut(LAPIC_REGISTERS)
             .unwrap();
         apic_registers_page_entry.set_pat(LiminePat::UC);
+
+        println!("Mapping LAPIC registers. Phys: {:016X}, Virt: {:016X}", lapic_address.0, LAPIC_REGISTERS.0);
+
         core::arch::asm!(
             "mov rax, cr3",
             "mov cr3, rax",

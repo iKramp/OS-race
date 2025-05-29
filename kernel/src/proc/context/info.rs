@@ -9,10 +9,11 @@ bitfield! {
     #[derive(Copy, Clone)]
     pub struct MemoryRegionFlags(u32);
     impl Debug;
-    pub is_writeable, set_is_writeable: 1;
-    pub is_executable, set_is_executable: 2;
+    pub is_writeable, set_is_writeable: 0;
+    pub is_executable, set_is_executable: 1;
 }
 
+#[derive(Debug)]
 pub struct MemoryRegionDescriptor {
     start: VirtAddr,
     size_pages: usize,
@@ -58,12 +59,14 @@ impl MemoryRegionDescriptor {
     }
 }
 
+#[derive(Debug)]
 pub enum MemoryRegionError {
     StartNotPageAligned,
 }
 
 ///Describes a memory context of a process. For it to be valid, mem_init regions all have to be
 ///included in the mem_regions
+#[derive(Debug)]
 pub struct ContextInfo<'a> {
     is_32_bit: bool,
     stack_size_pages: Option<u8>,
@@ -137,6 +140,7 @@ impl<'a> ContextInfo<'a> {
     }
 }
 
+#[derive(Debug)]
 pub enum ContextInfoError {
     MemoryRegionOverlap,
     StackSizeTooBig,

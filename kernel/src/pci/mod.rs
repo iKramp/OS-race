@@ -2,7 +2,7 @@ use std::{boxed::Box, println, printlnc};
 
 use device_config::{MassStorageController, RegularPciDevice};
 
-use crate::{drivers::ahci::disk::AhciController, interrupts::{handlers::apic_eoi, ProcData}};
+use crate::{drivers::ahci::disk::AhciController, interrupts::{handlers::apic_eoi, ProcessorState}};
 
 pub mod device_config;
 mod port_access;
@@ -37,7 +37,7 @@ pub fn enumerate_devices() {
 pub static mut PCI_DEVICE_INTERRUPTS: [(u8, u8, u8); 256] = [(255, 255, 255); 256];
 
 //pci interrupt handler
-pub extern "C" fn pci_interrupt(_proc_data: &mut ProcData) {
+pub extern "C" fn pci_interrupt(_proc_data: &mut ProcessorState) {
     println!("PCI interrupt. HOW THE HELL DO I KNOW WHAT DEVICE THIS IS FOR?");
     apic_eoi();
 }

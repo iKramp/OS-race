@@ -15,11 +15,47 @@ impl core::ops::Add for PhysAddr {
     }
 }
 
+impl core::convert::From<VirtAddr> for u64 {
+    fn from(value: VirtAddr) -> Self {
+        value.0
+    }
+}
+
+impl core::ops::Add<u64> for PhysAddr {
+    type Output = PhysAddr;
+    #[inline]
+    fn add(self, rhs: u64) -> Self::Output {
+        Self(self.0 + rhs)
+    }
+}
+
+impl core::ops::AddAssign for PhysAddr {
+    #[inline]
+    fn add_assign(&mut self, rhs: Self) {
+        self.0 += rhs.0
+    }
+}
+
+impl core::ops::AddAssign<u64> for PhysAddr {
+    #[inline]
+    fn add_assign(&mut self, rhs: u64) {
+        self.0 += rhs
+    }
+}
+
 impl core::ops::Add<PhysOffset> for PhysAddr {
     type Output = VirtAddr;
     #[inline]
     fn add(self, rhs: PhysOffset) -> Self::Output {
         VirtAddr(self.0 + rhs.0)
+    }
+}
+
+impl core::ops::Sub<u64> for PhysAddr {
+    type Output = PhysAddr;
+    #[inline]
+    fn sub(self, rhs: u64) -> Self::Output {
+        PhysAddr(self.0 - rhs)
     }
 }
 
@@ -134,6 +170,16 @@ pub unsafe fn memset_virtual_addr(addr: VirtAddr, value: u8, size: usize) {
             data.write_volatile(value);
             data = data.add(1);
         }
+    }
+}
+
+///# Safety
+///the physical address offset must be correct
+#[inline]
+pub unsafe fn memset_physical_addr(addr: PhysAddr, value: u8, size: usize) {
+    unsafe {
+        let virt_addr = addr + PHYSICAL_OFFSET;
+        memset_virtual_addr(virt_addr, value, size);
     }
 }
 

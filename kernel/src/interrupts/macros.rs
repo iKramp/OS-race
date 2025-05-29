@@ -70,14 +70,16 @@ macro_rules! handler {
                         "
                     }),
 
-                    //check for swapping gs_base
-
                     "mov rdi, rsp",
-                    "add rdi, 16", //start of proc data
+                    "add rdi, 8", //start of proc data
+                    
+                    "sti", //enable interrupts (nesting)
 
                     //stack should be aligned
 
                     "call {}",
+
+                    "cli", //disable interrupts
 
                     handler!(@if_else_flag slow_swap, $($flag)*, {
                         "
@@ -174,9 +176,9 @@ macro_rules! handler {
     };
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[repr(C)]
-pub struct ProcData {
+pub struct ProcessorState {
     pub r15: u64,
     pub r14: u64,
     pub r13: u64,
@@ -191,10 +193,39 @@ pub struct ProcData {
     pub rdx: u64,
     pub rcx: u64,
     pub rbx: u64,
+    pub rax: u64,
     pub err_code: u64,
     pub rip: u64,
     pub cs: u64,
     pub rflags: u64,
     pub rsp: u64,
     pub ss: u64,
+}
+
+impl ProcessorState {
+    pub fn new(rip: u64, rsp: u64) -> Self {
+        Self {
+            r15: 0,
+            r14: 0,
+            r13: 0,
+            r12: 0,
+            r11: 0,
+            r10: 0,
+            r9: 0,
+            r8: 0,
+            rbp: 0,
+            rdi: 0,
+            rsi: 0,
+            rdx: 0,
+            rcx: 0,
+            rbx: 0,
+            rax: 0,
+            err_code: 0,
+            rip,
+            cs: 0x1B,
+            rflags: 0x3202,
+            rsp,
+            ss: 0x23,
+        }
+    }
 }

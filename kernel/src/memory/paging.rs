@@ -1,12 +1,36 @@
 use core::fmt::Display;
-use std::{print, println};
+use std::{print, println, string::String};
+
+use bitfield::bitfield;
 
 use crate::memory::physical_allocator::is_on_ram;
 
 use super::{mem_utils::*, physical_allocator};
 
-#[derive(Clone, Copy)]
-pub struct PageTableEntry(u64);
+bitfield! {
+    #[derive(Clone, Copy)]
+    pub struct PageTableEntry(u64);
+    pub present, set_present: 0;
+    pub writeable, set_writeable: 1;
+    pub user_accessible, set_user_accessible: 2;
+    pub page_write_through, set_page_write_through: 3;
+    pub page_cache_disable, set_page_cache_disable: 4;
+    pub accessed, _: 5;
+    pub dirty, _: 6;
+    pub huge_page, set_huge_page: 7; //is shared with pat
+    pub global, set_global: 8;
+    pub no_execute, set_no_execute: 63;
+}
+
+impl Display for PageTableEntry {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_tuple("PageTableEntry")
+            .field(&format_args!("P({})", self.0 & 0b1))
+            .field(&format_args!("R/W({})", self.writeable()))
+            .field(&format_args!("U({})", self.user_accessible()))
+            .finish()
+    }
+}
 
 //first 4 are identical as at power-on/reset
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -23,8 +47,11 @@ impl PageTableEntry {
     //creates default entry:
     //present, writeable, not user accessible, not write-through, not cache disabled, not accessed,
     //not dirty, not huge, not global
-    pub fn new(address: PhysAddr) -> Self {
-        let mut entry = Self((address.0 & 0xF_FFF_FFF_FFF_000) | 0b000000011);
+    pub fn new(phys_address: PhysAddr, user_mode: bool) -> Self {
+        let mut entry = Self((phys_address.0 & 0x_FFF_FFF_FFF_000) | 0b000000011 | (1 << 63));
+        if user_mode {
+            entry.0 |= 4;
+        }
         entry.set_num_of_available_pages(512);
         entry
     }
@@ -33,59 +60,9 @@ impl PageTableEntry {
         PhysAddr(self.0 & 0xF_FFF_FFF_FFF_000)
     }
 
-    pub fn present(&self) -> bool {
-        self.0 & 0b1 != 0
-    }
-
-    pub fn set_present(&mut self, present: bool) {
-        const OFFSET: u64 = 0;
-        const MASK: u64 = 1 << OFFSET;
-        const INVERSE_MASK: u64 = MASK ^ u64::MAX;
-        self.0 = (self.0 & INVERSE_MASK) | ((present as u64) << OFFSET);
-    }
-
-    pub fn writeable(&self) -> bool {
-        self.0 & (1 << 1) != 0
-    }
-
-    pub fn set_writeable(&mut self, present: bool) {
-        const OFFSET: u64 = 1;
-        const MASK: u64 = 1 << OFFSET;
-        const INVERSE_MASK: u64 = MASK ^ u64::MAX;
-        self.0 = (self.0 & INVERSE_MASK) | ((present as u64) << OFFSET);
-    }
-
-    pub fn user_accessible(&self) -> bool {
-        self.0 & (1 << 2) != 0
-    }
-
-    pub fn set_user_accessible(&mut self, present: bool) {
-        const OFFSET: u64 = 2;
-        const MASK: u64 = 1 << OFFSET;
-        const INVERSE_MASK: u64 = MASK ^ u64::MAX;
-        self.0 = (self.0 & INVERSE_MASK) | ((present as u64) << OFFSET);
-    }
-
-    pub fn write_through_caching(&self) -> bool {
-        self.0 & (1 << 3) != 0
-    }
-
-    fn set_write_through_cahcing(&mut self, present: bool) {
-        const OFFSET: u64 = 3;
-        const MASK: u64 = 1 << OFFSET;
-        const INVERSE_MASK: u64 = MASK ^ u64::MAX;
-        self.0 = (self.0 & INVERSE_MASK) | ((present as u64) << OFFSET);
-    }
-
-    pub fn disable_cache(&self) -> bool {
-        self.0 & (1 << 4) != 0
-    }
-
-    fn set_disable_cahce(&mut self, present: bool) {
-        const OFFSET: u64 = 4;
-        const MASK: u64 = 1 << OFFSET;
-        const INVERSE_MASK: u64 = MASK ^ u64::MAX;
-        self.0 = (self.0 & INVERSE_MASK) | ((present as u64) << OFFSET);
+    pub fn set_address(&mut self, address: PhysAddr) {
+        const MASK: u64 = 0xF_FFF_FFF_FFF_000;
+        self.0 = (self.0 & !MASK) | (address.0 & MASK);
     }
 
     pub fn set_pat(&mut self, pat_val: LiminePat) {
@@ -97,8 +74,8 @@ impl PageTableEntry {
             LiminePat::WP => (true, false, false),
             LiminePat::WC => (true, false, true),
         };
-        self.set_disable_cahce(pcd);
-        self.set_write_through_cahcing(pwt);
+        self.set_page_cache_disable(pcd);
+        self.set_page_write_through(pwt);
         //for now i ignore pat teehee :3
         //pat bit depends on if it's a page directory or page table. Can be checked with huge
         //table, but huge-huge tables (1GB) also have huge tables, and don't have pat bit
@@ -107,8 +84,8 @@ impl PageTableEntry {
     }
 
     pub fn pat(&self) -> LiminePat {
-        let pcd = self.disable_cache();
-        let pwt = self.write_through_caching();
+        let pcd = self.page_cache_disable();
+        let pwt = self.page_write_through();
 
         match (pcd, pwt) {
             (false, false) => LiminePat::WB,
@@ -116,50 +93,6 @@ impl PageTableEntry {
             (true, false) => LiminePat::UCMinus,
             (true, true) => LiminePat::UC,
         }
-    }
-
-    pub fn accessed(&self) -> bool {
-        self.0 & (1 << 5) != 0
-    }
-
-    pub fn set_accessed(&mut self, present: bool) {
-        const OFFSET: u64 = 5;
-        const MASK: u64 = 1 << OFFSET;
-        const INVERSE_MASK: u64 = MASK ^ u64::MAX;
-        self.0 = (self.0 & INVERSE_MASK) | ((present as u64) << OFFSET);
-    }
-
-    pub fn dirty(&self) -> bool {
-        self.0 & (1 << 6) != 0
-    }
-
-    pub fn set_dirty(&mut self, present: bool) {
-        const OFFSET: u64 = 6;
-        const MASK: u64 = 1 << OFFSET;
-        const INVERSE_MASK: u64 = MASK ^ u64::MAX;
-        self.0 = (self.0 & INVERSE_MASK) | ((present as u64) << OFFSET);
-    }
-
-    pub fn huge_page(&self) -> bool {
-        self.0 & (1 << 7) != 0
-    }
-
-    pub fn set_huge_page(&mut self, present: bool) {
-        const OFFSET: u64 = 7;
-        const MASK: u64 = 1 << OFFSET;
-        const INVERSE_MASK: u64 = MASK ^ u64::MAX;
-        self.0 = (self.0 & INVERSE_MASK) | ((present as u64) << OFFSET);
-    }
-
-    pub fn global(&self) -> bool {
-        self.0 & (1 << 8) != 0
-    }
-
-    pub fn set_global(&mut self, present: bool) {
-        const OFFSET: u64 = 8;
-        const MASK: u64 = 1 << OFFSET;
-        const INVERSE_MASK: u64 = MASK ^ u64::MAX;
-        self.0 = (self.0 & INVERSE_MASK) | ((present as u64) << OFFSET);
     }
 
     pub fn num_of_available_pages(&self) -> u64 {
@@ -179,17 +112,6 @@ impl PageTableEntry {
     pub fn increase_available(&mut self) {
         self.0 += 1 << 52;
     }
-
-    pub fn no_execute(&self) -> bool {
-        self.0 & (1 << 63) != 0
-    }
-
-    pub fn set_no_execute(&mut self, no_execute: bool) {
-        const OFFSET: u64 = 63;
-        const MASK: u64 = 1 << OFFSET;
-        const INVERSE_MASK: u64 = MASK ^ u64::MAX;
-        self.0 = (self.0 & INVERSE_MASK) | ((no_execute as u64) << OFFSET);
-    }
 }
 
 impl core::fmt::Debug for PageTableEntry {
@@ -202,8 +124,8 @@ impl core::fmt::Debug for PageTableEntry {
             .field("huge page", &self.huge_page())
             .field("no execute", &self.no_execute())
             .field("writeable", &self.writeable())
-            .field("write through", &self.write_through_caching())
-            .field("disable cache", &self.disable_cache())
+            .field("write through", &self.page_write_through())
+            .field("disable cache", &self.page_cache_disable())
             .field("user accessible", &self.user_accessible())
             .field("accessed", &self.accessed())
             .field("dirty", &self.dirty())
@@ -240,6 +162,8 @@ impl PageTable {
                     if curr_range.pat != entry.pat()
                         || curr_range.write != entry.writeable()
                         || curr_range.execute == entry.no_execute()
+                        || (curr_range.phys.0 + curr_range.len != entry.address().0
+                            && curr_range.phys.0 - curr_range.len != entry.address().0)
                     {
                         println!("{curr_range}");
                         current_range = None
@@ -249,6 +173,7 @@ impl PageTable {
                 if let Some(curr_range) = current_range.clone() {
                     let new_range = MapRange {
                         len: curr_range.len + (1 << (3 + level * 9)),
+                        phys: PhysAddr(curr_range.phys.0.min(entry.address().0)),
                         ..curr_range
                     };
                     current_range = Some(new_range);
@@ -256,6 +181,7 @@ impl PageTable {
                     let new_range = MapRange {
                         virt: self_virt_addr,
                         len: 1 << (3 + level * 9),
+                        phys: entry.address(),
                         pat: entry.pat(),
                         write: entry.writeable(),
                         execute: !entry.no_execute(),
@@ -299,7 +225,7 @@ impl PageTable {
             let frame = physical_allocator::allocate_frame_low();
             let table = unsafe { get_at_physical_addr::<PageTable>(frame) };
             table.clear();
-            *entry = PageTableEntry::new(frame);
+            *entry = PageTableEntry::new(frame, false);
         }
 
         //remove highest page from pool
@@ -444,6 +370,11 @@ impl PageTable {
                 "memory space must already be allocated"
             );
             unsafe {
+                let entry = self.get_page_table_entry(VirtAddr(address + i * 4096), 4);
+
+                if let Some(entry) = entry {
+                    assert!(!entry.present(), "incorrect contigious map logic");
+                }
                 self.mmap(VirtAddr(address + i * 4096), physical_address + PhysAddr(i * 4096));
             }
         }
@@ -473,7 +404,7 @@ impl PageTable {
             let frame_addr = physical_allocator::allocate_frame();
             let page_table = unsafe { get_at_physical_addr::<PageTable>(frame_addr) };
             page_table.clear();
-            let temp_entry = PageTableEntry::new(frame_addr);
+            let temp_entry = PageTableEntry::new(frame_addr, is_user_mode(*address));
             *entry = temp_entry;
         }
 
@@ -498,7 +429,7 @@ impl PageTable {
             let frame_addr = physical_allocator::allocate_frame();
             let page_table = unsafe { get_at_physical_addr::<PageTable>(frame_addr) };
             page_table.clear();
-            let temp_entry = PageTableEntry::new(frame_addr);
+            let temp_entry = PageTableEntry::new(frame_addr, is_user_mode(address));
             *entry = temp_entry;
             debug_assert_eq!(temp_entry.0, entry.0);
         }
@@ -525,7 +456,7 @@ impl PageTable {
         *address += (index_of_available as u64) << 12;
         let entry = &mut self.entries[index_of_available];
 
-        *entry = PageTableEntry::new(physical_address);
+        *entry = PageTableEntry::new(physical_address, is_user_mode(*address));
     }
 
     unsafe fn allocate_level_1_virtual(&mut self, virtual_address: VirtAddr, physical_address: PhysAddr) {
@@ -537,7 +468,7 @@ impl PageTable {
             entry
         );
 
-        *entry = PageTableEntry::new(physical_address);
+        *entry = PageTableEntry::new(physical_address, is_user_mode(virtual_address));
     }
 
     //returns if there was no space but now there is
@@ -652,9 +583,21 @@ impl PageTable {
         }
     }
 
+    #[inline]
     fn get_page_table_entry_on_level(&mut self, addr: VirtAddr, level: u64) -> &mut PageTableEntry {
         let entry = (addr.0 >> (12 + 9 * (level - 1))) & 0x1FF;
         &mut self.entries[entry as usize]
+    }
+
+    fn set_execute_recursive(&mut self, addr: VirtAddr, level: u64) {
+        let entry = self.get_page_table_entry_on_level(addr, level);
+        debug_assert!(entry.present());
+        entry.set_no_execute(false);
+        if level == 1 || entry.huge_page() {
+            return;
+        }
+        let lower_table = unsafe { get_at_physical_addr::<PageTable>(entry.address()) };
+        lower_table.set_execute_recursive(addr, level - 1);
     }
 }
 
@@ -671,6 +614,7 @@ fn dealloc_huge_page(entry: &PageTableEntry, level: u64) {
     }
 }
 
+#[derive(Debug)]
 pub struct PageTree {
     level_4_table: PhysAddr,
 }
@@ -684,7 +628,7 @@ impl PageTree {
         self.level_4_table
     }
 
-    pub fn print_mapping(&mut self) {
+    pub fn print_mapping(&self) {
         unsafe {
             let level_4_table = get_at_physical_addr::<PageTable>(self.level_4_table);
             if let Some(range) = level_4_table.print_range(None, 4, VirtAddr(0)) {
@@ -729,6 +673,15 @@ impl PageTree {
         level_4_table
     }
 
+    pub fn set_level4_addr(level_4_table: PhysAddr) {
+        unsafe {
+            core::arch::asm!(
+                "mov cr3, {}",
+                in(reg) level_4_table.0,
+            );
+        }
+    }
+
     pub fn reload() {
         unsafe {
             let level_4_table = Self::get_level4_addr();
@@ -756,6 +709,13 @@ impl PageTree {
                 let entry = &mut level_4_table.entries[i];
                 entry.set_present(false);
             }
+        }
+    }
+
+    pub fn set_execute(&mut self, addr: VirtAddr) {
+        unsafe {
+            let level_4_table = get_at_physical_addr::<PageTable>(self.level_4_table);
+            level_4_table.set_execute_recursive(addr, 4);
         }
     }
 }
@@ -810,6 +770,12 @@ impl PageTree {
                 None => {
                     let addr = level_4_table.get_available_entry_pages(4, num, low);
                     for i in 0..num {
+                        let entry = level_4_table.get_page_table_entry(VirtAddr(addr + i * 4096), 4);
+
+                        if let Some(entry) = entry {
+                            assert!(!entry.present(), "incorrect contigious map logic");
+                        }
+
                         level_4_table.allocate(VirtAddr(addr + i * 4096));
                     }
                     VirtAddr(addr)
@@ -857,9 +823,15 @@ impl PageTree {
     }
 }
 
+pub fn is_user_mode<T: Into<u64>>(addr: T) -> bool {
+    let _u64: u64 = addr.into();
+    _u64 < 0x800000000000
+}
+
 #[derive(Debug, Clone)]
 pub struct MapRange {
     pub virt: VirtAddr,
+    pub phys: PhysAddr,
     pub len: u64,
     pub pat: LiminePat,
     pub write: bool,
@@ -869,12 +841,22 @@ pub struct MapRange {
 
 impl Display for MapRange {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let rwx = match (self.write, self.execute) {
-            (true, true) => "RWX",
-            (true, false) => "RW-",
-            (false, true) => "RWX",
-            (false, false) => "R--",
-        };
+        let mut rwxu = String::from("r");
+        if self.write {
+            rwxu.push('w');
+        } else {
+            rwxu.push('-');
+        }
+        if self.execute {
+            rwxu.push('x');
+        } else {
+            rwxu.push('-');
+        }
+        if self.user {
+            rwxu.push('u');
+        } else {
+            rwxu.push('k');
+        }
         let addr_start = if self.virt.0 & (1 << 47) != 0 {
             self.virt.0 + (0xFFFF << 48)
         } else {
@@ -887,8 +869,8 @@ impl Display for MapRange {
         };
         write!(
             f,
-            "Range: virt: {:016x}, end: {:016x}, pat: {:?}, rwx: {:?}, user: {:?}",
-            addr_start, addr_end, self.pat, rwx, self.user
+            "Range: virt: {:016x}, end: {:016x}, phys start: {:016x}, pat: {:?}, rwx: {:?}",
+            addr_start, addr_end, self.phys.0, self.pat, rwxu
         )
     }
 }

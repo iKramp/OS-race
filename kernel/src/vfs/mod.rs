@@ -154,21 +154,21 @@ impl InodeType {
 bitfield! {
     pub struct InodeFlags(u32);
     impl Debug;
-    pub suid, set_suid: 0x800;
-    pub sgid, set_sgid: 0x400;
-    pub sticky, set_sticky: 0x200;
+    pub suid, set_suid: 11;
+    pub sgid, set_sgid: 10;
+    pub sticky, set_sticky: 9;
 
-    pub r_usr, set_r_usr: 0x100;
-    pub w_usr, set_w_usr: 0x80;
-    pub x_usr, set_x_usr: 0x40;
+    pub r_usr, set_r_usr: 8;
+    pub w_usr, set_w_usr: 7;
+    pub x_usr, set_x_usr: 6;
 
-    pub r_grp, set_r_grp: 0x20;
-    pub w_grp, set_w_grp: 0x10;
-    pub x_grp, set_x_grp: 0x8;
+    pub r_grp, set_r_grp: 5;
+    pub w_grp, set_w_grp: 4;
+    pub x_grp, set_x_grp: 3;
 
-    pub r_othr, set_r_othr: 0x4;
-    pub w_othr, set_w_othr: 0x2;
-    pub x_othr, set_x_othr: 0x1;
+    pub r_othr, set_r_othr: 2;
+    pub w_othr, set_w_othr: 1;
+    pub x_othr, set_x_othr: 0;
 }
 
 pub fn resolve_path(path: &str, working_dir: &str) -> ResolvedPath {

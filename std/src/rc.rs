@@ -1,3 +1,5 @@
+use core::fmt::Debug;
+
 use alloc::boxed::Box;
 
 #[derive(Debug)]
@@ -39,7 +41,16 @@ impl<T> Drop for Rc<T> {
     }
 }
 
-impl<T: crate::fmt::Debug> Clone for Rc<T> {
+impl<T: Debug> Debug for Rc<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Rc")
+            .field("data", &self.inner.data)
+            .field("ref_count", &self.inner.count)
+            .finish()
+    }
+}
+
+impl<T> Clone for Rc<T> {
     #[inline]
     fn clone(&self) -> Self {
         unsafe {

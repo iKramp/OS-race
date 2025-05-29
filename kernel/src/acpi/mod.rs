@@ -12,6 +12,7 @@ mod smp;
 use std::{mem_utils::PhysAddr, Vec};
 
 pub use apic::{LapicRegisters, LAPIC_REGISTERS};
+pub use smp::cpu_locals;
 use platform_info::PlatformInfo;
 
 use crate::{limine::LIMINE_BOOTLOADER_REQUESTS, memory::{physical_allocator, PAGE_TREE_ALLOCATOR}, println, printlnc};

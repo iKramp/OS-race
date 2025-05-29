@@ -224,6 +224,7 @@ impl PciDevice {
                     physical_allocator::mark_addr(physical_bar_addr + PhysAddr(i * 0x1000), true);
                 }
                 let address = PAGE_TREE_ALLOCATOR.allocate_contigious(num, Some(physical_bar_addr), false);
+                println!("Mapped memory BAR from virt {:#X} to phys {:#X} with size {:#X}", address.0, physical_bar_addr.0, size);
                 //mark caching as uncacheable, unless prefetchable, then write-through
                 for i in 0..num {
                     let page_entry = PAGE_TREE_ALLOCATOR.get_page_table_entry_mut(address + (i * 4096)).unwrap();

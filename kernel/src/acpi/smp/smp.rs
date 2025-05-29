@@ -1,20 +1,20 @@
 use crate::{
     interrupts::{
-        self, idt::{TablePointer, IDT_POINTER}
+        self,
+        idt::{TablePointer, IDT_POINTER},
     },
     memory::{
-        paging::{LiminePat, PageTree}, PAGE_TREE_ALLOCATOR
+        paging::{LiminePat, PageTree}, stack::{prepare_kernel_stack, KERNEL_STACK_SIZE_PAGES}, PAGE_TREE_ALLOCATOR
     },
     msr::{get_msr, get_mtrr_cap, get_mtrr_def_type},
     println,
 };
 use core::sync::atomic::{AtomicBool, AtomicU8};
-use std::{boxed::Box, mem_utils::{get_at_virtual_addr, VirtAddr}};
+use std::mem_utils::{VirtAddr, get_at_virtual_addr};
 
 pub static mut CPU_LOCK: AtomicBool = AtomicBool::new(false);
 pub static mut CPUS_INITIALIZED: AtomicU8 = AtomicU8::new(0);
 pub static mut CPU_LOCALS: Option<std::Vec<VirtAddr>> = None;
-const STACK_SIZE_PAGES: u8 = (interrupts::KERNEL_STACK_SIZE / 0x1000) as u8; //4KB
 
 //custom data starts at 0x4 from ap_startup
 
@@ -31,17 +31,15 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
         //GDTs
         //i could probably reuse current stack, as kernel doesn't preserve stack across task
         //switches
-        let bsp_stack_addr = crate::memory::PAGE_TREE_ALLOCATOR.allocate_contigious(STACK_SIZE_PAGES as u64, None, false);
-        let bsp_gdt = interrupts::create_new_gdt(bsp_stack_addr);
+        let bsp_stack_ptr = prepare_kernel_stack(KERNEL_STACK_SIZE_PAGES);
+        let bsp_gdt = interrupts::create_new_gdt(bsp_stack_ptr);
         interrupts::load_gdt(bsp_gdt);
-        let bsp_gdt_ptr = Box::leak(Box::new(bsp_gdt)) as *const _ as u64;
         let bsp_local = super::cpu_locals::CpuLocals::new(
-            0,
-            0,
+            bsp_stack_ptr,
+            KERNEL_STACK_SIZE_PAGES as u64,
             platform_info.boot_processor.apic_id,
             platform_info.boot_processor.processor_id,
-            VirtAddr(bsp_gdt_ptr),
-
+            VirtAddr(bsp_gdt.base),
         );
         let bsp_local_ptr = add_cpu_locals(bsp_local);
         crate::msr::set_msr(0xC0000101, bsp_local_ptr.0);
@@ -49,8 +47,9 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
         let destination = crate::memory::TRAMPOLINE_RESERVED.0 as *mut u8;
         let comm_lock = destination.add(56);
         for cpu in platform_info.application_processors.iter().enumerate() {
-            let stack_addr = crate::memory::PAGE_TREE_ALLOCATOR.allocate_contigious(STACK_SIZE_PAGES as u64, None, false); //2 pages
-            (destination.add(32) as *mut u64).write_volatile(stack_addr.0 + STACK_SIZE_PAGES as u64 * 0x1000);
+            let ap_stack_top = prepare_kernel_stack(KERNEL_STACK_SIZE_PAGES);
+            (destination.add(32) as *mut u64).write_volatile(ap_stack_top.0);
+
             let lapic_registers = get_at_virtual_addr::<LapicRegisters>(LAPIC_REGISTERS);
             println!("Waking up CPU {}", cpu.1.apic_id);
             if cpu.1.apic_id == 255 {
@@ -68,14 +67,13 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
             send_mtrrs(comm_lock);
             send_cr_registers(comm_lock);
 
-            let ap_gdt = interrupts::create_new_gdt(stack_addr);
-            let ap_gdt_ptr = Box::leak(Box::new(ap_gdt)) as *const _ as u64;
+            let ap_gdt = interrupts::create_new_gdt(ap_stack_top);
             let ap_local = super::cpu_locals::CpuLocals::new(
-                stack_addr.0,
-                STACK_SIZE_PAGES as u64 * 0x1000,
+                ap_stack_top,
+                KERNEL_STACK_SIZE_PAGES as u64,
                 cpu.1.apic_id,
                 cpu.1.processor_id,
-                VirtAddr(ap_gdt_ptr),
+                VirtAddr(ap_gdt.base),
             );
             let ap_local_ptr = add_cpu_locals(ap_local);
 

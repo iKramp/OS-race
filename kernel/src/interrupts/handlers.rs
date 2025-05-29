@@ -1,11 +1,20 @@
-use crate::utils::{byte_from_port, byte_to_port};
+use crate::{
+    acpi::cpu_locals::CpuLocals,
+    interrupts::gdt::GlobalDescriptorTable,
+    memory::paging::PageTree,
+    proc::context_switch,
+    utils::{byte_from_port, byte_to_port},
+};
 #[allow(unused_imports)] //they are used in macros
 use core::arch::asm;
-use std::printlnc;
+use std::{
+    mem_utils::{VirtAddr, get_at_virtual_addr},
+    println, printlnc,
+};
 
-use super::macros::ProcData;
+use super::macros::ProcessorState;
 
-pub extern "C" fn invalid_opcode(proc_data: &mut ProcData) {
+pub extern "C" fn invalid_opcode(proc_data: &mut ProcessorState) {
     printlnc!(
         (0, 0, 255),
         "EXCEPTION: INVALID OPCODE at {:#X}:{:#X}",
@@ -19,8 +28,13 @@ pub extern "C" fn invalid_opcode(proc_data: &mut ProcData) {
     }
 }
 
-pub extern "C" fn breakpoint(proc_data: &mut ProcData) {
-    printlnc!((0, 255, 255), "Breakpoint reached at {:#X}:{:#X}", proc_data.cs, proc_data.rip);
+pub extern "C" fn breakpoint(proc_data: &mut ProcessorState) {
+    printlnc!(
+        (0, 255, 255),
+        "Breakpoint reached at {:#X}:{:#X}",
+        proc_data.cs,
+        proc_data.rip
+    );
     apic_eoi();
     legacy_eoi();
 }
@@ -47,12 +61,23 @@ impl From<u64> for PageFaultErrorCode {
     }
 }
 
-pub extern "C" fn page_fault(proc_data: &mut ProcData) {
+pub extern "C" fn page_fault(proc_data: &mut ProcessorState) {
+    println!("{}", proc_data as *const ProcessorState as usize);
     printlnc!(
         (0, 0, 255),
-        "EXCEPTION: PAGE FAULT. error code: {:#X?}",
+        "EXCEPTION: PAGE FAULT. error code: {:#X?}\nproc state: {:#X?}",
         PageFaultErrorCode::from(proc_data.err_code),
+        proc_data
     );
+    let mut page_tree = PageTree::new(PageTree::get_level4_addr());
+    page_tree
+        .get_page_table_entry_mut(VirtAddr(proc_data.rip & 0xFFFF_FFFF_FFFF_F000))
+        .map(|entry| {
+            println!("Page fault at {:#X?} with entry: {:#X?}", proc_data.rip, entry);
+        })
+        .unwrap_or_else(|| {
+            println!("Page fault at {:#X?} with no entry", proc_data.rip);
+        });
     unsafe {
         loop {
             asm!("hlt");
@@ -61,9 +86,14 @@ pub extern "C" fn page_fault(proc_data: &mut ProcData) {
 }
 
 //gpf
-pub extern "C" fn general_protection_fault(proc_data: &mut ProcData) {
+pub extern "C" fn general_protection_fault(proc_data: &mut ProcessorState) {
     printlnc!((0, 0, 255), "EXCEPTION: GPF. err code: {:#X?}", proc_data.err_code);
     printlnc!((0, 0, 255), "EXCEPTION: GPF. proc_data: {:#X?}", proc_data);
+    //print GDT
+    let cpu_locals = CpuLocals::get();
+    let gdt_addr = cpu_locals.gdt_ptr;
+    let gdt = unsafe { get_at_virtual_addr::<GlobalDescriptorTable>(gdt_addr) };
+    println!("gdt: {:#x?}", gdt);
     unsafe {
         loop {
             asm!("hlt");
@@ -71,7 +101,7 @@ pub extern "C" fn general_protection_fault(proc_data: &mut ProcData) {
     }
 }
 
-pub extern "C" fn other_legacy_interrupt(_proc_data: &mut ProcData) {
+pub extern "C" fn other_legacy_interrupt(_proc_data: &mut ProcessorState) {
     printlnc!((0, 0, 255), "interrupt: OTHER LEGACY INTERRUPT");
     legacy_eoi();
 }
@@ -89,32 +119,32 @@ fn legacy_eoi() {
     byte_to_port(0x20, 0x20);
 }
 
-pub extern "C" fn other_apic_interrupt(_proc_data: &mut ProcData) {
+pub extern "C" fn other_apic_interrupt(_proc_data: &mut ProcessorState) {
     apic_eoi();
 }
 
-pub extern "C" fn apic_timer_tick(_proc_data: &mut ProcData) {
+pub extern "C" fn apic_timer_tick(_proc_data: &mut ProcessorState) {
     unsafe {
         super::TIMER_TICKS += 1;
         apic_eoi();
     }
 }
 
-pub extern "C" fn legacy_timer_tick_testing(_proc_data: &mut ProcData) {
+pub extern "C" fn legacy_timer_tick_testing(_proc_data: &mut ProcessorState) {
     unsafe {
         super::LEGACY_PIC_TIMER_TICKS += 1;
     }
     legacy_eoi();
 }
 
-pub extern "C" fn legacy_timer_tick(_proc_data: &mut ProcData) {
+pub extern "C" fn legacy_timer_tick(_proc_data: &mut ProcessorState) {
     unsafe {
         super::TIMER_TICKS += 1;
     }
     legacy_eoi();
 }
 
-pub extern "C" fn apic_error(_proc_data: &mut ProcData) {
+pub extern "C" fn apic_error(_proc_data: &mut ProcessorState) {
     unsafe {
         let lapic_registers = std::mem_utils::get_at_virtual_addr::<crate::acpi::LapicRegisters>(crate::acpi::LAPIC_REGISTERS);
         lapic_registers.error_status.bytes = 0; //activate it to load the real value
@@ -124,34 +154,36 @@ pub extern "C" fn apic_error(_proc_data: &mut ProcData) {
     }
 }
 
-pub extern "C" fn spurious_interrupt(_proc_data: &mut ProcData) {
+pub extern "C" fn spurious_interrupt(_proc_data: &mut ProcessorState) {
     apic_eoi();
 }
 
-pub extern "C" fn legacy_keyboard_interrupt(_proc_data: &mut ProcData) {
+pub extern "C" fn legacy_keyboard_interrupt(_proc_data: &mut ProcessorState) {
     let code = byte_from_port(0x60);
     //println!("{code}");
     crate::keyboard::handle_key(code);
     legacy_eoi();
 }
 
-pub extern "C" fn apic_keyboard_interrupt(_proc_data: &mut ProcData) {
+pub extern "C" fn apic_keyboard_interrupt(_proc_data: &mut ProcessorState) {
     apic_eoi();
     let code = byte_from_port(0x60);
     crate::keyboard::handle_key(code);
     //println!("{code}");
 }
 
-pub extern "C" fn ps2_mouse_interrupt(_proc_data: &mut ProcData) {
+pub extern "C" fn ps2_mouse_interrupt(_proc_data: &mut ProcessorState) {
     apic_eoi();
 }
 
-pub extern "C" fn fpu_interrupt(_proc_data: &mut ProcData) {
+pub extern "C" fn fpu_interrupt(_proc_data: &mut ProcessorState) {
     apic_eoi();
 }
 
-pub extern "C" fn primary_ata_hard_disk(_proc_data: &mut ProcData) {
+pub extern "C" fn primary_ata_hard_disk(_proc_data: &mut ProcessorState) {
     apic_eoi();
 }
 
-
+pub extern "C" fn first_context_switch(proc_data: &mut ProcessorState) {
+    context_switch(proc_data, true);
+}

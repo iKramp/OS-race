@@ -1,11 +1,11 @@
 mod gdt;
 use std::{println, printlnc};
-pub use gdt::{create_new_gdt, load_gdt, STATIC_GDT_PTR, KERNEL_STACK_SIZE};
+pub use gdt::{create_new_gdt, load_gdt, STATIC_GDT_PTR};
 #[macro_use]
 pub mod handlers;
 pub mod idt;
 mod macros;
-pub use macros::ProcData;
+pub use macros::ProcessorState;
 use crate::utils::byte_to_port;
 
 pub fn init_interrupts() {

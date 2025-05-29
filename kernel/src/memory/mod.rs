@@ -1,6 +1,7 @@
 pub mod heap;
 pub mod paging;
 pub mod physical_allocator;
+pub mod stack;
 
 use crate::LIMINE_BOOTLOADER_REQUESTS;
 use crate::{println, printlnc};
