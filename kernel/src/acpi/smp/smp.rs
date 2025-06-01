@@ -1,10 +1,12 @@
 use crate::{
     interrupts::{
         self,
-        idt::{TablePointer, IDT_POINTER},
+        idt::{IDT_POINTER, TablePointer},
     },
     memory::{
-        paging::{LiminePat, PageTree}, stack::{prepare_kernel_stack, KERNEL_STACK_SIZE_PAGES}, PAGE_TREE_ALLOCATOR
+        PAGE_TREE_ALLOCATOR,
+        paging::{LiminePat, PageTree},
+        stack::{KERNEL_STACK_SIZE_PAGES, prepare_kernel_stack},
     },
     msr::{get_msr, get_mtrr_cap, get_mtrr_def_type},
     println,

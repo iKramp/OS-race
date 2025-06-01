@@ -1,11 +1,19 @@
-use std::{boxed::Box, format, mem_utils::PhysAddr, string::{String, ToString}, vec::Vec};
+use std::{
+    boxed::Box,
+    format,
+    mem_utils::PhysAddr,
+    string::{String, ToString},
+    vec::Vec,
+};
 
 use uuid::Uuid;
 
-use crate::drivers::{disk::{DirEntry, Disk, MountedPartition, PartitionSchemeDriver}, gpt::GPTDriver};
+use crate::drivers::{
+    disk::{DirEntry, Disk, MountedPartition, PartitionSchemeDriver},
+    gpt::GPTDriver,
+};
 
-use super::{fs_tree, resolve_path, DeviceDetails, InodeType, ResolvedPath, ROOT_INODE_INDEX, VFS};
-
+use super::{DeviceDetails, InodeType, ROOT_INODE_INDEX, ResolvedPath, VFS, fs_tree, resolve_path};
 
 pub fn add_disk(mut disk: Box<dyn Disk + Send>) {
     //for now only GPT
@@ -87,7 +95,6 @@ pub fn mount_partition_resolved(part_id: Uuid, mountpoint: ResolvedPath) -> Resu
     fs_tree::init(inode);
     vfs.mounted_partitions.insert(part_id, fs);
 
-    
     Ok(())
 }
 

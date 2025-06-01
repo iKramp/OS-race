@@ -10,7 +10,7 @@ struct RcInner<T> {
 
 pub struct Rc<T>
 where
-    T: 'static
+    T: 'static,
 {
     inner: &'static mut RcInner<T>,
 }
@@ -18,7 +18,7 @@ where
 impl<T> Rc<T> {
     pub fn new(data: T) -> Self {
         unsafe {
-            let address = Box::into_raw(Box::new(RcInner {data, count: 1})) as usize;
+            let address = Box::into_raw(Box::new(RcInner { data, count: 1 })) as usize;
             Self {
                 inner: &mut *(address as *mut RcInner<T>),
             }

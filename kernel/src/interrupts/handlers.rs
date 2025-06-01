@@ -2,7 +2,7 @@ use crate::{
     acpi::cpu_locals::CpuLocals,
     interrupts::gdt::GlobalDescriptorTable,
     memory::paging::PageTree,
-    proc::{context_switch, set_proc_initialized, StackCpuStateData},
+    proc::{StackCpuStateData, context_switch, set_proc_initialized},
     utils::{byte_from_port, byte_to_port},
 };
 #[allow(unused_imports)] //they are used in macros
@@ -189,8 +189,5 @@ pub extern "C" fn primary_ata_hard_disk(_proc_data: &mut InterruptProcessorState
 
 pub extern "C" fn first_context_switch(proc_data: &mut InterruptProcessorState) {
     set_proc_initialized();
-    context_switch(
-        StackCpuStateData::Interrupt(proc_data),
-        true,
-    );
+    context_switch(StackCpuStateData::Interrupt(proc_data), true);
 }

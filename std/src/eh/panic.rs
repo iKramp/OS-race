@@ -1,5 +1,5 @@
-pub use core::panic::*;
 use crate::println;
+pub use core::panic::*;
 
 //function that prints the stack trace (function addresses)
 
@@ -38,22 +38,26 @@ pub fn print_stack_trace() {
         if opcode == 0xE8 {
             // Read the offset (next 4 bytes)
             offset_bytes.copy_from_slice(unsafe { core::slice::from_raw_parts(instruction_ptr.add(1), 4) });
-            
+
             // Convert offset to a signed integer
             let offset = i32::from_le_bytes(offset_bytes);
-            
+
             // Calculate the target address
             let target_address = call_instruction_address.wrapping_add(5).wrapping_add(offset as usize);
-            
+
             // Print the return address and the target address
-            println!("Return address: {:#x}, Target function address: {:#x}", return_address, target_address);
+            println!(
+                "Return address: {:#x}, Target function address: {:#x}",
+                return_address, target_address
+            );
         } else {
             // If it's not a near call, handle other types accordingly
-            println!("Return address: {return_address:#x}, Call instruction {opcode:#x} not recognized at: {call_instruction_address:#x}");
+            println!(
+                "Return address: {return_address:#x}, Call instruction {opcode:#x} not recognized at: {call_instruction_address:#x}"
+            );
         }
 
         rbp = old_rbp;
-
     }
     println!("End of stack trace");
 }

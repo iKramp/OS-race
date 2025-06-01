@@ -12,9 +12,10 @@ pub fn derive_enum_new(input: TokenStream) -> TokenStream {
     let generics = &input.generics;
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-    let has_prefix = input.attrs.iter().find(|attr| {
-        attr.path().is_ident("op_prefix") || attr.path().is_ident("ext_op_prefix")
-    });
+    let has_prefix = input
+        .attrs
+        .iter()
+        .find(|attr| attr.path().is_ident("op_prefix") || attr.path().is_ident("ext_op_prefix"));
 
     if has_prefix.is_some() {
         panic!("EnumNew cannot be derived for enums with prefix attributes");

@@ -23,7 +23,8 @@ pub fn kernel_test(_args: TokenStream, input: TokenStream) -> TokenStream {
 
     let mut code = r#"
         #[cfg(feature = "run_tests")]
-        pub "#.to_string();
+        pub "#
+        .to_string();
     code.push_str(&function);
     code.push('\n');
 

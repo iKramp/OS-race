@@ -1,4 +1,8 @@
-use core::{cell::UnsafeCell, ops::{Deref, DerefMut}, sync::atomic::{AtomicU8, Ordering::*}};
+use core::{
+    cell::UnsafeCell,
+    ops::{Deref, DerefMut},
+    sync::atomic::{AtomicU8, Ordering::*},
+};
 
 pub struct Mutex<T: ?Sized> {
     state: AtomicU8,

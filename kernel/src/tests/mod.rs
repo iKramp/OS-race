@@ -14,8 +14,8 @@ pub(super) fn get_free_space_addr() -> *mut u8 {
 
 #[cfg(feature = "run_tests")]
 pub fn test_runner() {
-    use std::printlnc;
     use std::println;
+    use std::printlnc;
 
     use kernel_test::all_tests;
 

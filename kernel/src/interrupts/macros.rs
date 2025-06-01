@@ -91,7 +91,7 @@ macro_rules! handler {
                         "
                             mov rdi, rbx //restore rdi
                             call {1} //call context switch
-                        " 
+                        "
                     }),
                     "/* {1} */", //unused arg
 

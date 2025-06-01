@@ -1,11 +1,5 @@
 use bitfield::bitfield;
-use std::{
-    boxed::Box,
-    collections::btree_map::BTreeMap,
-    format,
-    sync::mutex::Mutex,
-    vec::Vec,
-};
+use std::{boxed::Box, collections::btree_map::BTreeMap, format, sync::mutex::Mutex, vec::Vec};
 use uuid::Uuid;
 
 use crate::drivers::{

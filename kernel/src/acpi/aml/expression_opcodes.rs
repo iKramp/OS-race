@@ -1,7 +1,7 @@
-use std::boxed::Box;
 use std::Vec;
+use std::boxed::Box;
 
-use super::data_object::{WordData, EXT_OP_PREFIX};
+use super::data_object::{EXT_OP_PREFIX, WordData};
 use super::name_objects::{NameString, SimpleName, SuperName, Target};
 use super::package::PkgLength;
 use super::term_objects::{MethodInvocation, TermArg};
@@ -444,7 +444,9 @@ impl AmlNew for DefPackage {
         let num_elements = data[skip];
         skip += 1;
         let (mut element_list, skip_element_list) = PackageElementList::aml_new(&data[skip..(1 + pkg_length.get_length())])?;
-        element_list.elements.reserve_exact(num_elements as usize - element_list.elements.len());
+        element_list
+            .elements
+            .reserve_exact(num_elements as usize - element_list.elements.len());
         skip += skip_element_list;
         debug_assert!(skip == pkg_length.get_length() + 1);
         Some((

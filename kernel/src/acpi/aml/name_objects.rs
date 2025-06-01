@@ -1,8 +1,8 @@
 use core::fmt::Debug;
 use std::{
+    Vec,
     boxed::Box,
     string::{String, ToString},
-    Vec,
 };
 
 use super::{

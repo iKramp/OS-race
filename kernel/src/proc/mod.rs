@@ -2,7 +2,6 @@ use context::{
     builder::create_process,
     info::{ContextInfo, MemoryRegionDescriptor, MemoryRegionFlags},
 };
-use syscall::SyscallCpuState;
 use core::{mem::MaybeUninit, sync::atomic::AtomicU32};
 use scheduler::{Scheduler, SimpleScheduler};
 use std::{
@@ -13,6 +12,7 @@ use std::{
     sync::{arc::Arc, mutex::Mutex},
     vec::Vec,
 };
+use syscall::SyscallCpuState;
 
 use crate::{interrupts::InterruptProcessorState, memory::paging::PageTree};
 
@@ -21,7 +21,7 @@ mod context_switch;
 mod dispatcher;
 mod scheduler;
 mod syscall;
-pub use context_switch::{interrupt_context_switch, context_switch};
+pub use context_switch::{context_switch, interrupt_context_switch};
 
 ///stores process metadata
 static PROCESSES: Mutex<BTreeMap<Pid, ProcessData>> = Mutex::new(BTreeMap::new());
@@ -134,7 +134,25 @@ pub fn kill_process(pid: Pid) {
 //context switch to this process when no other processes exist
 pub fn create_fallback_process() {
     let code_region = MemoryRegionDescriptor::new(VirtAddr(0x1000), 1, MemoryRegionFlags(2)).unwrap();
-    let code_init = [0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x0f, 0x05, 0x90, 0xEB, 0_u8.wrapping_sub(10)]; //in theory nop, nop, nop, nop, nop, jmp -4
+    let code_init = [
+        0x90,
+        0x90,
+        0x90,
+        0x90,
+        0x90,
+        0x90,
+        0x90,
+        0x90,
+        0x90,
+        0x90,
+        0x90,
+        0x90,
+        0x0f,
+        0x05,
+        0x90,
+        0xEB,
+        0_u8.wrapping_sub(10),
+    ]; //in theory nop, nop, nop, nop, nop, jmp -4
     let fake_context = ContextInfo::new(
         false,
         Some(1),

@@ -1,4 +1,4 @@
-use std::{boxed::Box, Vec};
+use std::{Vec, boxed::Box};
 
 use macros::*;
 use traits::*;
@@ -7,7 +7,7 @@ use crate::acpi::aml::name_objects::NameString;
 
 use super::{
     data_object::{ByteData, DWordData, EXT_OP_PREFIX},
-    namespace::{self, get_namespace, Namespace},
+    namespace::{self, Namespace, get_namespace},
     term_objects::{TermArg, TermList},
 };
 

@@ -1,25 +1,22 @@
 #![allow(clippy::unusual_byte_groupings, static_mut_refs)]
 
 use crate::proc::interrupt_context_switch;
+use std::mem_utils::{PhysAddr, VirtAddr};
 use std::printlnc;
-use std::
-    mem_utils::{PhysAddr, VirtAddr}
-;
 
 use unroll::unroll_for_loops;
 
 use crate::{
+    handler,
     interrupts::{
-        LEGACY_PIC_TIMER_TICKS, PIC_TIMER_FREQUENCY, TIMER_TICKS,
-        handlers::*,
+        InterruptProcessorState, LEGACY_PIC_TIMER_TICKS, PIC_TIMER_FREQUENCY, TIMER_TICKS,
         handlers::apic_eoi,
+        handlers::*,
         idt::{Entry, IDT},
-        InterruptProcessorState,
     },
     memory::paging::LiminePat,
     println,
     utils::byte_to_port,
-    handler
 };
 
 pub static mut LAPIC_REGISTERS: VirtAddr = VirtAddr(0);
@@ -116,7 +113,10 @@ fn map_lapic_registers(lapic_address: PhysAddr) {
             .unwrap();
         apic_registers_page_entry.set_pat(LiminePat::UC);
 
-        println!("Mapping LAPIC registers. Phys: {:016X}, Virt: {:016X}", lapic_address.0, LAPIC_REGISTERS.0);
+        println!(
+            "Mapping LAPIC registers. Phys: {:016X}, Virt: {:016X}",
+            lapic_address.0, LAPIC_REGISTERS.0
+        );
 
         core::arch::asm!(
             "mov rax, cr3",

@@ -2,7 +2,6 @@ use core::fmt::Debug;
 
 use bitfield::bitfield;
 
-
 #[derive(Debug)]
 pub enum FisType {
     RegisterH2D = 0x27,
@@ -52,7 +51,12 @@ pub struct H2DRegisterFis {
 
 impl From<&H2DRegisterFis> for &[u8] {
     fn from(fis: &H2DRegisterFis) -> Self {
-        unsafe { core::slice::from_raw_parts(fis as *const H2DRegisterFis as *const u8, core::mem::size_of::<H2DRegisterFis>()) }
+        unsafe {
+            core::slice::from_raw_parts(
+                fis as *const H2DRegisterFis as *const u8,
+                core::mem::size_of::<H2DRegisterFis>(),
+            )
+        }
     }
 }
 
@@ -167,7 +171,7 @@ bitfield! {
 
 }
 
-bitfield! { 
+bitfield! {
     pub struct DmaPmport(u8);
     impl Debug;
     pmport, set_pmport: 3, 0;
@@ -330,4 +334,3 @@ bitfield! {
     read_look_ahead, _: 1;
     write_cache, _: 0;
 }
-

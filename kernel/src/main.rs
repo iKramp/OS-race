@@ -47,7 +47,6 @@ extern "C" fn _start() -> ! {
     let cmd_line_info = unsafe { &(*LIMINE_BOOTLOADER_REQUESTS.cmd_line_request.info) };
     let str = unsafe { ffi::CStr::from_ptr(cmd_line_info.cmdline) };
 
-
     println!("starting RustOs...");
     println!("stack pointer: {:?}", stack_pointer);
 

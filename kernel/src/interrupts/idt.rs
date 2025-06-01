@@ -1,6 +1,6 @@
-use crate::proc::interrupt_context_switch;
 use crate::handler;
 use crate::interrupts::macros::InterruptProcessorState;
+use crate::proc::interrupt_context_switch;
 
 use super::gdt::{DEBUG_IST, DOUBLE_FAULT_IST, FIRST_CONTEXT_SWITCH_IST, MACHINE_CHECK_IST, NMI_IST};
 use super::handlers::*;
@@ -11,7 +11,12 @@ macro_rules! never_exit_interrupt_message {
     ($message:expr, $func_name:ident) => {
         extern "C" fn $func_name(proc_data: &mut InterruptProcessorState) -> ! {
             printlnc!((0, 0, 255), "{} exception", $message);
-            printlnc!((0, 0, 255), "segmetn:instruction: {:x}:{:x}", proc_data.interrupt_frame.cs, proc_data.interrupt_frame.rip);
+            printlnc!(
+                (0, 0, 255),
+                "segmetn:instruction: {:x}:{:x}",
+                proc_data.interrupt_frame.cs,
+                proc_data.interrupt_frame.rip
+            );
             loop {}
         }
     };
@@ -36,9 +41,6 @@ never_exit_interrupt_message!("machine check", machine_check_handler);
 never_exit_interrupt_message!("simd fp", simd_fp_handler);
 never_exit_interrupt_message!("virtualization", virtualization_handler);
 never_exit_interrupt_message!("control", control_handler);
-
-
-
 
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
@@ -91,7 +93,10 @@ impl Idt {
         self.set(Entry::new(handler!(bound_handler)), 5);
         self.set(Entry::new(handler!(invalid_opcode_handler)), 6);
         self.set(Entry::new(handler!(device_not_available_handler)), 7);
-        self.set(Entry::ist_index(DOUBLE_FAULT_IST, handler!(double_fault_handler, slow_swap, has_code)), 8);
+        self.set(
+            Entry::ist_index(DOUBLE_FAULT_IST, handler!(double_fault_handler, slow_swap, has_code)),
+            8,
+        );
         self.set(Entry::new(handler!(coprocessor_segment_overrun_handler)), 9);
         self.set(Entry::new(handler!(invalid_tss_handler, has_code)), 10);
         self.set(Entry::new(handler!(segment_not_present_handler, has_code)), 11);
@@ -101,7 +106,10 @@ impl Idt {
         self.set(Entry::new(handler!(reserved_handler)), 15);
         self.set(Entry::new(handler!(fpu_error_handler)), 16);
         self.set(Entry::new(handler!(alignment_check_handler, has_code)), 17);
-        self.set(Entry::ist_index(MACHINE_CHECK_IST, handler!(machine_check_handler, slow_swap)), 18);
+        self.set(
+            Entry::ist_index(MACHINE_CHECK_IST, handler!(machine_check_handler, slow_swap)),
+            18,
+        );
         self.set(Entry::new(handler!(simd_fp_handler)), 19);
         self.set(Entry::new(handler!(virtualization_handler)), 20);
         self.set(Entry::new(handler!(control_handler, has_code)), 21);
@@ -126,7 +134,7 @@ impl Idt {
         self.set(Entry::new(handler!(apic_timer_tick)), 100);
         self.set(Entry::new(handler!(spurious_interrupt)), 255);
 
-        //entries set by other files: 
+        //entries set by other files:
         //38-255 other apic interrupt (blank)
         //67 - apic error
         //32: selected timer (100 is free to use after apic init)
@@ -140,7 +148,10 @@ impl Idt {
 
     //apic sets everything from 38 to 254. Here be other handlers
     pub fn set_after_apic(&mut self) {
-        self.set(Entry::ist_index(FIRST_CONTEXT_SWITCH_IST, handler!(first_context_switch)), 254);
+        self.set(
+            Entry::ist_index(FIRST_CONTEXT_SWITCH_IST, handler!(first_context_switch)),
+            254,
+        );
     }
 }
 
@@ -163,11 +174,7 @@ pub struct Entry {
 }
 
 impl Entry {
-    pub fn new_custom(
-        gdt_selector: u16,
-        handler: extern "C" fn() -> !,
-        options: u16,
-    ) -> Self {
+    pub fn new_custom(gdt_selector: u16, handler: extern "C" fn() -> !, options: u16) -> Self {
         let pointer = handler as usize;
         Self {
             gdt_selector,
@@ -201,7 +208,7 @@ impl Entry {
 
 //privilige level is always 0 (kernel)
 //always interrupt gate, which clears IF
-//type bits 11 10 9 8 
+//type bits 11 10 9 8
 //
 const fn construct_entry_options(
     interrupt_stack_table_index: u16,

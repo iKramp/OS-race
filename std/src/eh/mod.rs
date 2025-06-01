@@ -1,7 +1,6 @@
+mod dbg_info_entry;
 pub mod elf_parser;
 pub mod panic;
-mod dbg_info_entry;
-
 
 pub fn int3() {
     unsafe {

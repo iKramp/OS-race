@@ -37,7 +37,7 @@ impl TermList {
                 let min_index = skip.saturating_sub(100);
                 let max_index = usize::min(skip + 100, data.len());
                 panic!(
-                    "TermList::new: could not read term object.\nPreceeding data: {:x?}\nPreceeding objects: {:#x?}\nFollowing data: {:x?}", 
+                    "TermList::new: could not read term object.\nPreceeding data: {:x?}\nPreceeding objects: {:#x?}\nFollowing data: {:x?}",
                     &data[min_index..skip],
                     term_list,
                     &data[skip..max_index]
@@ -86,7 +86,6 @@ impl AmlNew for MethodInvocation {
             }
         }
         Some((MethodInvocation { name, args }, skip))
-
     }
 }
 

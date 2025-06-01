@@ -1,4 +1,3 @@
-
 pub struct PkgLength {
     length: u32,
 }
@@ -7,7 +6,12 @@ impl PkgLength {
     pub fn new(data: &[u8]) -> (Self, usize) {
         let byte_length = (data[0] >> 6) & 0b11;
         match byte_length {
-            0 => (Self { length: (data[0] & 0b111111) as u32 }, 1),
+            0 => (
+                Self {
+                    length: (data[0] & 0b111111) as u32,
+                },
+                1,
+            ),
             1 => {
                 let mut num = data[0] as u32 & 0b1111;
                 num |= (data[1] as u32) << 4;

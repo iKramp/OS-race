@@ -88,9 +88,10 @@ impl ElfFile {
     pub fn new(file: VirtAddr) -> Self {
         let header = ElfHeader::new(file);
         let shstrtab_section = unsafe {
-                crate::mem_utils::get_at_virtual_addr::<SectionHeader>(
-                    file + header.section_header_table_offset + (header.shstr_index as u64 * core::mem::size_of::<SectionHeader>() as u64),
-                )
+            crate::mem_utils::get_at_virtual_addr::<SectionHeader>(
+                file + header.section_header_table_offset
+                    + (header.shstr_index as u64 * core::mem::size_of::<SectionHeader>() as u64),
+            )
         };
         let mut debug_abbrev_section = None;
         let mut debug_info_section = None;
@@ -115,7 +116,7 @@ impl ElfFile {
             let Ok(section_name) = section_name.to_str() else {
                 panic!("Failed to convert section name to str: {:#x?}", section_name);
             };
-            
+
             match section_name {
                 ".debug_abbrev" => debug_abbrev_section = Some(Section::new(file, section_header, section_name)),
                 ".debug_info" | ".debug_info.dwo" => debug_info_section = Some(Section::new(file, section_header, section_name)),

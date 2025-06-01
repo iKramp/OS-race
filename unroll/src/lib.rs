@@ -1,24 +1,24 @@
 #![recursion_limit = "128"]
 
 //! An attribute-like procedural macro for unrolling for loops with integer literal bounds.
-//! 
+//!
 //! This crate provides the [`unroll_for_loops`] attribute-like macro that can be applied to
 //! functions containing for-loops with integer bounds. This macro looks for loops to unroll and
 //! unrolls them at compile time.
-//! 
+//!
 //!
 //! ## Usage
-//! 
+//!
 //! Just add `#[unroll_for_loops]` above the function whose for loops you would like to unroll.
 //! Currently all for loops with integer literal bounds will be unrolled, although this macro
 //! currently can't see inside complex code (e.g. for loops within closures).
-//! 
-//! 
+//!
+//!
 //! ## Example
-//! 
+//!
 //! The following function computes a matrix-vector product and returns the result as an array.
 //! Both of the inner for-loops are unrolled when `#[unroll_for_loops]` is applied.
-//! 
+//!
 //! ```rust
 //! use unroll::unroll_for_loops;
 //!
@@ -36,10 +36,13 @@
 
 extern crate proc_macro;
 
-use syn::{parse_quote, Block, Expr, ExprBlock, ExprForLoop, ExprIf, ExprLet, ExprLit, ExprRange, ExprUnsafe, Item, ItemFn, Lit, Pat, PatIdent, RangeLimits, Stmt};
-use syn::token::Brace;
 use proc_macro::TokenStream;
 use quote::quote;
+use syn::token::Brace;
+use syn::{
+    Block, Expr, ExprBlock, ExprForLoop, ExprIf, ExprLet, ExprLit, ExprRange, ExprUnsafe, Item, ItemFn, Lit, Pat, PatIdent,
+    RangeLimits, Stmt, parse_quote,
+};
 
 /// Attribute used to unroll for loops found inside a function block.
 #[proc_macro_attribute]
@@ -48,10 +51,7 @@ pub fn unroll_for_loops(_meta: TokenStream, input: TokenStream) -> TokenStream {
 
     if let Item::Fn(item_fn) = item {
         let new_block = {
-            let ItemFn {
-                block: box_block,
-                ..
-            } = &item_fn;
+            let ItemFn { block: box_block, .. } = &item_fn;
             unroll_in_block(box_block)
         };
         let new_item = Item::Fn(ItemFn {
@@ -66,10 +66,7 @@ pub fn unroll_for_loops(_meta: TokenStream, input: TokenStream) -> TokenStream {
 
 /// Routine to unroll for loops within a block
 fn unroll_in_block(block: &Block) -> Block {
-    let Block {
-        brace_token,
-        stmts,
-    } = block;
+    let Block { brace_token, stmts } = block;
     let mut new_stmts = Vec::new();
     for stmt in stmts.iter() {
         if let &Stmt::Expr(ref expr, token) = stmt {
@@ -135,7 +132,9 @@ fn unroll(expr: &Expr) -> Expr {
                         ..
                     }) = **box_from
                     {
-                        lit_int.base10_parse::<usize>().expect("literal should be a base-10 integer that fits in a `usize`")
+                        lit_int
+                            .base10_parse::<usize>()
+                            .expect("literal should be a base-10 integer that fits in a `usize`")
                     } else {
                         return forloop_with_body(new_body);
                     }
@@ -150,18 +149,16 @@ fn unroll(expr: &Expr) -> Expr {
                         ..
                     }) = **box_to
                     {
-                        lit_int.base10_parse::<usize>().expect("literal should be a base-10 integer that fits in a `usize`")
+                        lit_int
+                            .base10_parse::<usize>()
+                            .expect("literal should be a base-10 integer that fits in a `usize`")
                     } else {
                         return forloop_with_body(new_body);
                     }
                 } else {
                     // we need to know where the limit is to know how much to unroll by.
                     return forloop_with_body(new_body);
-                } + if let &RangeLimits::Closed(_) = limits {
-                    1
-                } else {
-                    0
-                };
+                } + if let &RangeLimits::Closed(_) = limits { 1 } else { 0 };
 
                 let mut stmts = Vec::new();
                 for i in begin..end {
@@ -202,10 +199,7 @@ fn unroll(expr: &Expr) -> Expr {
             ..(*if_expr).clone()
         })
     } else if let Expr::Let(let_expr) = expr {
-        let ExprLet {
-            ref expr,
-            ..
-        } = *let_expr;
+        let ExprLet { ref expr, .. } = *let_expr;
         Expr::Let(ExprLet {
             expr: Box::new(unroll(expr)),
             ..(*let_expr).clone()
@@ -226,4 +220,3 @@ fn unroll(expr: &Expr) -> Expr {
         (*expr).clone()
     }
 }
-

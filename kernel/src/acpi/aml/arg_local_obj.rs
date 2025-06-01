@@ -17,7 +17,6 @@ const ARG4_OP: u8 = 0x6C;
 const ARG5_OP: u8 = 0x6D;
 pub const ARG6_OP: u8 = 0x6E;
 
-
 #[derive(Debug)]
 pub enum ArgObj {
     Arg0,

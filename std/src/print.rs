@@ -66,10 +66,9 @@ pub fn _print(args: core::fmt::Arguments) {
     _print_locked(&mut lock, args);
 }
 
-
 #[doc(hidden)]
 pub fn _print_locked(lock: &mut MutexGuard<dyn Print>, args: core::fmt::Arguments) {
-    lock.write_fmt(args).unwrap() ;
+    lock.write_fmt(args).unwrap();
 }
 
 #[doc(hidden)]
@@ -98,7 +97,8 @@ pub fn _format(args: Arguments<'_>) -> crate::String {
         output
     }
 
-    args.as_str().map_or_else(|| format_inner(args), crate::alloc::borrow::ToOwned::to_owned)
+    args.as_str()
+        .map_or_else(|| format_inner(args), crate::alloc::borrow::ToOwned::to_owned)
 }
 
 #[macro_export]

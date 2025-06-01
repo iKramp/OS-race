@@ -72,7 +72,7 @@ impl Inode {
             modification_time: vfs_inode.access_time,
             stat_change_time: vfs_inode.stat_change_time,
             link_count,
-            size
+            size,
         }
     }
 }

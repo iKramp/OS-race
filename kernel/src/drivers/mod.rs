@@ -1,8 +1,8 @@
 use core::fmt::Debug;
 
 pub mod ahci;
-pub mod gpt;
 pub mod disk;
+pub mod gpt;
 pub mod rfs;
 
 pub trait PCIDriver: Debug {

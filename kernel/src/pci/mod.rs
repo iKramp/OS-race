@@ -2,7 +2,10 @@ use std::{boxed::Box, println, printlnc};
 
 use device_config::{MassStorageController, RegularPciDevice};
 
-use crate::{drivers::ahci::disk::AhciController, interrupts::{handlers::apic_eoi, InterruptProcessorState}};
+use crate::{
+    drivers::ahci::disk::AhciController,
+    interrupts::{InterruptProcessorState, handlers::apic_eoi},
+};
 
 pub mod device_config;
 mod port_access;

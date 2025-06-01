@@ -18,8 +18,8 @@ fn panic(info: &PanicInfo) -> ! {
 extern crate alloc;
 
 pub mod print;
-pub use print::set_print;
 pub use print::Print;
+pub use print::set_print;
 
 pub mod mem_utils;
 
@@ -31,12 +31,12 @@ use core::panic::PanicInfo;
 //backtrace
 pub use alloc::boxed;
 pub use alloc::boxed::*;
+pub use alloc::collections;
 pub use core::borrow;
 pub use core::cell;
 pub use core::char;
 pub use core::clone;
 pub use core::cmp;
-pub use alloc::collections;
 pub use core::convert;
 pub use core::default;
 pub use core::env;

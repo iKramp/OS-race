@@ -8,11 +8,7 @@ fn main() {
     if !kernel_build_files_dir.exists() {
         std::fs::create_dir(kernel_build_files_dir.clone()).unwrap();
     }
-    std::fs::copy(
-        kernel,
-        kernel_build_files_dir.join("kernel.elf"),
-    )
-    .unwrap();
+    std::fs::copy(kernel, kernel_build_files_dir.join("kernel.elf")).unwrap();
     let status = Command::new("objcopy")
         .arg("kernel_build_files/kernel.elf")
         .arg("kernel_build_files/kernel.bin")

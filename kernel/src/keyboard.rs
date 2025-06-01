@@ -1,4 +1,3 @@
-
 pub static mut KEY_STATES: [bool; 128] = [false; 128];
 
 pub fn handle_key(key: u8) {
@@ -7,5 +6,4 @@ pub fn handle_key(key: u8) {
         KEY_STATES[key as usize & 0x7F] = pressed;
     }
     //println!("key action: {}, {}", key & 0x7F, pressed);
-    
 }

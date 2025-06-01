@@ -19,6 +19,8 @@ impl CmdArgs {
             }
         }
 
-        Self { root_partition: root_partition.unwrap() }
+        Self {
+            root_partition: root_partition.unwrap(),
+        }
     }
 }

@@ -13,7 +13,11 @@ fn main() {
     let snapshot = true;
 
     let mut cmd = std::process::Command::new("qemu-system-x86_64");
-    cmd.arg("-d").arg("int,cpu_reset").arg("-D").arg("./log.txt").arg("-no-reboot");
+    cmd.arg("-d")
+        .arg("int,cpu_reset")
+        .arg("-D")
+        .arg("./log.txt")
+        .arg("-no-reboot");
     if debug {
         cmd.arg("-s");
         cmd.arg("-S");
@@ -26,13 +30,13 @@ fn main() {
         cmd.arg("-device").arg("isa-debug-exit,iobase=0xf4,iosize=0x04");
     }
 
-
     if uefi {
         cmd.arg("-bios").arg(ovmf_prebuilt::ovmf_pure_efi());
-    } 
+    }
     cmd.arg("-drive").arg("format=raw,file=kernel_build_files/image.iso");
     if snapshot {
-        cmd.arg("-drive").arg("id=test_disk,format=raw,file=ahci_disk.img,if=none,snapshot=on");
+        cmd.arg("-drive")
+            .arg("id=test_disk,format=raw,file=ahci_disk.img,if=none,snapshot=on");
     } else {
         cmd.arg("-drive").arg("id=test_disk,format=raw,file=ahci_disk.img,if=none");
     }
@@ -43,9 +47,12 @@ fn main() {
     if debug {
         let _ = std::process::Command::new("kitty")
             .arg("gdb")
-            .arg("-x").arg("~/programming/OS-race/gdb_commands.txt")
-            .spawn().unwrap().wait().unwrap();
-            
+            .arg("-x")
+            .arg("~/programming/OS-race/gdb_commands.txt")
+            .spawn()
+            .unwrap()
+            .wait()
+            .unwrap();
     }
 
     child.wait().unwrap();

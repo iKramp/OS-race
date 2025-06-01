@@ -2,7 +2,6 @@ use core::{fmt::Debug, sync::atomic::AtomicUsize};
 
 use alloc::boxed::Box;
 
-
 struct ArcInner<T> {
     data: T,
     ref_count: AtomicUsize,
@@ -39,7 +38,9 @@ impl<T> Arc<T> {
 
 impl<T> Clone for Arc<T> {
     fn clone(&self) -> Self {
-        (unsafe { &mut *self.inner }).ref_count.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+        (unsafe { &mut *self.inner })
+            .ref_count
+            .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
         Self {
             inner: unsafe { &mut *(self.inner as *const ArcInner<T> as *mut ArcInner<T>) },
         }
@@ -48,7 +49,11 @@ impl<T> Clone for Arc<T> {
 
 impl<T> Drop for Arc<T> {
     fn drop(&mut self) {
-        if unsafe { &*self.inner}.ref_count.fetch_sub(1, core::sync::atomic::Ordering::Relaxed) == 1 {
+        if unsafe { &*self.inner }
+            .ref_count
+            .fetch_sub(1, core::sync::atomic::Ordering::Relaxed)
+            == 1
+        {
             let _ = unsafe { Box::from_raw(self.inner) };
         }
     }

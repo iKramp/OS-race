@@ -2,7 +2,6 @@
 
 use std::mem_utils::{PhysAddr, VirtAddr};
 
-
 static LIMINE_BASE_REVISION: [u64; 3] = [0xf9562b2d5c95a6c8, 0x6a7b384944536bdc, 2];
 
 pub static LIMINE_MEMMAP_USABLE: u64 = 0;
@@ -90,7 +89,7 @@ pub struct BootloaderRequests {
     pub rsdp_request: RsdpRequest,
     pub kernel_address_request: KernelAddressRequest,
     pub limine_kernel_file_request: LimineKernelFileRequest,
-    
+
     _request_end_marker: [u64; 2],
 }
 
@@ -211,8 +210,6 @@ pub struct FramebufferMode {
     pub blue_mask_shift: u8,
 }
 
-
-
 #[repr(C)]
 #[derive(Debug)]
 pub struct PagingModeRequest {
@@ -226,7 +223,8 @@ pub struct PagingModeRequest {
 
 #[repr(C)]
 #[derive(Debug)]
-struct SMPRequest { //processors will be bootstrapped 
+struct SMPRequest {
+    //processors will be bootstrapped
     magic: [u64; 4],
     revision: u64,
     info: *const SMPInfo,
@@ -252,7 +250,6 @@ struct CPUInfo {
     goto_address: PhysAddr,
     extra_argument: u64, //free to use
 }
-
 
 #[repr(C)]
 #[derive(Debug)]
@@ -339,7 +336,7 @@ pub struct LimineFile {
     pub revision: u64,
     pub address: *const (),
     pub size: u64,
-    pub path : *const u8,
+    pub path: *const u8,
     pub cmdline: *const u8,
     pub media_type: u32,
     unused: u32,

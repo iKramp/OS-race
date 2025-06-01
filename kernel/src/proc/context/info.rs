@@ -1,5 +1,5 @@
-use std::{boxed::Box, mem_utils::VirtAddr};
 use bitfield::bitfield;
+use std::{boxed::Box, mem_utils::VirtAddr};
 
 use crate::proc::MemoryContext;
 
@@ -21,15 +21,11 @@ pub struct MemoryRegionDescriptor {
 }
 
 impl MemoryRegionDescriptor {
-    pub fn new(
-        start: VirtAddr,
-        size_pages: usize,
-        flags: MemoryRegionFlags,
-    ) -> Result<Self, MemoryRegionError> {
+    pub fn new(start: VirtAddr, size_pages: usize, flags: MemoryRegionFlags) -> Result<Self, MemoryRegionError> {
         if start.0 % 0x1000 != 0 {
             return Err(MemoryRegionError::StartNotPageAligned);
         }
-        
+
         Ok(Self {
             start,
             size_pages,
@@ -144,7 +140,7 @@ impl<'a> ContextInfo<'a> {
 pub enum ContextInfoError {
     MemoryRegionOverlap,
     StackSizeTooBig,
-    EntryPointNotMapped
+    EntryPointNotMapped,
 }
 
 impl Drop for MemoryContext {

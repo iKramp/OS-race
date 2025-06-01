@@ -1,14 +1,14 @@
 use crate::interrupts::InterruptProcessorState;
 use crate::proc::CpuStateType;
+use crate::proc::PROCESS_ID_COUNTER;
+use crate::proc::PROCESSES;
 use crate::proc::ProcessData;
 use crate::proc::ProcessState;
-use crate::proc::PROCESSES;
 use crate::proc::SCHEDULER;
-use crate::proc::PROCESS_ID_COUNTER;
 use std::string::ToString;
 use std::sync::arc::Arc;
 use std::{
-    mem_utils::{self, memset_physical_addr, VirtAddr},
+    mem_utils::{self, VirtAddr, memset_physical_addr},
     println, vec,
 };
 
@@ -77,7 +77,6 @@ pub fn build_generic_memory_context(context: ContextInfo) -> MemoryContext {
         }
     }
 
-
     MemoryContext {
         is_32_bit: context.is_32_bit(),
         page_tree: memory_tree,
@@ -133,14 +132,9 @@ pub fn add_stack(context: &mut MemoryContext, stack_size_pages: u8) {
     }
     //add a non-accessible page to catch stack overflows
     let overflow_page = top_page - stack_reserve_pages + 1;
-    println!(
-        "allocating stack overflow page at {:#X}",
-        overflow_page << 12
-    );
+    println!("allocating stack overflow page at {:#X}", overflow_page << 12);
     mem_tree.allocate_set_virtual(None, VirtAddr(overflow_page << 12));
-    let entry = mem_tree
-        .get_page_table_entry_mut(VirtAddr(overflow_page << 12))
-        .unwrap();
+    let entry = mem_tree.get_page_table_entry_mut(VirtAddr(overflow_page << 12)).unwrap();
     entry.set_writeable(false);
     entry.set_no_execute(true);
     entry.set_user_accessible(false);

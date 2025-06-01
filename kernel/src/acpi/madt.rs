@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
 use std::{
-    mem_utils::{get_at_virtual_addr, VirtAddr},
     Vec,
+    mem_utils::{VirtAddr, get_at_virtual_addr},
 };
 
 #[repr(C, packed)]
@@ -25,7 +25,7 @@ impl Madt {
                         entries.push(MadtEntryType::ProcessorLocalAPIC(get_at_virtual_addr::<ProcessorLocalApic>(
                             ptr,
                         )));
-                    },
+                    }
                     1 => entries.push(MadtEntryType::IoApic(get_at_virtual_addr::<IoApic>(ptr))),
                     2 => entries.push(MadtEntryType::InterruptSourceOverride(get_at_virtual_addr::<
                         InterruptSourceOverride,
