@@ -63,13 +63,17 @@ impl Inode {
 
     ///only for changing permissions and similar. Does not update size, link count and other things
     ///100% dependent on the filesystem
-    fn from_vfs_old(&mut self, vfs_inode: vfs::Inode) {
-        self.inode_type_mode = vfs_inode.type_mode;
-        self.uid = vfs_inode.uid;
-        self.gid = vfs_inode.gid;
-        self.access_time = vfs_inode.access_time;
-        self.modification_time = vfs_inode.access_time;
-        self.stat_change_time = vfs_inode.stat_change_time;
+    fn from_vfs(vfs_inode: vfs::Inode, link_count: u16, size: InodeSize) -> Self {
+        Self {
+            inode_type_mode: vfs_inode.type_mode,
+            uid: vfs_inode.uid,
+            gid: vfs_inode.gid,
+            access_time: vfs_inode.access_time,
+            modification_time: vfs_inode.access_time,
+            stat_change_time: vfs_inode.stat_change_time,
+            link_count,
+            size
+        }
     }
 }
 

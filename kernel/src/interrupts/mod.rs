@@ -5,7 +5,7 @@ pub use gdt::{create_new_gdt, load_gdt, STATIC_GDT_PTR};
 pub mod handlers;
 pub mod idt;
 mod macros;
-pub use macros::ProcessorState;
+pub use macros::InterruptProcessorState;
 use crate::utils::byte_to_port;
 
 pub fn init_interrupts() {

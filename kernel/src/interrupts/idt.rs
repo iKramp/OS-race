@@ -1,16 +1,17 @@
+use crate::proc::interrupt_context_switch;
 use crate::handler;
-use crate::interrupts::macros::ProcessorState;
+use crate::interrupts::macros::InterruptProcessorState;
 
-use super::gdt::{DOUBLE_FAULT_IST, FIRST_CONTEXT_SWITCH_IST, MACHINE_CHECK_IST, NMI_IST};
+use super::gdt::{DEBUG_IST, DOUBLE_FAULT_IST, FIRST_CONTEXT_SWITCH_IST, MACHINE_CHECK_IST, NMI_IST};
 use super::handlers::*;
 use core::arch::asm;
 use std::printlnc;
 
 macro_rules! never_exit_interrupt_message {
     ($message:expr, $func_name:ident) => {
-        extern "C" fn $func_name(proc_data: &mut ProcessorState) -> ! {
+        extern "C" fn $func_name(proc_data: &mut InterruptProcessorState) -> ! {
             printlnc!((0, 0, 255), "{} exception", $message);
-            printlnc!((0, 0, 255), "segmetn:instruction: {:x}:{:x}", proc_data.cs, proc_data.rip);
+            printlnc!((0, 0, 255), "segmetn:instruction: {:x}:{:x}", proc_data.interrupt_frame.cs, proc_data.interrupt_frame.rip);
             loop {}
         }
     };
@@ -83,7 +84,7 @@ impl Idt {
 
     pub fn set_entries(&mut self) {
         self.set(Entry::new(handler!(divide_by_zero_handler)), 0);
-        self.set(Entry::new(handler!(debug_handler, slow_swap)), 1);
+        self.set(Entry::ist_index(DEBUG_IST, handler!(debug_handler, slow_swap)), 1);
         self.set(Entry::ist_index(NMI_IST, handler!(nmi_handler, slow_swap)), 2);
         self.set(Entry::new(handler!(breakpoint)), 3);
         self.set(Entry::new(handler!(overflow_handler)), 4);

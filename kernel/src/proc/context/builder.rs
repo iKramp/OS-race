@@ -1,3 +1,12 @@
+use crate::interrupts::InterruptProcessorState;
+use crate::proc::CpuStateType;
+use crate::proc::ProcessData;
+use crate::proc::ProcessState;
+use crate::proc::PROCESSES;
+use crate::proc::SCHEDULER;
+use crate::proc::PROCESS_ID_COUNTER;
+use std::string::ToString;
+use std::sync::arc::Arc;
 use std::{
     mem_utils::{self, memset_physical_addr, VirtAddr},
     println, vec,
@@ -5,12 +14,39 @@ use std::{
 
 use crate::{
     memory::{self, paging::PageTree},
-    proc::{MemoryContext, Stack},
+    proc::{MemoryContext, Pid, Stack},
 };
 
 use super::info::ContextInfo;
 
 const DEFAULT_PROC_STACK_SIZE: usize = 0x1000; // 4KB
+
+pub fn create_process(context_info: ContextInfo) -> Pid {
+    let pid = Pid(PROCESS_ID_COUNTER.fetch_add(1, core::sync::atomic::Ordering::Relaxed));
+    let is_32_bit = context_info.is_32_bit();
+    let cmdline = context_info.cmdline().to_string().into_boxed_str();
+    let rip = context_info.entry_point().0;
+    let memory_context = build_mem_context_for_new_proc(context_info);
+    let rsp = memory_context.stacks.last().unwrap().stack_base.0;
+
+    let cpu_state = InterruptProcessorState::new(rip, rsp);
+    let process_data = ProcessData {
+        pid,
+        is_32_bit,
+        cmdline,
+        memory_context: Arc::new(memory_context),
+        proc_state: ProcessState::Paused,
+        cpu_state: CpuStateType::Interrupt(cpu_state),
+    };
+
+    let mut proc_state_lock = PROCESSES.lock();
+    proc_state_lock.insert(pid, process_data);
+    drop(proc_state_lock);
+    let mut scheduler_lock = SCHEDULER.lock();
+    let scheduler = unsafe { scheduler_lock.assume_init_mut() };
+    scheduler.accept_new_process(pid);
+    pid
+}
 
 pub fn build_generic_memory_context(context: ContextInfo) -> MemoryContext {
     let mut memory_tree = build_generic_memory_tree();

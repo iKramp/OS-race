@@ -1,9 +1,10 @@
 #![allow(clippy::unusual_byte_groupings, static_mut_refs)]
 
-use std::{
-    mem_utils::{PhysAddr, VirtAddr},
-    printlnc,
-};
+use crate::proc::interrupt_context_switch;
+use std::printlnc;
+use std::
+    mem_utils::{PhysAddr, VirtAddr}
+;
 
 use unroll::unroll_for_loops;
 
@@ -13,7 +14,7 @@ use crate::{
         handlers::*,
         handlers::apic_eoi,
         idt::{Entry, IDT},
-        ProcessorState,
+        InterruptProcessorState,
     },
     memory::paging::LiminePat,
     println,
@@ -84,7 +85,7 @@ pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo, processor
 
     macro_rules! apic_interrupt_vector {
         ($num: ident) => {{
-            extern "C" fn wrapper(_proc_data: &mut ProcessorState) {
+            extern "C" fn wrapper(_proc_data: &mut InterruptProcessorState) {
                 printlnc!((0, 0, 255), "interrupt vector {}", $num);
                 apic_eoi();
             }

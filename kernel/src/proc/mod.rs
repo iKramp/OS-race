@@ -1,27 +1,27 @@
 use context::{
-    builder::build_mem_context_for_new_proc,
+    builder::create_process,
     info::{ContextInfo, MemoryRegionDescriptor, MemoryRegionFlags},
 };
+use syscall::SyscallCpuState;
 use core::{mem::MaybeUninit, sync::atomic::AtomicU32};
-use dispatcher::{dispatch, is_root_interrupt};
 use scheduler::{Scheduler, SimpleScheduler};
 use std::{
     boxed::Box,
     collections::btree_map::BTreeMap,
     mem_utils::VirtAddr,
     string::ToString,
-    sync::{
-        arc::Arc,
-        mutex::{Mutex, MutexGuard},
-    },
+    sync::{arc::Arc, mutex::Mutex},
     vec::Vec,
 };
 
-use crate::{acpi::cpu_locals::CpuLocals, interrupts::ProcessorState, memory::paging::PageTree};
+use crate::{interrupts::InterruptProcessorState, memory::paging::PageTree};
 
 mod context;
+mod context_switch;
 mod dispatcher;
 mod scheduler;
+mod syscall;
+pub use context_switch::{interrupt_context_switch, context_switch};
 
 ///stores process metadata
 static PROCESSES: Mutex<BTreeMap<Pid, ProcessData>> = Mutex::new(BTreeMap::new());
@@ -29,6 +29,8 @@ static PROCESSES: Mutex<BTreeMap<Pid, ProcessData>> = Mutex::new(BTreeMap::new()
 static SCHEDULER: Mutex<MaybeUninit<Box<dyn Scheduler + Send>>> = Mutex::new(MaybeUninit::uninit());
 
 static PROCESS_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
+
+static mut PROC_INITIALIZED: bool = false;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Pid(u32);
@@ -48,7 +50,18 @@ struct ProcessData {
     cmdline: Box<str>,
     memory_context: Arc<MemoryContext>,
     proc_state: ProcessState,
-    cpu_state: ProcessorState,
+    cpu_state: CpuStateType,
+}
+
+#[derive(Debug)]
+enum CpuStateType {
+    Interrupt(InterruptProcessorState),
+    Syscall(SyscallCpuState),
+}
+
+pub enum StackCpuStateData<'a> {
+    Interrupt(&'a InterruptProcessorState),
+    Syscall(SyscallCpuState), //nothing on kernel stack
 }
 
 /// notes:
@@ -86,88 +99,14 @@ pub fn init() {
     *scheduler = MaybeUninit::new(Box::new(SimpleScheduler::new()));
     drop(scheduler);
     create_fallback_process();
+    syscall::init();
 }
 
-pub fn context_switch(return_frame: &mut ProcessorState, force_switch: bool) {
-    if !force_switch && !is_root_interrupt(return_frame) {
-        return;
+//set this AFTER the process with pid 1 is loaded (pid 0 is fallback, might be removed)
+pub fn set_proc_initialized() {
+    unsafe {
+        PROC_INITIALIZED = true;
     }
-
-    // Switch to the next process
-    let mut scheduler_lock = SCHEDULER.lock();
-    let scheduler = unsafe { scheduler_lock.assume_init_mut() };
-    let pid = match scheduler.schedule() {
-        Some(pid) => pid,
-        None => {
-            //fallback process with nops. Fallback process should just sleep
-            Pid(0)
-        }
-    };
-
-    let mut process_states_lock = PROCESSES.lock();
-
-    let Some(process_data) = prepare_process_for_run(pid, scheduler_lock, &mut process_states_lock) else {
-        //thread is not ready to run
-        return;
-    };
-
-    //Reference is safe to clone as at most what any other cores can do at this point (after
-    //process states lock is dropped) is switch from running to stopping, but that is handled after
-    //this execution cycle
-    let process_data = unsafe { &*(process_data as *const ProcessData) };
-
-    let cpu_locals = CpuLocals::get();
-    let current_pid = cpu_locals.current_process;
-    let current_proc_data = process_states_lock.get_mut(&Pid(current_pid));
-
-    dispatch(process_data, current_proc_data, return_frame);
-    drop(process_states_lock);
-}
-
-fn prepare_process_for_run<'a>(
-    pid: Pid,
-    mut scheduler_lock: MutexGuard<MaybeUninit<Box<dyn Scheduler + Send>>>,
-    proc_state_lock: &'a mut MutexGuard<BTreeMap<Pid, ProcessData>>,
-) -> Option<&'a mut ProcessData> {
-    let Some(process) = proc_state_lock.get_mut(&pid) else {
-        //process not found
-        unsafe { scheduler_lock.assume_init_mut().remove_process(pid) };
-        return None;
-    };
-
-    if let ProcessState::Stopping = process.proc_state {
-        return None;
-    }
-    drop(scheduler_lock);
-    process.proc_state = ProcessState::Running;
-    Some(process)
-}
-
-pub fn create_process(context_info: ContextInfo) -> Pid {
-    let pid = Pid(PROCESS_ID_COUNTER.fetch_add(1, core::sync::atomic::Ordering::Relaxed));
-    let is_32_bit = context_info.is_32_bit();
-    let cmdline = context_info.cmdline().to_string().into_boxed_str();
-    let rip = context_info.entry_point().0;
-    let memory_context = build_mem_context_for_new_proc(context_info);
-    let rsp = memory_context.stacks.last().unwrap().stack_top.0;
-
-    let cpu_state = ProcessorState::new(rip, rsp);
-    let process_data = ProcessData {
-        pid,
-        is_32_bit,
-        cmdline,
-        memory_context: Arc::new(memory_context),
-        proc_state: ProcessState::Paused,
-        cpu_state,
-    };
-
-    let mut proc_state_lock = PROCESSES.lock();
-    proc_state_lock.insert(pid, process_data);
-    drop(proc_state_lock);
-    let mut scheduler_lock = SCHEDULER.lock();
-    let scheduler = unsafe { scheduler_lock.assume_init_mut() };
-    scheduler.accept_new_process(pid);
-    pid
 }
 
 //for now this only marks the process as stopping. If it was in running state before, return,
@@ -195,7 +134,7 @@ pub fn kill_process(pid: Pid) {
 //context switch to this process when no other processes exist
 pub fn create_fallback_process() {
     let code_region = MemoryRegionDescriptor::new(VirtAddr(0x1000), 1, MemoryRegionFlags(2)).unwrap();
-    let code_init = [0x90, 0x90, 0x90, 0x90, 0x90, 0xEB, 0_u8.wrapping_sub(4)]; //in theory nop, nop, nop, nop, nop, jmp -4
+    let code_init = [0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x0f, 0x05, 0x90, 0xEB, 0_u8.wrapping_sub(10)]; //in theory nop, nop, nop, nop, nop, jmp -4
     let fake_context = ContextInfo::new(
         false,
         Some(1),

@@ -5,6 +5,7 @@ macro_rules! handler {
     ) => {{
         #[naked]
         extern "C" fn wrapper() -> ! {
+            //TODO: any kind of change here should be matched with the one in dispatcher.rs
             unsafe {
                 core::arch::naked_asm!(
                     //potentially padding, but we always start with a clean stack if we're the first
@@ -52,54 +53,56 @@ macro_rules! handler {
                             js 3f
 
                             swapgs
+                            push 0x1 //swapped
+                            jmp 4f
                             3:
-                            push rdx //save for later
+                            push 0x0 //not swapped
+                            4:
                         "
                     } {
                         //mov pushed cs to register by offsetting from rsp
                         "
                             xor rax, rax
-                            mov rax, [rsp + 8 * 17] //cs
+                            mov rax, [rsp + 8 * 17] //ss
                                                     //skip swap if rax == 8
                             cmp rax, 8
                             je 3f
 
                             swapgs
+                            push 0x1 //swapped
+                            jmp 4f
                             3:
-                            push rax //save for later
+                            push 0x0 //not swapped
+                            4:
                         "
                     }),
 
                     "mov rdi, rsp",
                     "add rdi, 8", //start of proc data
-                    
+                    "mov rbx, rdi", //save rdi for later
+
                     "sti", //enable interrupts (nesting)
 
                     //stack should be aligned
 
-                    "call {}",
+                    "call {0}",
+
+                    handler!(@if_not_flag slow_swap, $($flag)* {
+                        "
+                            mov rdi, rbx //restore rdi
+                            call {1} //call context switch
+                        " 
+                    }),
+                    "/* {1} */", //unused arg
 
                     "cli", //disable interrupts
 
-                    handler!(@if_else_flag slow_swap, $($flag)*, {
-                        "
-                            pop rdx //restore gsbase
-                            test edx, edx
-                            js 4f
+                    "pop rax",
+                    "cmp rax, 0",
+                    "je 5f",
 
-                            swapgs
-                            4:
-                        "
-                    } {
-                        "
-                            pop rax
-                            cmp rax, 8
-                            je 4f
-
-                            swapgs
-                            4:
-                        "
-                    }),
+                    "swapgs",
+                    "5:",
 
                     "pop r15",
                     "pop r14",
@@ -122,6 +125,7 @@ macro_rules! handler {
 
                     "iretq",
                     sym $name,
+                    sym interrupt_context_switch
                 )
 
             }
@@ -178,7 +182,7 @@ macro_rules! handler {
 
 #[derive(Debug, Clone)]
 #[repr(C)]
-pub struct ProcessorState {
+pub struct InterruptProcessorState {
     pub r15: u64,
     pub r14: u64,
     pub r13: u64,
@@ -195,6 +199,12 @@ pub struct ProcessorState {
     pub rbx: u64,
     pub rax: u64,
     pub err_code: u64,
+    pub interrupt_frame: InterruptFrame,
+}
+
+#[derive(Debug, Clone)]
+#[repr(C)]
+pub struct InterruptFrame {
     pub rip: u64,
     pub cs: u64,
     pub rflags: u64,
@@ -202,7 +212,7 @@ pub struct ProcessorState {
     pub ss: u64,
 }
 
-impl ProcessorState {
+impl InterruptProcessorState {
     pub fn new(rip: u64, rsp: u64) -> Self {
         Self {
             r15: 0,
@@ -221,11 +231,13 @@ impl ProcessorState {
             rbx: 0,
             rax: 0,
             err_code: 0,
-            rip,
-            cs: 0x1B,
-            rflags: 0x3202,
-            rsp,
-            ss: 0x23,
+            interrupt_frame: InterruptFrame {
+                rip,
+                cs: 0x23,
+                rflags: 0x3202,
+                rsp,
+                ss: 0x1B,
+            },
         }
     }
 }

@@ -9,13 +9,13 @@ mod rsdt;
 mod sdt;
 mod smp;
 
-use std::{mem_utils::PhysAddr, Vec};
+use std::{Vec, mem_utils::PhysAddr};
 
-pub use apic::{LapicRegisters, LAPIC_REGISTERS};
-pub use smp::cpu_locals;
+pub use apic::{LAPIC_REGISTERS, LapicRegisters};
 use platform_info::PlatformInfo;
+pub use smp::cpu_locals;
 
-use crate::{limine::LIMINE_BOOTLOADER_REQUESTS, memory::{physical_allocator, PAGE_TREE_ALLOCATOR}, println, printlnc};
+use crate::{limine::LIMINE_BOOTLOADER_REQUESTS, memory::PAGE_TREE_ALLOCATOR, println, printlnc};
 
 static mut PLATFORM_INFO: Option<PlatformInfo> = None;
 pub fn get_platform_info() -> &'static PlatformInfo {
@@ -82,7 +82,6 @@ pub fn init_acpi() {
     smp::wake_cpus(platform_info);
     printlnc!((0, 255, 0), "ACPI initialized and APs started");
     unsafe { PAGE_TREE_ALLOCATOR.unmap_lower_half() };
-
 
     //after loading dsdt
     /*

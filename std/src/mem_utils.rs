@@ -60,6 +60,7 @@ impl core::ops::Sub<u64> for PhysAddr {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
+#[repr(C)]
 pub struct VirtAddr(pub u64);
 
 impl core::ops::Add for VirtAddr {

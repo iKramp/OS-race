@@ -8,7 +8,6 @@
 #![feature(arbitrary_self_types)]
 #![feature(arbitrary_self_types_pointers)]
 
-#[macro_use]
 extern crate static_cond;
 
 use core::ffi;
@@ -32,7 +31,6 @@ mod utils;
 mod vfs;
 mod vga;
 use limine::LIMINE_BOOTLOADER_REQUESTS;
-use memory::paging::PageTree;
 
 pub struct BootInfo {}
 

@@ -676,7 +676,7 @@ impl FileSystem for Rfs {
         let (inode_block, inode_block_binding) = get_working_block();
         self.partition.read(inode_block_index as usize * 8, 1, &[inode_block]);
         let inode_data: &mut Inode = unsafe { get_at_virtual_addr(inode_block_binding) };
-        inode_data.from_vfs_old(vfs_inode_data);
+        *inode_data = Inode::from_vfs(vfs_inode_data, inode_data.link_count, InodeSize(inode_data.size.0));
         self.partition.write(inode_block_index as usize * 8, 1, &[inode_block]);
         unsafe { PAGE_TREE_ALLOCATOR.deallocate(inode_block_binding) };
         self.clean_after_operation();

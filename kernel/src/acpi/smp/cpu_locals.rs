@@ -1,14 +1,15 @@
-use core::u64;
 use std::mem_utils::VirtAddr;
 
+#[repr(C)]
 pub struct CpuLocals {
+    //keep this as first argument for syscall reasons
     pub kernel_stack_base: VirtAddr,
     pub stack_size_pages: u64,
-    pub apic_id: u8,
-    pub processor_id: u8,
     /// Points to TablePointer with base and limit of GDT
     pub gdt_ptr: VirtAddr,
     pub current_process: u32,
+    pub apic_id: u8,
+    pub processor_id: u8,
 }
 
 impl CpuLocals {
@@ -34,6 +35,5 @@ impl CpuLocals {
         }
     }
 }
-
 
 //FS register contains thread local storage of a process
