@@ -134,30 +134,39 @@ pub fn kill_process(pid: Pid) {
 //context switch to this process when no other processes exist
 pub fn create_fallback_process() {
     let code_region = MemoryRegionDescriptor::new(VirtAddr(0x1000), 1, MemoryRegionFlags(2)).unwrap();
+    let data_region = MemoryRegionDescriptor::new(VirtAddr(0x2000), 1, MemoryRegionFlags(1)).unwrap();
     let code_init = [
-        0x90,
-        0x90,
-        0x90,
-        0x90,
-        0x90,
-        0x90,
-        0x90,
-        0x90,
-        0x90,
-        0x90,
-        0x90,
-        0x90,
-        0x0f,
-        0x05,
-        0x90,
-        0xEB,
-        0_u8.wrapping_sub(10),
-    ]; //in theory nop, nop, nop, nop, nop, jmp -4
+        0x90,                  //nop
+        0x90,                  //nop
+        0x90,                  //nop
+        0x90,                  //nop
+        0x48,                  //vvv
+        0xC7,                  //vvv
+        0xC7,                  //mov rdi, imm
+        0x01,                  //vvv
+        0x00,                  //vvv
+        0x00,                  //vvv
+        0x00,                  //0x1
+        0x48,                  //vvv
+        0xC7,                  //vvv
+        0xC6,                  //mov rsi, imm
+        0x00,                  //vvv
+        0x20,                  //vvv
+        0x00,                  //vvv
+        0x00,                  //0x2000
+        0x0f,                  //vvv
+        0x05,                  //syscall
+        0x90,                  //nop
+        0xEB,                  //jmp
+        0_u8.wrapping_sub(20), //jmp offset
+    ];
+    let data_init = b"Message from user process: uhhhh idk something something works??\0";
+
     let fake_context = ContextInfo::new(
         false,
         Some(1),
-        Box::new([code_region]),
-        Box::new([(VirtAddr(0x1000), &code_init)]),
+        Box::new([code_region, data_region]),
+        Box::new([(VirtAddr(0x1000), &code_init), (VirtAddr(0x2000), data_init)]),
         VirtAddr(0x1000),
         "fallback_process".to_string().into_boxed_str(),
     )

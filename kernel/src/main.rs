@@ -7,6 +7,7 @@
 #![feature(string_remove_matches)]
 #![feature(arbitrary_self_types)]
 #![feature(arbitrary_self_types_pointers)]
+#![feature(c_str_module)]
 
 extern crate static_cond;
 
