@@ -15,35 +15,40 @@ use super::ParseError;
     ElfN_Xword      uint64_t
 */
 
+#[repr(C)]
 pub struct Elf64_Ehdr {
-    e_ident: e_ident,
-    e_type: u16,
-    e_machine: u16,
-    e_version: u32,
-    e_entry: u64,
-    e_phoff: u64,
-    e_shoff: u64,
-    e_flags: u32,
-    e_ehsize: u16,
-    e_phentsize: u16,
-    e_phnum: u16,
-    e_shentsize: u16,
-    e_shnum: u16,
-    e_shstrndx: u16,
+    pub e_ident: EIdent,
+    pub e_type: u16,
+    pub e_machine: u16,
+    pub e_version: u32,
+    pub e_entry: u64,
+    pub e_phoff: u64,
+    pub e_shoff: u64,
+    pub e_flags: u32,
+    pub e_ehsize: u16,
+    pub e_phentsize: u16,
+    pub e_phnum: u16,
+    pub e_shentsize: u16,
+    pub e_shnum: u16,
+    pub e_shstrndx: u16,
 }
 
 impl Elf64_Ehdr {
-    fn parse(data: &[u8]) -> Result<&Self, ParseError> {
+    pub(super) fn parse(data: &[u8]) -> Result<&Self, ParseError> {
         if data.len() < core::mem::size_of::<Self>() {
             return Err(ParseError::IncompleteData);
         }
-        e_ident::verify(data)?;
+        EIdent::verify(data)?;
         let header = unsafe { &*(data.as_ptr() as *const Elf64_Ehdr) };
+        if header.e_ehsize != core::mem::size_of::<Self>() as u16 {
+            return Err(ParseError::Other);
+        }
         Ok(header)
     }
 }
 
-pub struct e_ident {
+#[repr(C)]
+pub struct EIdent {
     /// (0x7f)ELF magic number
     pub ei_magic: [u8; 4],
     /// ELF class (0: invalid, 1: 32-bit, 2: 64-bit)
@@ -54,16 +59,6 @@ pub struct e_ident {
     pub ei_version: u8,
     /// OS/ABI identification
     /// 0: None
-    /// 1: System V
-    /// 2: HP-UX
-    /// 3: NetBSD
-    /// 4: Linux
-    /// 5: Solaris
-    /// 6: Irix
-    /// 7: FreeBSD
-    /// 8: Tru64
-    /// 9: Arm
-    /// 10: Standalone
     pub ei_osabi: u8,
     /// ABI version
     pub ei_abiversion: u8,
@@ -71,9 +66,9 @@ pub struct e_ident {
     pub ei_nident: u8,
 }
 
-impl e_ident {
+impl EIdent {
     fn verify(data: &[u8]) -> Result<(), ParseError> {
-        let header = unsafe { &*(data.as_ptr() as *const e_ident) };
+        let header = unsafe { &*(data.as_ptr() as *const Self) };
         if header.ei_magic != [0x7f, b'E', b'L', b'F'] {
             return Err(ParseError::InvalidMagic);
         }
@@ -86,9 +81,30 @@ impl e_ident {
         if header.ei_version != 1 {
             return Err(ParseError::InvalidVersion);
         }
-        if header.ei_nident != core::mem::size_of::<Self>() as u8 {
-            return Err(ParseError::Other);
-        }
         Ok(())
     }
+}
+
+#[repr(u16)]
+pub enum EType {
+    ET_NONE = 0,
+    ET_EXEC = 1,
+    ET_DYN = 2,
+    ET_REL = 3,
+    ET_CORE = 4
+}
+
+#[repr(u8)]
+pub enum EiOsAbi {
+    None = 0,
+    SystemV = 1,
+    HpUx = 2,
+    NetBSD = 3,
+    Linux = 4,
+    Solaris = 5,
+    Irix = 6,
+    FreeBSD = 7,
+    Tru64 = 8,
+    Arm = 9,
+    Standalone = 10,
 }

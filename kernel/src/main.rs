@@ -8,6 +8,7 @@
 #![feature(arbitrary_self_types)]
 #![feature(arbitrary_self_types_pointers)]
 #![feature(c_str_module)]
+#![feature(str_from_raw_parts)]
 
 extern crate static_cond;
 
@@ -34,7 +35,14 @@ mod vfs;
 mod vga;
 use limine::LIMINE_BOOTLOADER_REQUESTS;
 
-pub struct BootInfo {}
+#[repr(align(32))]
+pub struct ElfDataWrapper<'a> {
+    data: &'a [u8]
+}
+
+const TEST_EXECUTABLE: ElfDataWrapper = ElfDataWrapper {
+    data: include_bytes!("../../assets/libr")
+};
 
 #[unsafe(no_mangle)]
 extern "C" fn _start() -> ! {
@@ -87,7 +95,10 @@ extern "C" fn _start() -> ! {
     }
 
     //start first proc
-    unsafe { core::arch::asm!("int 254") };
+    // unsafe { core::arch::asm!("int 254") };
+
+    let res = parsers::elf::parse_unaligned(TEST_EXECUTABLE.data);
+    println!("{:?}", res);
 
     println!("looping infinitely now");
     let mut a = 0;

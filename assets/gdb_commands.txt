@@ -7,8 +7,14 @@ symbol-file kernel_build_files/kernel.elf
 python
 import sys
 import gdb
+import os
+import subprocess
 
-sys.path.append("/home/nejc/.rustup/toolchains/nightly-2024-10-01-x86_64-unknown-linux-gnu/lib/rustlib/etc/")
+cargo_path = subprocess.check_output(['which', 'cargo'], text=True).strip()
+rustlib_path = os.path.join(os.path.dirname(cargo_path), '..', 'lib', 'rustlib', 'etc')
+rustlib_path = os.path.realpath(rustlib_path)
+sys.path.append(rustlib_path)
+
 import gdb_lookup
 import rust_types
 printer = gdb_lookup.RustPrettyPrinter("rust")

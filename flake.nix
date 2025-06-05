@@ -31,6 +31,7 @@
         pkgs.nasm
         pkgs.rust-analyzer
         pkgs.clippy
+        pkgs.xorriso
       ];
 
       shellHook = ''
