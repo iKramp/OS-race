@@ -36,9 +36,9 @@ fn main() {
     cmd.arg("-drive").arg("format=raw,file=kernel_build_files/image.iso");
     if snapshot {
         cmd.arg("-drive")
-            .arg("id=test_disk,format=raw,file=ahci_disk.img,if=none,snapshot=on");
+            .arg("id=test_disk,format=raw,file=assets/ahci_disk.img,if=none,snapshot=on");
     } else {
-        cmd.arg("-drive").arg("id=test_disk,format=raw,file=ahci_disk.img,if=none");
+        cmd.arg("-drive").arg("id=test_disk,format=raw,file=assets/ahci_disk.img,if=none");
     }
     cmd.arg("-device").arg("ahci,id=ahci");
     cmd.arg("-device").arg("ide-hd,drive=test_disk,bus=ahci.0");
@@ -48,7 +48,7 @@ fn main() {
         let _ = std::process::Command::new("kitty")
             .arg("gdb")
             .arg("-x")
-            .arg("~/programming/OS-race/gdb_commands.txt")
+            .arg("~/programming/OS-race/assets/gdb_commands.txt")
             .spawn()
             .unwrap()
             .wait()

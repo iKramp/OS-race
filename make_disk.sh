@@ -16,7 +16,7 @@ mkdir -p iso/EFI/BOOT
 cp -u $LIMINE_DATA_DIR/limine-uefi-cd.bin iso/
 cp -u $LIMINE_DATA_DIR/limine-bios-cd.bin iso/
 cp -u $LIMINE_DATA_DIR/limine-bios.sys iso/
-cp -u limine.conf iso/
+cp -u assets/limine.conf iso/
 cp -u kernel_build_files/kernel.bin iso/EFI/BOOT/
 
 xorriso -as mkisofs -b "/limine-bios-cd.bin" \
