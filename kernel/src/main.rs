@@ -24,6 +24,7 @@ mod keyboard;
 mod limine;
 mod memory;
 mod msr;
+mod parsers;
 mod pci;
 mod proc;
 #[allow(unused_imports)]

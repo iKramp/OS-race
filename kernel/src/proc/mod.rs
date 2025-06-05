@@ -21,6 +21,7 @@ mod context_switch;
 mod dispatcher;
 mod scheduler;
 mod syscall;
+mod loaders;
 pub use context_switch::{context_switch, interrupt_context_switch};
 
 ///stores process metadata
@@ -99,6 +100,7 @@ pub fn init() {
     *scheduler = MaybeUninit::new(Box::new(SimpleScheduler::new()));
     drop(scheduler);
     create_fallback_process();
+    loaders::init_process_loaders();
     syscall::init();
 }
 
