@@ -7,7 +7,7 @@ use super::ParseError;
 ///Section header struct
 #[repr(C)]
 #[derive(Debug)]
-pub(super) struct Elf64_Shdr {
+pub struct Elf64_Shdr {
     ///index into string table
     pub sh_name: u32,
     pub sh_type: u32,
@@ -41,7 +41,7 @@ pub(super) fn get_section_table(data: &[u8], e_phoff: u64, e_phentsize: u16, e_p
 
 #[repr(u32)]
 #[derive(Debug)]
-enum ShType {
+pub enum ShType {
     SHT_NULL = 0,            /* unused section */
     SHT_PROGBITS = 1,        /* Program data */
     SHT_SYMTAB = 2,          /* Symbol table */
@@ -59,6 +59,7 @@ enum ShType {
     SSHT_PREINIT_ARRAY = 16, /* Array of pre-constructors */
     SSHT_GROUP = 17,         /* Section group */
     SSHT_SYMTAB_SHNDX = 18,  /* Extended section indeces */
+    NUM_SH_TYPES = 19,      /* Number of defined types */
 }
 
 bitfield! {

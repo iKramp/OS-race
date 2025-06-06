@@ -22,5 +22,6 @@ struct ProcessLoader {
 #[derive(Debug)]
 pub enum ProcessLoadError {
     UnparseableFile,
-    UnsupportedProcessFormat, //32 bit for example
+    InvalidFile,
+    UnsupportedProcessFormat, //32 bit, different arch,...
 }

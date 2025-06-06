@@ -6,6 +6,8 @@ mod header;
 mod program_header;
 mod section;
 
+pub use program_header::{PType, PFlags, Elf64_Phdr}
+
 
 #[derive(Debug)]
 pub enum ParseError {
@@ -18,34 +20,41 @@ pub enum ParseError {
     Other,
 }
 
-pub fn parse(data: &[u8]) -> Result<(), ParseError> {
+//parse further if needed
+pub struct ParsedElf<'a> {
+    pub header: &'a header::Elf64_Ehdr,
+    pub segments: Box<[(&'a program_header::Elf64_Phdr, &'a [u8])]>,
+}
+
+pub fn parse<'a>(data: &'a [u8]) -> Result<ParsedElf<'a>, ParseError> {
     let header = header::Elf64_Ehdr::parse(data)?;
     let section_headers = section::get_section_table(data, header.e_shoff, header.e_shentsize, header.e_shnum)?;
     let segment_headers = program_header::get_segment_table(data, header.e_phoff, header.e_phentsize, header.e_phnum)?;
     let string_section_header = &section_headers[header.e_shstrndx as usize];
     let start_shstr = string_section_header.sh_offset as usize;
     let end_shstr = start_shstr + string_section_header.sh_size as usize;
-    let shstrtab = &data[start_shstr..end_shstr];
+    let _shstrtab = &data[start_shstr..end_shstr];
 
-    let mut sections_names: Vec<Box<str>> = Vec::new();
-    let shstrtab_ptr = shstrtab.as_ptr();
-    let mut start_str = 0;
-    for i in 0..shstrtab.len() {
-        let character = shstrtab[i];
-        if character == b'\0' {
-            let new_str = unsafe { core::str::from_raw_parts(shstrtab_ptr.add(start_str), i - start_str) };
-            sections_names.push(new_str.into());
-            start_str = i + 1;
+    let mut segments = Vec::new();
+    for segment in segment_headers {
+        let start = segment.p_offset as usize;
+        let end = start + segment.p_filesz as usize;
+        if end > data.len() {
+            return Err(ParseError::IncompleteData);
         }
+        let segment_data = &data[start..end];
+        segments.push((segment, segment_data));
     }
-    println!("{:?}", sections_names);
-    
 
+    let parsed = ParsedElf {
+        header,
+        segments: segments.into_boxed_slice(),
+    };
 
-    Ok(())
+    Ok(parsed)
 }
 
-pub fn parse_unaligned(data: &[u8]) -> Result<(), ParseError> {
+pub fn parse_unaligned<'a>(data: &'a [u8]) -> Result<ParsedElf<'a>, ParseError> {
     let size_pages = data.len().div_ceil(0x1000);
     let virt_addr = unsafe { memory::PAGE_TREE_ALLOCATOR.allocate_contigious(size_pages as u64, None, false) };
 

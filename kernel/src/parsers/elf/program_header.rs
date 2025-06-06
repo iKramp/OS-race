@@ -3,20 +3,20 @@
 use super::ParseError;
 use bitfield::bitfield;
 
-pub(super) struct Elf64_Phdr {
-    p_type: u32,
-    p_flags: PFlags,
+pub struct Elf64_Phdr {
+    pub p_type: u32,
+    pub p_flags: PFlags,
     ///in file offset to the segment
-    p_offset: u64,
-    p_vaddr: u64,
+    pub p_offset: u64,
+    pub p_vaddr: u64,
     ///unused
-    p_paddr: u64,
+    pub p_paddr: u64,
     ///segment size on disk. Differs from in memory for uninitialized data 
     ///(not on disk, but reserved in memory)
-    p_filesz: u64,
+    pub p_filesz: u64,
     ///segment size on memory
-    p_memsz: u64,
-    p_align: u64,
+    pub p_memsz: u64,
+    pub p_align: u64,
 }
 
 pub(super) fn get_segment_table(data: &[u8], e_shoff: u64, e_shentsize: u16, e_shnum: u16) -> Result<&[Elf64_Phdr], ParseError> {
@@ -35,7 +35,8 @@ pub(super) fn get_segment_table(data: &[u8], e_shoff: u64, e_shentsize: u16, e_s
 
 
 #[repr(u32)]
-enum PType {
+#[derive(Debug)]
+pub enum PType {
     PT_NULL = 0,
     PT_LOAD = 1,
     PT_DYNAMIC = 2,
@@ -44,13 +45,13 @@ enum PType {
     PT_SHLIB = 5,
     PT_PHDR = 6,
     PT_TLS = 7,
-    PT_NUM = 8,
+    NUM_P_TYPES = 8,
 }
 
 bitfield! {
-    struct PFlags(u32);
+    pub struct PFlags(u32);
     impl Debug;
-    execute, _: 0;
-    write, _: 1;
-    read, _: 2;
+    pub execute, _: 0;
+    pub write, _: 1;
+    pub read, _: 2;
 }
