@@ -1,5 +1,5 @@
 use bitfield::bitfield;
-use std::{boxed::Box, mem_utils::VirtAddr};
+use std::{boxed::Box, mem_utils::VirtAddr, vec::Vec};
 
 use crate::proc::MemoryContext;
 
@@ -13,8 +13,9 @@ bitfield! {
     pub is_executable, set_is_executable: 1;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MemoryRegionDescriptor {
+    ///Guaranteed to be page aligned
     start: VirtAddr,
     size_pages: usize,
     flags: MemoryRegionFlags,
@@ -39,7 +40,10 @@ impl MemoryRegionDescriptor {
         let other_start = other.start.0;
         let other_end = other.start.0 + (other.size_pages as u64 * 0x1000);
 
-        (self_end < other_start) || (self_start > other_end)
+        let other_overlaps_self_start = other_start < self_end && other_start >= self_start;
+        let self_overlaps_other_start = self_start < other_end && self_start >= other_start;
+
+        other_overlaps_self_start || self_overlaps_other_start
     }
 
     pub fn start(&self) -> VirtAddr {
@@ -65,7 +69,7 @@ pub enum MemoryRegionError {
 #[derive(Debug)]
 pub struct ContextInfo<'a> {
     is_32_bit: bool,
-    stack_size_pages: Option<u8>,
+    ///Sorted by start address, no overlapping regions
     mem_regions: Box<[MemoryRegionDescriptor]>,
     mem_init: Box<[(VirtAddr, &'a [u8])]>,
     entry_point: VirtAddr,
@@ -75,32 +79,56 @@ pub struct ContextInfo<'a> {
 impl<'a> ContextInfo<'a> {
     pub fn new(
         is_32_bit: bool,
-        stack_size_pages: Option<u8>,
-        mem_regions: Box<[MemoryRegionDescriptor]>,
-        mem_init: Box<[(VirtAddr, &'a [u8])]>,
+        mem_regions: &mut [MemoryRegionDescriptor],
+        mut mem_init: Box<[(VirtAddr, &'a [u8])]>,
         entry_point: VirtAddr,
         cmdline: Box<str>,
     ) -> Result<Self, ContextInfoError> {
-        for (i, region) in mem_regions.iter().enumerate() {
-            for j in (i + 1)..mem_regions.len() {
-                if region.overlaps(&mem_regions[j]) {
+        //Note: This prevents cases where 2 non overlapping regions are in fixed_regions, and a new
+        //region that ovrelaps both is added. When sorted, any region added may only extend an
+        //existing region, not connect two existing regions.
+        mem_regions.sort_by(|lhs, rhs| lhs.start().0.cmp(&rhs.start().0));
+
+        let mut fixed_regions: Vec<MemoryRegionDescriptor> = Vec::new();
+
+        for region in mem_regions.iter() {
+            'inner: for other_region in fixed_regions.iter_mut() {
+                if region.overlaps(other_region) {
+                    if region.flags().0 != other_region.flags().0 {
+                        return Err(ContextInfoError::MemoryRegionOverlap);
+                    } else {
+                        let start_diff = region.start().0 - other_region.start().0;
+                        let start_page_diff = start_diff as usize / 0x1000;
+                        other_region.size_pages = other_region.size_pages.max(region.size_pages + start_page_diff);
+                        break 'inner;
+                    }
+                }
+            }
+            fixed_regions.push(region.clone());
+        }
+
+        mem_init.sort_by(|lhs, rhs| lhs.0.0.cmp(&rhs.0.0));
+
+        for (i, init_1) in mem_init.iter().enumerate() {
+            for init_2 in mem_init[i + 1..].iter() {
+                let self_start = init_1.0.0;
+                let self_end = init_1.0.0 + (init_1.1.len() as u64);
+                let other_start = init_2.0.0;
+                let other_end = init_2.0.0 + (init_2.1.len() as u64);
+
+                let other_overlaps_self_start = other_start < self_end && other_start >= self_start;
+                let self_overlaps_other_start = self_start < other_end && self_start >= other_start;
+
+                let regions_pverlap = other_overlaps_self_start || self_overlaps_other_start;
+                if regions_pverlap {
                     return Err(ContextInfoError::MemoryRegionOverlap);
                 }
             }
         }
-        if let Some(stack_size) = stack_size_pages {
-            if stack_size > MAX_PROC_STACK_SIZE_PAGES as u8 {
-                return Err(ContextInfoError::StackSizeTooBig);
-            }
-        }
-        if !mem_regions.iter().any(|region| region.start == entry_point) {
-            return Err(ContextInfoError::EntryPointNotMapped);
-        }
 
         Ok(Self {
             is_32_bit,
-            stack_size_pages,
-            mem_regions,
+            mem_regions: fixed_regions.into_boxed_slice(),
             mem_init,
             entry_point,
             cmdline,
@@ -111,10 +139,8 @@ impl<'a> ContextInfo<'a> {
         self.is_32_bit
     }
 
-    pub fn stack_size_pages(&self) -> Option<u8> {
-        self.stack_size_pages
-    }
-
+    ///Returns the memory regions of the process. The regions are guaranteed to be sorted by start
+    ///address and do not overlap.
     pub fn mem_regions(&self) -> &[MemoryRegionDescriptor] {
         &self.mem_regions
     }

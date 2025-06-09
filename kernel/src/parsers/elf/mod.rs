@@ -1,4 +1,4 @@
-use std::{boxed::Box, println, vec::Vec};
+use std::{boxed::Box, vec::Vec};
 
 use crate::memory;
 
@@ -6,8 +6,7 @@ mod header;
 mod program_header;
 mod section;
 
-pub use program_header::{PType, PFlags, Elf64_Phdr}
-
+pub use program_header::PType;
 
 #[derive(Debug)]
 pub enum ParseError {
@@ -21,6 +20,7 @@ pub enum ParseError {
 }
 
 //parse further if needed
+#[derive(Debug)]
 pub struct ParsedElf<'a> {
     pub header: &'a header::Elf64_Ehdr,
     pub segments: Box<[(&'a program_header::Elf64_Phdr, &'a [u8])]>,

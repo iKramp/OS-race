@@ -1,7 +1,4 @@
-use std::{
-    mem_utils::{VirtAddr, get_at_virtual_addr},
-    vec::Vec,
-};
+use std::{mem_utils::VirtAddr, println, vec::Vec};
 
 use crate::{
     parsers::elf,
@@ -13,7 +10,7 @@ use super::{ProcessLoadError, ProcessLoader};
 pub(super) fn proc_loader() -> ProcessLoader {
     ProcessLoader {
         is_this_type: is_elf,
-        load_process: load_elf_process,
+        load_context: load_elf_process,
     }
 }
 
@@ -48,8 +45,9 @@ fn load_elf_process(data: &[u8]) -> Result<ContextInfo, super::ProcessLoadError>
         if segment.p_type != elf::PType::PT_LOAD as u32 {
             continue; // Only loadable segments
         }
-        let start = segment.p_vaddr as u64;
-        let size = segment.p_memsz as usize;
+        let start = segment.p_vaddr & (!0xfff); // Align to page boundary
+        let start_extended = segment.p_vaddr - start;
+        let size = segment.p_memsz as usize + start_extended as usize;
         let mut flags = MemoryRegionFlags(0);
         flags.set_is_writeable(segment.p_flags.write());
         flags.set_is_executable(segment.p_flags.execute());
@@ -63,10 +61,7 @@ fn load_elf_process(data: &[u8]) -> Result<ContextInfo, super::ProcessLoadError>
             }
         }
         if !segment_data.is_empty() {
-            let init_region = (
-                VirtAddr(start),
-                *segment_data
-            );
+            let init_region = (VirtAddr(start + start_extended), *segment_data);
             regions_init.push(init_region);
         }
     }
@@ -74,13 +69,13 @@ fn load_elf_process(data: &[u8]) -> Result<ContextInfo, super::ProcessLoadError>
     if regions.is_empty() {
         return Err(ProcessLoadError::InvalidFile);
     }
+    println!("rip will be set to {:#x}", parsed_elf.header.e_entry);
     let context_info = ContextInfo::new(
         false,
-        None,
-        regions.into_boxed_slice(),
+        &mut regions,
         regions_init.into_boxed_slice(),
-        VirtAddr(0),
-        "".into()
+        VirtAddr(parsed_elf.header.e_entry),
+        "".into(),
     );
 
     context_info.map_err(|_| ProcessLoadError::InvalidFile)

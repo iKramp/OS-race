@@ -136,15 +136,15 @@ pub struct GlobalDescriptorTable {
 impl GlobalDescriptorTable {
     const fn default() -> Self {
         GlobalDescriptorTable {
+            //user segments are inverted because sysret requres user code to be user data + 8
             table: [
-                create_segment_descriptor(0, 0, 0, 0),            //null descriptor
-                create_segment_descriptor(0, 0xFFFFF, 0x9A, 0xA), //code segment
-                create_segment_descriptor(0, 0xFFFFF, 0x92, 0xC), //data segment
-                //user segments are inverted because sysret requres user code to be user data + 8
-                create_segment_descriptor(0, 0xFFFFF, 0xF2, 0xC), //user data segment
-                create_segment_descriptor(0, 0xFFFFF, 0xFA, 0xA), //user code segment
-                create_segment_descriptor(0, 0x0, 0x0, 0x0),      //TSS segment placeholder
-                create_segment_descriptor(0, 0x0, 0x0, 0x0),      //TSS segment placeholder
+                /*0x00*/ create_segment_descriptor(0, 0, 0, 0), //null descriptor
+                /*0x08*/ create_segment_descriptor(0, 0xFFFFF, 0x9A, 0xA), //code segment
+                /*0x10*/ create_segment_descriptor(0, 0xFFFFF, 0x92, 0xC), //data segment
+                /*0x18*/ create_segment_descriptor(0, 0xFFFFF, 0xF2, 0xC), //user data segment
+                /*0x20*/ create_segment_descriptor(0, 0xFFFFF, 0xFA, 0xA), //user code segment
+                /*0x28*/ create_segment_descriptor(0, 0x0, 0x0, 0x0), //TSS segment placeholder
+                /*0x00*/ create_segment_descriptor(0, 0x0, 0x0, 0x0), //TSS segment placeholder
             ],
             len: 5, //len is 2 shorter to account for tss placeholders
         }

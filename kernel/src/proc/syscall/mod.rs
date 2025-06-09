@@ -1,6 +1,6 @@
 use super::context_switch;
 use crate::{msr, proc::syscall};
-use std::{mem_utils::VirtAddr, println};
+use std::mem_utils::VirtAddr;
 
 mod handlers;
 
@@ -14,7 +14,7 @@ const MSR_EFER: u32 = 0xC000_0080;
 ///MSRs and more
 pub(super) fn init() {
     let syscall_cs_ss: u16 = 0x8;
-    let sysret_cs_ss: u16 = 0x18 | 0b11;
+    let sysret_cs_ss: u16 = 0x10 | 0x3;
     let syscall_eip: u64 = 0; //unused
     let syscall_rip: u64 = handler_wrapper as *const fn() as u64;
     let compat_rip: u64 = 0; //unused
@@ -78,10 +78,12 @@ extern "C" fn handler_wrapper() -> ! {
     }
 }
 
+#[allow(unused_variables)]
 extern "C" fn handler(arg1: u64, arg2: u64, arg3: u64, _return_rcx: u64, arg4: u64, old_rsp: VirtAddr) -> ! {
     //handle here
     // println!("Syscall called with args: {}, {}, {}, {}", arg1, arg2, arg3, arg4);
 
+    #[allow(clippy::single_match)]
     match arg1 {
         1 => syscall::handlers::console_write(arg2, 0, 0),
         _ => {}

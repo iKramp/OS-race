@@ -3,6 +3,8 @@
 use super::ParseError;
 use bitfield::bitfield;
 
+#[repr(C)]
+#[derive(Debug)]
 pub struct Elf64_Phdr {
     pub p_type: u32,
     pub p_flags: PFlags,
@@ -11,7 +13,7 @@ pub struct Elf64_Phdr {
     pub p_vaddr: u64,
     ///unused
     pub p_paddr: u64,
-    ///segment size on disk. Differs from in memory for uninitialized data 
+    ///segment size on disk. Differs from in memory for uninitialized data
     ///(not on disk, but reserved in memory)
     pub p_filesz: u64,
     ///segment size on memory
@@ -19,20 +21,19 @@ pub struct Elf64_Phdr {
     pub p_align: u64,
 }
 
-pub(super) fn get_segment_table(data: &[u8], e_shoff: u64, e_shentsize: u16, e_shnum: u16) -> Result<&[Elf64_Phdr], ParseError> {
-    if e_shentsize as usize != core::mem::size_of::<Elf64_Phdr>() {
+pub(super) fn get_segment_table(data: &[u8], e_phoff: u64, e_phentsize: u16, e_phnum: u16) -> Result<&[Elf64_Phdr], ParseError> {
+    if e_phentsize as usize != core::mem::size_of::<Elf64_Phdr>() {
         return Err(ParseError::InvalidData);
     }
-    if e_shoff as usize + (e_shentsize + e_shnum) as usize > data.len() {
+    if e_phoff as usize + (e_phentsize * e_phnum) as usize > data.len() {
         return Err(ParseError::InvalidData);
     }
     unsafe {
-        let first_ptr = data.as_ptr().add(e_shoff as usize) as *const Elf64_Phdr;
-        let slice = core::slice::from_raw_parts(first_ptr, e_shnum as usize);
+        let first_ptr = data.as_ptr().add(e_phoff as usize) as *const Elf64_Phdr;
+        let slice = core::slice::from_raw_parts(first_ptr, e_phnum as usize);
         Ok(slice)
     }
 }
-
 
 #[repr(u32)]
 #[derive(Debug)]

@@ -14,9 +14,22 @@ pub fn init_process_loaders() {
     }
 }
 
+pub(super) fn load_process(data: &[u8]) -> Result<ContextInfo, ProcessLoadError> {
+    unsafe {
+        let loaders = PROCESS_LOADERS.assume_init_ref();
+        for loader in loaders {
+            if (loader.is_this_type)(data) {
+                return (loader.load_context)(data);
+            }
+        }
+    }
+    Err(ProcessLoadError::UnsupportedProcessFormat)
+}
+
 struct ProcessLoader {
     is_this_type: fn(&[u8]) -> bool,
-    load_process: fn(&[u8]) -> Result<ContextInfo, ProcessLoadError>,
+    load_context: fn(&[u8]) -> Result<ContextInfo, ProcessLoadError>,
+    //potentially a post load hook
 }
 
 #[derive(Debug)]

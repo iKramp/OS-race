@@ -14,13 +14,20 @@ pub extern "C" fn interrupt_context_switch(on_stack_data: &mut InterruptProcesso
 }
 
 pub fn context_switch(on_stack_data: StackCpuStateData, force_switch: bool) {
+    if !unsafe { PROC_INITIALIZED } {
+        return;
+    }
+
     if !force_switch && !is_root_interrupt(&on_stack_data) {
         return;
     }
 
-    if !unsafe { PROC_INITIALIZED } {
-        return;
-    }
+    let cpu_locals = CpuLocals::get();
+    let current_pid = cpu_locals.current_process;
+    let mut process_states_lock = PROCESSES.lock();
+
+    let current_proc_data = process_states_lock.get_mut(&Pid(current_pid));
+    save_current_proc(current_proc_data, on_stack_data);
 
     // Switch to the next process
     let mut scheduler_lock = SCHEDULER.lock();
@@ -33,11 +40,9 @@ pub fn context_switch(on_stack_data: StackCpuStateData, force_switch: bool) {
         }
     };
 
-    let mut process_states_lock = PROCESSES.lock();
-
     let Some(process_data) = prepare_process_for_run(pid, scheduler_lock, &mut process_states_lock) else {
-        //thread is not ready to run
-        return;
+        cpu_locals.current_process = 0; //reset current process
+        panic!("idk");
     };
 
     //---------commit point---------
@@ -46,12 +51,8 @@ pub fn context_switch(on_stack_data: StackCpuStateData, force_switch: bool) {
     //process states lock is dropped) is switch from running to stopping, but that is handled after
     //this execution cycle
     let process_data = unsafe { &*(process_data as *const ProcessData) };
+    cpu_locals.current_process = process_data.pid.0;
 
-    let cpu_locals = CpuLocals::get();
-    let current_pid = cpu_locals.current_process;
-    let current_proc_data = process_states_lock.get_mut(&Pid(current_pid));
-
-    save_current_proc(current_proc_data, on_stack_data);
     drop(process_states_lock);
 
     dispatch(process_data);

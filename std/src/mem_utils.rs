@@ -136,7 +136,7 @@ pub fn get_physical_offset() -> PhysOffset {
 ///the address must be valid and there are no other references to the data
 ///This can be used as is if all the data has been written before using the function,
 ///becasue rust cannot rearrange memory reads when it comes to pointers (which are used)
-///If data changes after this function is called, a read_volatile needs to be used
+///If data nges after this function is called, a read_volatile needs to be used
 #[inline]
 pub unsafe fn get_at_virtual_addr<T>(addr: VirtAddr) -> &'static mut T {
     let data: *mut T = addr.0 as *mut T;
@@ -181,6 +181,16 @@ pub unsafe fn memset_physical_addr(addr: PhysAddr, value: u8, size: usize) {
     unsafe {
         let virt_addr = addr + PHYSICAL_OFFSET;
         memset_virtual_addr(virt_addr, value, size);
+    }
+}
+
+///# Safety
+///the physical address offset must be correct
+#[inline]
+pub unsafe fn memcopy_physical_buffer(dest: PhysAddr, src: &[u8]) {
+    unsafe {
+        let dest_ptr = (dest + PHYSICAL_OFFSET).0 as *mut u8;
+        core::ptr::copy_nonoverlapping(src.as_ptr(), dest_ptr, src.len());
     }
 }
 

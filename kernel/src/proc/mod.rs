@@ -8,6 +8,7 @@ use std::{
     boxed::Box,
     collections::btree_map::BTreeMap,
     mem_utils::VirtAddr,
+    println,
     string::ToString,
     sync::{arc::Arc, mutex::Mutex},
     vec::Vec,
@@ -19,9 +20,9 @@ use crate::{interrupts::InterruptProcessorState, memory::paging::PageTree};
 mod context;
 mod context_switch;
 mod dispatcher;
+mod loaders;
 mod scheduler;
 mod syscall;
-mod loaders;
 pub use context_switch::{context_switch, interrupt_context_switch};
 
 ///stores process metadata
@@ -72,7 +73,6 @@ pub enum StackCpuStateData<'a> {
 struct MemoryContext {
     is_32_bit: bool,
     page_tree: PageTree,
-    default_stack_size_pages: u8,
     stacks: Vec<Stack>,
     //shared regions here?
 }
@@ -101,6 +101,11 @@ pub fn init() {
     drop(scheduler);
     create_fallback_process();
     loaders::init_process_loaders();
+
+    let context_info = loaders::load_process(crate::TEST_EXECUTABLE).expect("Failed to load test executable");
+    let pid = create_process(context_info);
+    println!("Created process with pid: {:?}", pid);
+
     syscall::init();
 }
 
@@ -166,8 +171,7 @@ pub fn create_fallback_process() {
 
     let fake_context = ContextInfo::new(
         false,
-        Some(1),
-        Box::new([code_region, data_region]),
+        &mut [code_region, data_region],
         Box::new([(VirtAddr(0x1000), &code_init), (VirtAddr(0x2000), data_init)]),
         VirtAddr(0x1000),
         "fallback_process".to_string().into_boxed_str(),

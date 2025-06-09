@@ -25,16 +25,16 @@ pub struct Elf64_Shdr {
     pub sh_entsize: u64,
 }
 
-pub(super) fn get_section_table(data: &[u8], e_phoff: u64, e_phentsize: u16, e_phnum: u16) -> Result<&[Elf64_Shdr], ParseError> {
-    if e_phentsize as usize != core::mem::size_of::<Elf64_Shdr>() {
+pub(super) fn get_section_table(data: &[u8], e_shoff: u64, e_shentsize: u16, e_shnum: u16) -> Result<&[Elf64_Shdr], ParseError> {
+    if e_shentsize as usize != core::mem::size_of::<Elf64_Shdr>() {
         return Err(ParseError::InvalidData);
     }
-    if e_phoff as usize + (e_phentsize + e_phnum) as usize > data.len() {
+    if e_shoff as usize + (e_shentsize * e_shnum) as usize > data.len() {
         return Err(ParseError::InvalidData);
     }
     unsafe {
-        let first_ptr = data.as_ptr().add(e_phoff as usize) as *const Elf64_Shdr;
-        let slice = core::slice::from_raw_parts(first_ptr, e_phnum as usize);
+        let first_ptr = data.as_ptr().add(e_shoff as usize) as *const Elf64_Shdr;
+        let slice = core::slice::from_raw_parts(first_ptr, e_shnum as usize);
         Ok(slice)
     }
 }
@@ -59,7 +59,7 @@ pub enum ShType {
     SSHT_PREINIT_ARRAY = 16, /* Array of pre-constructors */
     SSHT_GROUP = 17,         /* Section group */
     SSHT_SYMTAB_SHNDX = 18,  /* Extended section indeces */
-    NUM_SH_TYPES = 19,      /* Number of defined types */
+    NUM_SH_TYPES = 19,       /* Number of defined types */
 }
 
 bitfield! {

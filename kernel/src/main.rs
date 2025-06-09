@@ -35,14 +35,7 @@ mod vfs;
 mod vga;
 use limine::LIMINE_BOOTLOADER_REQUESTS;
 
-#[repr(align(32))]
-pub struct ElfDataWrapper<'a> {
-    data: &'a [u8]
-}
-
-const TEST_EXECUTABLE: ElfDataWrapper = ElfDataWrapper {
-    data: include_bytes!("../../assets/libr")
-};
+const TEST_EXECUTABLE: &[u8] = include_bytes!("../../assets/libr");
 
 #[unsafe(no_mangle)]
 extern "C" fn _start() -> ! {
@@ -95,10 +88,7 @@ extern "C" fn _start() -> ! {
     }
 
     //start first proc
-    // unsafe { core::arch::asm!("int 254") };
-
-    let res = parsers::elf::parse_unaligned(TEST_EXECUTABLE.data);
-    println!("{:?}", res);
+    unsafe { core::arch::asm!("int 254") };
 
     println!("looping infinitely now");
     let mut a = 0;

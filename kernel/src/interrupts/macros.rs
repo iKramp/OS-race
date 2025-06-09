@@ -63,7 +63,7 @@ macro_rules! handler {
                         //mov pushed cs to register by offsetting from rsp
                         "
                             xor rax, rax
-                            mov rax, [rsp + 8 * 17] //ss
+                            mov rax, [rsp + 8 * 17] //cs
                                                     //skip swap if rax == 8
                             cmp rax, 8
                             je 3f
@@ -234,7 +234,7 @@ impl InterruptProcessorState {
             interrupt_frame: InterruptFrame {
                 rip,
                 cs: 0x23,
-                rflags: 0x3202,
+                rflags: 0x202,
                 rsp,
                 ss: 0x1B,
             },

@@ -1,21 +1,8 @@
 #![allow(non_camel_case_types)] //these types conform to the ELF specification. Will be re-exported
-
 use super::ParseError;
 
-/*
-    ElfN_Addr       Unsigned program address, uintN_t
-    ElfN_Off        Unsigned file offset, uintN_t
-    ElfN_Section    Unsigned section index, uint16_t
-    ElfN_Versym     Unsigned version symbol information, uint16_t
-    Elf_Byte        unsigned char
-    ElfN_Half       uint16_t
-    ElfN_Sword      int32_t
-    ElfN_Word       uint32_t
-    ElfN_Sxword     int64_t
-    ElfN_Xword      uint64_t
-*/
-
 #[repr(C)]
+#[derive(Debug)]
 pub struct Elf64_Ehdr {
     pub e_ident: EIdent,
     pub e_type: u16,
@@ -48,6 +35,7 @@ impl Elf64_Ehdr {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct EIdent {
     /// (0x7f)ELF magic number
     pub ei_magic: [u8; 4],
@@ -88,10 +76,10 @@ impl EIdent {
 #[repr(u16)]
 pub enum EType {
     ET_NONE = 0,
-    ET_EXEC = 1,
-    ET_DYN = 2,
-    ET_REL = 3,
-    ET_CORE = 4
+    ET_REL = 1,
+    ET_EXEC = 2,
+    ET_DYN = 3,
+    ET_CORE = 4,
 }
 
 #[repr(u8)]

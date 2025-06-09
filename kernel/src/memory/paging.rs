@@ -163,7 +163,7 @@ impl PageTable {
                         || curr_range.write != entry.writeable()
                         || curr_range.execute == entry.no_execute()
                         || (curr_range.phys.0 + curr_range.len != entry.address().0
-                            && curr_range.phys.0 - curr_range.len != entry.address().0)
+                            && curr_range.phys.0 - 0x1000 != entry.address().0)
                     {
                         println!("{curr_range}");
                         current_range = None
@@ -330,10 +330,11 @@ impl PageTable {
         panic!("could not find available virtual page");
     }
 
-    pub fn allocate(&mut self, virtual_address: VirtAddr) {
+    pub fn allocate(&mut self, virtual_address: VirtAddr) -> PhysAddr {
         unsafe {
             let frame_addr = physical_allocator::allocate_frame();
-            self.mmap(virtual_address, frame_addr)
+            self.mmap(virtual_address, frame_addr);
+            frame_addr
         }
     }
 
@@ -739,12 +740,19 @@ impl PageTree {
         }
     }
 
-    pub fn allocate_set_virtual(&mut self, physical_address: Option<PhysAddr>, virtual_address: std::mem_utils::VirtAddr) {
+    pub fn allocate_set_virtual(
+        &mut self,
+        physical_address: Option<PhysAddr>,
+        virtual_address: std::mem_utils::VirtAddr,
+    ) -> PhysAddr {
         unsafe {
             let level_4_table = get_at_physical_addr::<PageTable>(self.level_4_table);
             match physical_address {
                 None => level_4_table.allocate(virtual_address),
-                Some(physical_address) => level_4_table.mmap(virtual_address, physical_address),
+                Some(physical_address) => {
+                    level_4_table.mmap(virtual_address, physical_address);
+                    physical_address
+                }
             }
         }
     }

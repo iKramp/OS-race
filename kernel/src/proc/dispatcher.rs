@@ -114,7 +114,7 @@ fn return_syscalled(cpu_state: &SyscallCpuState) -> ! {
 
 pub(super) fn is_root_interrupt(on_stack_data: &StackCpuStateData) -> bool {
     match on_stack_data {
-        StackCpuStateData::Interrupt(interrupt_state) => interrupt_state.interrupt_frame.cs == 0x16,
+        StackCpuStateData::Interrupt(interrupt_state) => interrupt_state.interrupt_frame.cs == 0x23,
         StackCpuStateData::Syscall(_) => true,
     }
 }
