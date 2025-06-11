@@ -94,8 +94,8 @@ pub extern "C" fn general_protection_fault(proc_data: &mut InterruptProcessorSta
     printlnc!((0, 0, 255), "EXCEPTION: GPF. proc_data: {:#X?}", proc_data);
     //print GDT
     let cpu_locals = CpuLocals::get();
-    let gdt_addr = cpu_locals.gdt_ptr;
-    let gdt = unsafe { get_at_virtual_addr::<GlobalDescriptorTable>(gdt_addr) };
+    let gdt_ptr = cpu_locals.gdt_ptr;
+    let gdt = unsafe { get_at_virtual_addr::<GlobalDescriptorTable>(VirtAddr(gdt_ptr.base)) };
     println!("gdt: {:#x?}", gdt);
     unsafe {
         loop {

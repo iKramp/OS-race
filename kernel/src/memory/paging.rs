@@ -214,10 +214,7 @@ impl PageTable {
         let entry_inedx = (addr.0 >> (3 + level * 9)) & 0b111_111_111;
         let entry = &self.entries[entry_inedx as usize];
         if entry.present() {
-            println!(
-                "Entry on level {level}: {:X}, {}",
-                entry.0, entry
-            );
+            println!("Entry on level {level}: {:X}, {}", entry.0, entry);
             if level != 1 && !entry.huge_page() {
                 let lower_table = unsafe { get_at_physical_addr::<PageTable>(entry.address()) };
                 lower_table.print_entries(addr, level - 1);

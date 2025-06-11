@@ -3,7 +3,6 @@
 use crate::interrupts::{self, idt::IDT_POINTER};
 use crate::println;
 use core::arch::asm;
-use std::mem_utils::get_at_virtual_addr;
 
 use crate::{
     memory::paging::PageTree,
@@ -62,8 +61,8 @@ fn set_cpu_local(comm_lock: *mut u8) {
     let cpu_local_ptr = read_8_bytes(comm_lock);
     crate::msr::set_msr(0xC0000101, cpu_local_ptr);
     let cpu_locals = cpu_locals::CpuLocals::get();
-    let gdt_ptr = unsafe { get_at_virtual_addr(cpu_locals.gdt_ptr) };
-    interrupts::load_gdt(*gdt_ptr);
+    let gdt_ptr = cpu_locals.gdt_ptr;
+    interrupts::load_gdt(gdt_ptr);
 
     //set again because setting gdt clears gs register
     crate::msr::set_msr(0xC0000101, cpu_local_ptr);

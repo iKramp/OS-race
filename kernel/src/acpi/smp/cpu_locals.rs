@@ -1,4 +1,6 @@
-use std::{boxed::Box, mem_utils::VirtAddr};
+use std::mem_utils::VirtAddr;
+
+use crate::interrupts::idt::TablePointer;
 
 #[repr(C)]
 pub struct CpuLocals {
@@ -6,14 +8,14 @@ pub struct CpuLocals {
     pub kernel_stack_base: VirtAddr,
     pub stack_size_pages: u64,
     /// Points to TablePointer with base and limit of GDT
-    pub gdt_ptr: VirtAddr,
+    pub gdt_ptr: TablePointer,
     pub current_process: u32,
     pub apic_id: u8,
     pub processor_id: u8,
 }
 
 impl CpuLocals {
-    pub fn new(kernel_stack_base: VirtAddr, stack_size_pages: u64, apic_id: u8, processor_id: u8, gdt_ptr: VirtAddr) -> Self {
+    pub fn new(kernel_stack_base: VirtAddr, stack_size_pages: u64, apic_id: u8, processor_id: u8, gdt_ptr: TablePointer) -> Self {
         Self {
             kernel_stack_base,
             stack_size_pages,

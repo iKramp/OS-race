@@ -41,7 +41,7 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
             KERNEL_STACK_SIZE_PAGES as u64,
             platform_info.boot_processor.apic_id,
             platform_info.boot_processor.processor_id,
-            VirtAddr(bsp_gdt.base),
+            bsp_gdt,
         );
         let bsp_local_ptr = add_cpu_locals(bsp_local);
         crate::msr::set_msr(0xC0000101, bsp_local_ptr.0);
@@ -76,7 +76,7 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
                 KERNEL_STACK_SIZE_PAGES as u64,
                 cpu.1.apic_id,
                 cpu.1.processor_id,
-                VirtAddr(ap_gdt.base),
+                ap_gdt,
             );
             let ap_local_ptr = add_cpu_locals(ap_local);
 
