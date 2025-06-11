@@ -1,4 +1,4 @@
-use std::mem_utils::VirtAddr;
+use std::{boxed::Box, mem_utils::VirtAddr};
 
 #[repr(C)]
 pub struct CpuLocals {

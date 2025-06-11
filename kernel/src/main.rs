@@ -61,17 +61,17 @@ extern "C" fn _start() -> ! {
     println!("cmd_args: {:?}", cmd_args);
 
     acpi::init_acpi();
-
-    pci::enumerate_devices();
-    vfs::init();
-
-    let res = vfs::mount_partition(cmd_args.root_partition, "/");
-    if let Err(e) = res {
-        println!("{}", e);
-        panic!("Failed to mount root partition");
-    }
-
-    println!("{:?}", vfs::get_dir_entries(vfs::resolve_path("/", "/")));
+    //
+    // pci::enumerate_devices();
+    // vfs::init();
+    //
+    // let res = vfs::mount_partition(cmd_args.root_partition, "/");
+    // if let Err(e) = res {
+    //     println!("{}", e);
+    //     panic!("Failed to mount root partition");
+    // }
+    //
+    // println!("{:?}", vfs::get_dir_entries(vfs::resolve_path("/", "/")));
 
     proc::init();
 

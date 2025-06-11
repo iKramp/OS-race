@@ -19,6 +19,7 @@ bitfield! {
     pub dirty, _: 6;
     pub huge_page, set_huge_page: 7; //is shared with pat
     pub global, set_global: 8;
+    pub reserved, _: 51, 48;
     pub no_execute, set_no_execute: 63;
 }
 
@@ -28,6 +29,7 @@ impl Display for PageTableEntry {
             .field(&format_args!("P({})", self.0 & 0b1))
             .field(&format_args!("R/W({})", self.writeable()))
             .field(&format_args!("U({})", self.user_accessible()))
+            .field(&format_args!("RSVD({})", self.reserved()))
             .finish()
     }
 }
@@ -205,6 +207,23 @@ impl PageTable {
                 print!("{}", if entry.present() { 1 } else { 0 });
             }
             println!("");
+        }
+    }
+
+    pub fn print_entries(&self, addr: VirtAddr, level: u64) {
+        let entry_inedx = (addr.0 >> (3 + level * 9)) & 0b111_111_111;
+        let entry = &self.entries[entry_inedx as usize];
+        if entry.present() {
+            println!(
+                "Entry on level {level}: {:X}, {}",
+                entry.0, entry
+            );
+            if level != 1 && !entry.huge_page() {
+                let lower_table = unsafe { get_at_physical_addr::<PageTable>(entry.address()) };
+                lower_table.print_entries(addr, level - 1);
+            }
+        } else {
+            println!("Entry at {:#x?} on level {level} is not present", addr.0 >> (3 + level * 9));
         }
     }
 
@@ -635,6 +654,14 @@ impl PageTree {
             if let Some(range) = level_4_table.print_range(None, 4, VirtAddr(0)) {
                 println!("{range}");
             }
+        }
+    }
+
+    pub fn print_entries(&self, addr: VirtAddr) {
+        println!("printing entries for {:?}", addr);
+        unsafe {
+            let level_4_table = get_at_physical_addr::<PageTable>(self.level_4_table);
+            level_4_table.print_entries(addr, 4);
         }
     }
 

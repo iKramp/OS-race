@@ -50,6 +50,7 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
         let comm_lock = destination.add(56);
         for cpu in platform_info.application_processors.iter().enumerate() {
             let ap_stack_top = prepare_kernel_stack(KERNEL_STACK_SIZE_PAGES);
+            PAGE_TREE_ALLOCATOR.print_entries(VirtAddr(0xfffffffffff92fe8));
             (destination.add(32) as *mut u64).write_volatile(ap_stack_top.0);
 
             let lapic_registers = get_at_virtual_addr::<LapicRegisters>(LAPIC_REGISTERS);
@@ -121,6 +122,7 @@ fn copy_trampoline() {
             "mov {}, cr3",
             out(reg) cr3,
         );
+        assert!(cr3 < 2_u64.pow(32));
         let gdt_ptr = crate::interrupts::STATIC_GDT_PTR;
         let page_tree_root = PageTree::get_level4_addr();
         let gdt_ptr = TablePointer {
@@ -132,8 +134,8 @@ fn copy_trampoline() {
         let wait_loop_ptr = super::ap_startup::ap_started_wait_loop as *const () as u64;
 
         (destination.add(4) as *mut u32).write_volatile(destination as u32);
-        (destination.add(14) as *mut TablePointer).write_volatile(gdt_ptr);
 
+        (destination.add(14) as *mut TablePointer).write_volatile(gdt_ptr);
         (destination.add(24) as *mut u64).write_volatile(cr3);
         (destination.add(40) as *mut u64).write_volatile(wait_loop_ptr);
         (destination.add(48) as *mut u64).write_volatile(get_mtrr_def_type());
