@@ -1,3 +1,4 @@
+
 use crate::{interrupts::InterruptProcessorState, memory::paging};
 
 use super::{CpuStateType, ProcessData, StackCpuStateData, syscall::SyscallCpuState};
@@ -36,23 +37,6 @@ pub(super) fn dispatch(new_proc: &ProcessData) -> ! {
         CpuStateType::Interrupt(interrupt_frame) => return_interrupted(interrupt_frame),
         CpuStateType::Syscall(state) => return_syscalled(state),
     }
-}
-
-pub(super) fn save_current_proc(old_proc: Option<&mut ProcessData>, on_stack_data: StackCpuStateData) {
-    if let Some(old_proc) = old_proc {
-        match on_stack_data {
-            StackCpuStateData::Interrupt(interrupt_frame) => save_interrupted(old_proc, interrupt_frame),
-            StackCpuStateData::Syscall(syscall_data) => save_syscalled(old_proc, &syscall_data),
-        }
-    }
-}
-
-fn save_interrupted(old_proc: &mut ProcessData, interrupt_frame: &InterruptProcessorState) {
-    old_proc.cpu_state = CpuStateType::Interrupt(interrupt_frame.clone());
-}
-
-fn save_syscalled(old_proc: &mut ProcessData, syscall_data: &SyscallCpuState) {
-    old_proc.cpu_state = CpuStateType::Syscall(syscall_data.clone());
 }
 
 fn return_interrupted(interrupt_frame: &InterruptProcessorState) -> ! {

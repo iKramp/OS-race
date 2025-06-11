@@ -229,6 +229,16 @@ pub fn translate_phys_virt_addr(addr: PhysAddr) -> VirtAddr {
 ///# Safety
 ///Caller must ensure the lifetimes will work out, even though it may be impossible in rust's type
 ///system
+pub unsafe fn set_static_lifetime<T>(data: &T) -> &'static T {
+    let data_ptr = data as *const T;
+    let static_data: &'static T = unsafe { &*data_ptr };
+    static_data
+}
+
+#[inline]
+///# Safety
+///Caller must ensure the lifetimes will work out, even though it may be impossible in rust's type
+///system
 pub unsafe fn set_static_lifetime_mut<T>(data: &mut T) -> &'static mut T {
     let data_ptr = data as *mut T;
     let static_data: &'static mut T = unsafe { &mut *data_ptr };

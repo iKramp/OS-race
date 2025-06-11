@@ -1,9 +1,7 @@
 use crate::interrupts::InterruptProcessorState;
 use crate::proc::CpuStateType;
 use crate::proc::PROCESS_ID_COUNTER;
-use crate::proc::PROCESSES;
 use crate::proc::ProcessData;
-use crate::proc::ProcessState;
 use crate::proc::SCHEDULER;
 use std::string::ToString;
 use std::sync::arc::Arc;
@@ -36,16 +34,12 @@ pub fn create_process(context_info: ContextInfo) -> Pid {
         is_32_bit,
         cmdline,
         memory_context: Arc::new(memory_context),
-        proc_state: ProcessState::Paused,
         cpu_state: CpuStateType::Interrupt(cpu_state),
     };
 
-    let mut proc_state_lock = PROCESSES.lock();
-    proc_state_lock.insert(pid, process_data);
-    drop(proc_state_lock);
     let mut scheduler_lock = SCHEDULER.lock();
     let scheduler = unsafe { scheduler_lock.assume_init_mut() };
-    scheduler.accept_new_process(pid);
+    scheduler.accept_new_process(pid, process_data);
     pid
 }
 

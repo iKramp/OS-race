@@ -1,6 +1,6 @@
 use std::mem_utils::VirtAddr;
 
-use crate::interrupts::idt::TablePointer;
+use crate::{interrupts::idt::TablePointer, proc::Pid};
 
 #[repr(C)]
 pub struct CpuLocals {
@@ -9,7 +9,7 @@ pub struct CpuLocals {
     pub stack_size_pages: u64,
     /// Points to TablePointer with base and limit of GDT
     pub gdt_ptr: TablePointer,
-    pub current_process: u32,
+    pub current_process: Pid,
     pub apic_id: u8,
     pub processor_id: u8,
 }
@@ -22,7 +22,7 @@ impl CpuLocals {
             apic_id,
             processor_id,
             gdt_ptr,
-            current_process: u32::MAX,
+            current_process: Pid(0),
         }
     }
 
