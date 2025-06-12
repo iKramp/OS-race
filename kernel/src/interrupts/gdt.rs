@@ -7,8 +7,7 @@ use super::idt::TablePointer;
 pub const DOUBLE_FAULT_IST: u16 = 1;
 pub const NMI_IST: u16 = 2;
 pub const MACHINE_CHECK_IST: u16 = 3;
-pub const FIRST_CONTEXT_SWITCH_IST: u16 = 4;
-pub const DEBUG_IST: u16 = 5;
+pub const DEBUG_IST: u16 = 4;
 
 pub const KERNEL_STACK_SIZE_BYTES: usize = KERNEL_STACK_SIZE_PAGES as usize * 0x1000;
 pub static mut STATIC_GDT_PTR: TablePointer = TablePointer { limit: 0, base: 0 };
@@ -77,18 +76,6 @@ fn init_tss(tss: &mut TaskStateSegment, static_stacks: bool, kernel_stack_ptr: O
         }
     };
     tss.interrupt_stack_table[MACHINE_CHECK_IST as usize - 1] = {
-        #[used]
-        static mut STACK: Ist = Ist {
-            stack: [0; KERNEL_STACK_SIZE_BYTES],
-        };
-
-        if static_stacks {
-            core::ptr::addr_of!(STACK) as u64 + KERNEL_STACK_SIZE_BYTES as u64
-        } else {
-            prepare_kernel_stack(KERNEL_STACK_SIZE_PAGES).0
-        }
-    };
-    tss.interrupt_stack_table[FIRST_CONTEXT_SWITCH_IST as usize - 1] = {
         #[used]
         static mut STACK: Ist = Ist {
             stack: [0; KERNEL_STACK_SIZE_BYTES],

@@ -2,7 +2,7 @@ use crate::handler;
 use crate::interrupts::macros::InterruptProcessorState;
 use crate::proc::interrupt_context_switch;
 
-use super::gdt::{DEBUG_IST, DOUBLE_FAULT_IST, FIRST_CONTEXT_SWITCH_IST, MACHINE_CHECK_IST, NMI_IST};
+use super::gdt::{DEBUG_IST, DOUBLE_FAULT_IST, MACHINE_CHECK_IST, NMI_IST};
 use super::handlers::*;
 use core::arch::asm;
 use std::printlnc;
@@ -132,26 +132,21 @@ impl Idt {
         self.set(Entry::new(handler!(legacy_keyboard_interrupt)), 33);
 
         self.set(Entry::new(handler!(apic_timer_tick)), 100);
+        self.set(Entry::new(handler!(inter_processor_interrupt)), 101);
+        self.set(Entry::new(handler!(first_context_switch)), 254);
         self.set(Entry::new(handler!(spurious_interrupt)), 255);
 
         //entries set by other files:
-        //38-255 other apic interrupt (blank)
-        //67 - apic error
-        //32: selected timer (100 is free to use after apic init)
+        //32 - selected timer (100 is free to use after apic init)
         //33 - apic keyboard
         //32 + 12 (44) - ps2 mouse
         //32 + 13 (45) - fpu
         //32 + 14 (46) - ata????
-        //254 first context switch
+        //67 - apic error
+        //253 - inter processor interrupt
+        //254 - first context switch
+        //255 - spurious interrupt
         //use anything above 128 for pci devices for now
-    }
-
-    //apic sets everything from 38 to 254. Here be other handlers
-    pub fn set_after_apic(&mut self) {
-        self.set(
-            Entry::ist_index(FIRST_CONTEXT_SWITCH_IST, handler!(first_context_switch)),
-            254,
-        );
     }
 }
 

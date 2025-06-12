@@ -42,8 +42,16 @@ pub extern "C" fn ap_started_wait_loop() -> ! {
     loop {
         unsafe {
             core::arch::asm!("hlt");
+            if crate::proc::PROC_INITIALIZED {
+                //if proc initialized, we can start executing processes
+                break;
+            }
         }
     }
+
+    crate::proc::init_ap();
+
+    unsafe { core::arch::asm!("int 254", options(noreturn)) };
 }
 
 fn set_initialized() {

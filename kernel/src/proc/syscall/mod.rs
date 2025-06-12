@@ -1,4 +1,4 @@
-use super::context_switch;
+use super::context_switch::no_ret_context_switch;
 use crate::{msr, proc::syscall};
 use std::mem_utils::VirtAddr;
 
@@ -89,11 +89,7 @@ extern "C" fn handler(arg1: u64, arg2: u64, arg3: u64, _return_rcx: u64, arg4: u
         _ => {}
     }
 
-    //force switch to skip root interrupt check. IS root anyway
-    loop {
-        context_switch(super::StackCpuStateData::Syscall(SyscallCpuState { rsp: old_rsp }), true);
-        //if context switch is unsuccessful just retry lol
-    }
+    no_ret_context_switch(super::StackCpuStateData::Syscall(SyscallCpuState { rsp: old_rsp }));
 }
 
 #[derive(Debug, Clone)]

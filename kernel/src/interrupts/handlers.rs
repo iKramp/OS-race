@@ -1,5 +1,5 @@
 use crate::{
-    acpi::cpu_locals::CpuLocals,
+    acpi::{LAPIC_REGISTERS, cpu_locals::CpuLocals},
     interrupts::gdt::GlobalDescriptorTable,
     memory::paging::PageTree,
     proc::{StackCpuStateData, context_switch, set_proc_initialized},
@@ -111,10 +111,8 @@ pub extern "C" fn other_legacy_interrupt(_proc_data: &mut InterruptProcessorStat
 
 #[inline]
 pub fn apic_eoi() {
-    unsafe {
-        let lapic_registers = std::mem_utils::get_at_virtual_addr::<crate::acpi::LapicRegisters>(crate::acpi::LAPIC_REGISTERS);
-        lapic_registers.end_of_interrupt.bytes = 0;
-    }
+    let lapic_registers = unsafe { LAPIC_REGISTERS.assume_init_mut() };
+    lapic_registers.end_of_interrupt.bytes = 0;
 }
 
 #[inline]
@@ -148,13 +146,11 @@ pub extern "C" fn legacy_timer_tick(_proc_data: &mut InterruptProcessorState) {
 }
 
 pub extern "C" fn apic_error(_proc_data: &mut InterruptProcessorState) {
-    unsafe {
-        let lapic_registers = std::mem_utils::get_at_virtual_addr::<crate::acpi::LapicRegisters>(crate::acpi::LAPIC_REGISTERS);
-        lapic_registers.error_status.bytes = 0; //activate it to load the real value
-        let _error_register = &lapic_registers.error_status;
-        //do error shit
-        apic_eoi();
-    }
+    let lapic_registers = unsafe { LAPIC_REGISTERS.assume_init_mut() };
+    lapic_registers.error_status.bytes = 0; //activate it to load the real value
+    let _error_register = &lapic_registers.error_status;
+    //do error shit
+    apic_eoi();
 }
 
 pub extern "C" fn spurious_interrupt(_proc_data: &mut InterruptProcessorState) {
@@ -190,4 +186,11 @@ pub extern "C" fn primary_ata_hard_disk(_proc_data: &mut InterruptProcessorState
 pub extern "C" fn first_context_switch(proc_data: &mut InterruptProcessorState) {
     set_proc_initialized();
     context_switch(StackCpuStateData::Interrupt(proc_data), true);
+}
+
+pub extern "C" fn inter_processor_interrupt(proc_data: &mut InterruptProcessorState) {
+    // This is a placeholder for inter-processor interrupts
+    // Currently, it just acknowledges the interrupt
+    apic_eoi();
+    printlnc!((0, 255, 0), "Inter-processor interrupt received: {:#X?}", proc_data);
 }

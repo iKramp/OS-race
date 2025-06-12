@@ -12,7 +12,7 @@ use crate::{
     println,
 };
 use core::sync::atomic::{AtomicBool, AtomicU8};
-use std::mem_utils::{VirtAddr, get_at_virtual_addr};
+use std::mem_utils::VirtAddr;
 
 pub static mut CPU_LOCK: AtomicBool = AtomicBool::new(false);
 pub static mut CPUS_INITIALIZED: AtomicU8 = AtomicU8::new(0);
@@ -20,7 +20,7 @@ pub static mut CPU_LOCALS: Option<std::Vec<VirtAddr>> = None;
 
 //custom data starts at 0x4 from ap_startup
 
-use crate::acpi::{LAPIC_REGISTERS, LapicRegisters, platform_info::PlatformInfo};
+use crate::acpi::{LAPIC_REGISTERS, platform_info::PlatformInfo};
 
 pub fn wake_cpus(platform_info: &PlatformInfo) {
     copy_trampoline();
@@ -53,7 +53,7 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
             PAGE_TREE_ALLOCATOR.print_entries(VirtAddr(0xfffffffffff92fe8));
             (destination.add(32) as *mut u64).write_volatile(ap_stack_top.0);
 
-            let lapic_registers = get_at_virtual_addr::<LapicRegisters>(LAPIC_REGISTERS);
+            let lapic_registers = LAPIC_REGISTERS.assume_init_mut();
             println!("Waking up CPU {}", cpu.1.apic_id);
             if cpu.1.apic_id == 255 {
                 panic!("invalid cpu: {:?}", cpu);

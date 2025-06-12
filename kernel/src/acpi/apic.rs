@@ -1,16 +1,15 @@
 #![allow(clippy::unusual_byte_groupings, static_mut_refs)]
 
 use crate::proc::interrupt_context_switch;
-use std::mem_utils::{PhysAddr, VirtAddr};
-use std::printlnc;
+use core::mem::MaybeUninit;
+use std::mem_utils::PhysAddr;
 
 use unroll::unroll_for_loops;
 
 use crate::{
     handler,
     interrupts::{
-        InterruptProcessorState, LEGACY_PIC_TIMER_TICKS, PIC_TIMER_FREQUENCY, TIMER_TICKS,
-        handlers::apic_eoi,
+        LEGACY_PIC_TIMER_TICKS, PIC_TIMER_FREQUENCY, TIMER_TICKS,
         handlers::*,
         idt::{Entry, IDT},
     },
@@ -19,7 +18,7 @@ use crate::{
     utils::byte_to_port,
 };
 
-pub static mut LAPIC_REGISTERS: VirtAddr = VirtAddr(0);
+pub static mut LAPIC_REGISTERS: MaybeUninit<&mut LapicRegisters> = MaybeUninit::uninit();
 const USE_LEGACY_TIMER: bool = false;
 const DIVIDE_VALUE: u32 = 16; //could be 1 on real PCs but VMs don't like it
 
@@ -30,7 +29,8 @@ pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo, processor
         disable_pic_keep_timer();
         map_lapic_registers(platform_info.apic.lapic_address);
     };
-    let lapic_registers = get_lapic_registers();
+
+    let lapic_registers = unsafe { LAPIC_REGISTERS.assume_init_mut() };
 
     if bsp {
         unsafe {
@@ -80,42 +80,30 @@ pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo, processor
         std::thread::TIMER_ACTIVE = true;
     }
 
-    macro_rules! apic_interrupt_vector {
-        ($num: ident) => {{
-            extern "C" fn wrapper(_proc_data: &mut InterruptProcessorState) {
-                printlnc!((0, 0, 255), "interrupt vector {}", $num);
-                apic_eoi();
-            }
-            IDT.set(Entry::new(handler!(wrapper)), $num);
-        }};
-    }
-
     unsafe {
-        for i in 38..255 {
-            apic_interrupt_vector!(i);
-        }
         IDT.set(Entry::new(handler!(apic_error)), 67);
 
         IDT.set(Entry::new(handler!(apic_keyboard_interrupt)), 32 + 1);
         IDT.set(Entry::new(handler!(ps2_mouse_interrupt)), 32 + 12);
         IDT.set(Entry::new(handler!(fpu_interrupt)), 32 + 13);
         IDT.set(Entry::new(handler!(primary_ata_hard_disk)), 32 + 14);
-        IDT.set_after_apic();
     }
     disable_pic_completely();
 }
 
 fn map_lapic_registers(lapic_address: PhysAddr) {
     unsafe {
-        LAPIC_REGISTERS = crate::memory::PAGE_TREE_ALLOCATOR.allocate(Some(lapic_address), false);
+        let lapic_virt_addr = crate::memory::PAGE_TREE_ALLOCATOR.allocate(Some(lapic_address), false);
         let apic_registers_page_entry = crate::memory::PAGE_TREE_ALLOCATOR
-            .get_page_table_entry_mut(LAPIC_REGISTERS)
+            .get_page_table_entry_mut(lapic_virt_addr)
             .unwrap();
         apic_registers_page_entry.set_pat(LiminePat::UC);
+        let lapic_ref = &mut *(lapic_virt_addr.0 as *mut LapicRegisters);
+        LAPIC_REGISTERS = MaybeUninit::new(lapic_ref);
 
         println!(
             "Mapping LAPIC registers. Phys: {:016X}, Virt: {:016X}",
-            lapic_address.0, LAPIC_REGISTERS.0
+            lapic_address.0, lapic_virt_addr.0
         );
 
         core::arch::asm!(
@@ -124,10 +112,6 @@ fn map_lapic_registers(lapic_address: PhysAddr) {
             out("rax") _
         ); //clear the TLB
     }
-}
-
-fn get_lapic_registers() -> &'static mut LapicRegisters {
-    unsafe { std::mem_utils::get_at_virtual_addr::<LapicRegisters>(LAPIC_REGISTERS) }
 }
 
 static mut TIMER_CONF: u32 = 0;

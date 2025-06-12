@@ -4,7 +4,14 @@ use context::{
 };
 use core::{mem::MaybeUninit, sync::atomic::AtomicU32};
 use scheduler::Scheduler;
-use std::{boxed::Box, mem_utils::VirtAddr, println, string::ToString, sync::{arc::Arc, mutex::Mutex}, vec::Vec};
+use std::{
+    boxed::Box,
+    mem_utils::VirtAddr,
+    println,
+    string::ToString,
+    sync::{arc::Arc, mutex::Mutex},
+    vec::Vec,
+};
 use syscall::SyscallCpuState;
 
 use crate::{interrupts::InterruptProcessorState, memory::paging::PageTree};
@@ -21,7 +28,7 @@ static SCHEDULER: Mutex<MaybeUninit<Scheduler>> = Mutex::new(MaybeUninit::uninit
 
 static PROCESS_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 
-static mut PROC_INITIALIZED: bool = false;
+pub static mut PROC_INITIALIZED: bool = false;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Pid(pub u32);
@@ -77,9 +84,15 @@ pub fn init() {
     loaders::init_process_loaders();
 
     let context_info = loaders::load_process(crate::TEST_EXECUTABLE).expect("Failed to load test executable");
-    let pid = create_process(context_info);
-    println!("Created process with pid: {:?}", pid);
+    for _i in 0..10 {
+        let pid = create_process(&context_info);
+        println!("Created process with pid: {:?}", pid);
+    }
 
+    syscall::init();
+}
+
+pub fn init_ap() {
     syscall::init();
 }
 
@@ -137,7 +150,7 @@ pub fn create_fallback_process() {
         "fallback_process".to_string().into_boxed_str(),
     )
     .unwrap();
-    let pid = create_process(fake_context);
+    let pid = create_process(&fake_context);
     assert_eq!(pid.0, 0);
     let mut scheduler_lock = SCHEDULER.lock();
     let scheduler = unsafe { scheduler_lock.assume_init_mut() };

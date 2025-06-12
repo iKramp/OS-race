@@ -11,7 +11,7 @@ mod smp;
 
 use std::{Vec, mem_utils::PhysAddr};
 
-pub use apic::{LAPIC_REGISTERS, LapicRegisters};
+pub use apic::LAPIC_REGISTERS;
 use platform_info::PlatformInfo;
 pub use smp::cpu_locals;
 

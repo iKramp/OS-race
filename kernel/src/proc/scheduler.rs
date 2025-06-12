@@ -1,6 +1,8 @@
 use crate::{interrupts::InterruptProcessorState, proc::Pid};
 use std::{
-    boxed::Box, collections::{btree_map::BTreeMap, btree_set::BTreeSet}, vec::Vec
+    boxed::Box,
+    collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+    vec::Vec,
 };
 
 use super::{CpuStateType, ProcessData, StackCpuStateData, syscall::SyscallCpuState};

@@ -19,7 +19,7 @@ use super::info::ContextInfo;
 
 const DEFAULT_PROC_STACK_SIZE: usize = 0x1000; // 4KB
 
-pub fn create_process(context_info: ContextInfo) -> Pid {
+pub fn create_process(context_info: &ContextInfo) -> Pid {
     let pid = Pid(PROCESS_ID_COUNTER.fetch_add(1, core::sync::atomic::Ordering::Relaxed));
     let is_32_bit = context_info.is_32_bit();
     let cmdline = context_info.cmdline().to_string().into_boxed_str();
@@ -43,7 +43,7 @@ pub fn create_process(context_info: ContextInfo) -> Pid {
     pid
 }
 
-pub fn build_generic_memory_context(context: ContextInfo) -> MemoryContext {
+pub fn build_generic_memory_context(context: &ContextInfo) -> MemoryContext {
     let mut memory_tree = build_generic_memory_tree();
 
     let mut mem_init = context.mem_init().iter();
@@ -106,7 +106,7 @@ pub fn build_generic_memory_context(context: ContextInfo) -> MemoryContext {
     }
 }
 
-pub fn build_mem_context_for_new_proc(context: ContextInfo) -> MemoryContext {
+pub fn build_mem_context_for_new_proc(context: &ContextInfo) -> MemoryContext {
     let mut generic_context = build_generic_memory_context(context);
     let stack_size_pages = DEFAULT_PROC_STACK_SIZE.div_ceil(0x1000) as u8; // convert to pages
 

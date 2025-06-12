@@ -29,10 +29,8 @@ impl<T> Mutex<T> {
 
 impl<T: ?Sized> Mutex<T> {
     pub fn lock(&self) -> MutexGuard<'_, T> {
-        loop {
-            if self.state.compare_exchange(0, 1, Acquire, SeqCst).is_ok() {
-                break;
-            }
+        while self.state.compare_exchange(0, 1, Acquire, Relaxed).is_err() {
+            core::hint::spin_loop();
         }
         MutexGuard { lock: self }
     }

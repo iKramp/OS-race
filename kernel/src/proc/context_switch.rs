@@ -1,4 +1,3 @@
-
 use crate::{acpi::cpu_locals::CpuLocals, interrupts::InterruptProcessorState};
 
 use super::{
@@ -18,7 +17,10 @@ pub fn context_switch(on_stack_data: StackCpuStateData, force_switch: bool) {
     if !force_switch && !is_root_interrupt(&on_stack_data) {
         return;
     }
+    no_ret_context_switch(on_stack_data);
+}
 
+pub fn no_ret_context_switch(on_stack_data: StackCpuStateData) -> ! {
     let cpu_locals = CpuLocals::get();
     let current_pid = cpu_locals.current_process;
 

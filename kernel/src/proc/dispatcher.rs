@@ -1,4 +1,3 @@
-
 use crate::{interrupts::InterruptProcessorState, memory::paging};
 
 use super::{CpuStateType, ProcessData, StackCpuStateData, syscall::SyscallCpuState};
