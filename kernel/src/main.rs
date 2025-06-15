@@ -43,7 +43,7 @@ extern "C" fn _start() -> ! {
     unsafe {
         core::arch::asm!("mov {}, rsp", out(reg) stack_pointer);
     }
-    unsafe { std::thread::GET_TIME_SINCE_BOOT = interrupts::time_since_boot };
+    unsafe { std::thread::GET_TIME_SINCE_BOOT = acpi::time_since_boot };
     vga::init_vga_driver();
     vga::clear_screen();
 

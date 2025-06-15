@@ -10,13 +10,19 @@ mod sdt;
 mod smp;
 
 use core::mem::MaybeUninit;
-use std::{boxed::Box, mem_utils::PhysAddr, vec, Vec};
+use std::{Vec, mem_utils::PhysAddr};
 
 pub use apic::LAPIC_REGISTERS;
+pub use apic::time_since_boot;
 use platform_info::PlatformInfo;
 pub use smp::cpu_locals;
 
-use crate::{interrupts::{APIC_TIMER_INIT, APIC_TIMER_TICKS}, limine::LIMINE_BOOTLOADER_REQUESTS, memory::PAGE_TREE_ALLOCATOR, println, printlnc};
+use crate::{
+    interrupts::{APIC_TIMER_INIT, APIC_TIMER_TICKS},
+    limine::LIMINE_BOOTLOADER_REQUESTS,
+    memory::PAGE_TREE_ALLOCATOR,
+    println, printlnc,
+};
 
 static mut PLATFORM_INFO: Option<PlatformInfo> = None;
 pub fn get_platform_info() -> &'static PlatformInfo {
@@ -85,7 +91,6 @@ pub fn init_acpi() {
         let mut vec = Vec::with_capacity(slots);
         vec.resize(slots, 0);
         APIC_TIMER_TICKS = MaybeUninit::new(vec.into_boxed_slice());
-
     };
     cpu_locals::init(platform_info);
 

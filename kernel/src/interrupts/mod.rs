@@ -6,7 +6,7 @@ use std::{boxed::Box, println, printlnc};
 pub mod handlers;
 pub mod idt;
 mod macros;
-use crate::{acpi::cpu_locals, utils::byte_to_port};
+use crate::utils::byte_to_port;
 pub use macros::InterruptProcessorState;
 
 const PIC1: u16 = 0x20;
@@ -81,14 +81,6 @@ pub const TIMER_DESIRED_FREQUENCY: u32 = 1; //don't need much lmao
 pub const PIC_TIMER_ORIGINAL_FREQ: u32 = 1193180;
 pub const PIC_DIVISOR: u16 = 119 * 3;
 pub const PIC_ACTUAL_FREQ: u32 = PIC_TIMER_ORIGINAL_FREQ / PIC_DIVISOR as u32;
-
-pub fn time_since_boot() -> std::time::Duration {
-    debug_assert!(unsafe { APIC_TIMER_INIT });
-    let apic_id = cpu_locals::CpuLocals::get().apic_id;
-    std::time::Duration::from_nanos(
-        unsafe { APIC_TIMER_TICKS.assume_init_ref()[apic_id as usize] } * 1_000_000_000 / TIMER_DESIRED_FREQUENCY as u64,
-    )
-}
 
 fn init_timer() {
     #[allow(clippy::unusual_byte_groupings)]

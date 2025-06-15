@@ -1,7 +1,12 @@
 use core::mem::MaybeUninit;
 use std::{boxed::Box, mem_utils::VirtAddr, vec::Vec};
 
-use crate::{acpi::platform_info::PlatformInfo, interrupts::{self, idt::TablePointer}, memory::stack::{prepare_kernel_stack, KERNEL_STACK_SIZE_PAGES}, proc::Pid};
+use crate::{
+    acpi::platform_info::PlatformInfo,
+    interrupts::{self, idt::TablePointer},
+    memory::stack::{KERNEL_STACK_SIZE_PAGES, prepare_kernel_stack},
+    proc::Pid,
+};
 
 pub static mut CPU_LOCALS: MaybeUninit<Box<[VirtAddr]>> = MaybeUninit::uninit();
 

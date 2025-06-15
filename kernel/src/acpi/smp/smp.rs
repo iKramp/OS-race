@@ -1,10 +1,16 @@
 use crate::{
-    acpi::cpu_locals::add_cpu_locals, interrupts::{
+    acpi::cpu_locals::add_cpu_locals,
+    interrupts::{
         self,
-        idt::{TablePointer, IDT_POINTER},
-    }, memory::{
-        paging::{LiminePat, PageTree}, stack::{prepare_kernel_stack, KERNEL_STACK_SIZE_PAGES}, PAGE_TREE_ALLOCATOR
-    }, msr::{get_msr, get_mtrr_cap, get_mtrr_def_type}, println
+        idt::{IDT_POINTER, TablePointer},
+    },
+    memory::{
+        PAGE_TREE_ALLOCATOR,
+        paging::{LiminePat, PageTree},
+        stack::{KERNEL_STACK_SIZE_PAGES, prepare_kernel_stack},
+    },
+    msr::{get_msr, get_mtrr_cap, get_mtrr_def_type},
+    println,
 };
 use core::sync::atomic::{AtomicBool, AtomicU8};
 use std::mem_utils::VirtAddr;

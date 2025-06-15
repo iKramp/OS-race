@@ -2,7 +2,7 @@
 
 use crate::{
     acpi::cpu_locals,
-    interrupts::{disable_pic_completely, disable_pic_keep_timer, PIC_ACTUAL_FREQ, TIMER_DESIRED_FREQUENCY},
+    interrupts::{APIC_TIMER_INIT, PIC_ACTUAL_FREQ, TIMER_DESIRED_FREQUENCY, disable_pic_completely, disable_pic_keep_timer},
     proc::interrupt_context_switch,
 };
 use core::mem::MaybeUninit;
@@ -187,6 +187,15 @@ fn activate_timer(lapic_registers: &mut LapicRegisters) {
         TIMER_CONF = timer_conf;
         INITIAL_COUNT = initial_count as u32;
     }
+}
+
+pub fn time_since_boot() -> std::time::Duration {
+    debug_assert!(unsafe { APIC_TIMER_INIT });
+    let apic_id = cpu_locals::CpuLocals::get().apic_id;
+    let time_seconds = unsafe { APIC_TIMER_TICKS.assume_init_ref()[apic_id as usize] };
+    let timer_ticks_counted = unsafe { INITIAL_COUNT as u64 - LAPIC_REGISTERS.assume_init_ref().current_count.bytes as u64 };
+    let time_nanos = unsafe { timer_ticks_counted * 1_000_000_000 / INITIAL_COUNT as u64 };
+    std::time::Duration::new(time_seconds, time_nanos as u32)
 }
 
 #[repr(C)]
