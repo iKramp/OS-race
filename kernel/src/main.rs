@@ -43,7 +43,7 @@ extern "C" fn _start() -> ! {
     unsafe {
         core::arch::asm!("mov {}, rsp", out(reg) stack_pointer);
     }
-    unsafe { std::thread::GET_TIME_SINCE_BOOT = || interrupts::time_since_boot() };
+    unsafe { std::thread::GET_TIME_SINCE_BOOT = interrupts::time_since_boot };
     vga::init_vga_driver();
     vga::clear_screen();
 
@@ -88,7 +88,7 @@ extern "C" fn _start() -> ! {
     }
 
     //start first proc
-    unsafe { core::arch::asm!("int 254") };
+    // unsafe { core::arch::asm!("int 254") };
 
     println!("looping infinitely now");
     let mut a = 0;
@@ -96,6 +96,6 @@ extern "C" fn _start() -> ! {
     loop {
         a += 1;
         println!("a: {}", a);
-        std::thread::sleep(std::time::Duration::from_secs(1));
+        unsafe { core::arch::asm!("hlt") };
     }
 }

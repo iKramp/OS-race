@@ -1,22 +1,16 @@
 use crate::{
-    interrupts::{
+    acpi::cpu_locals::add_cpu_locals, interrupts::{
         self,
-        idt::{IDT_POINTER, TablePointer},
-    },
-    memory::{
-        PAGE_TREE_ALLOCATOR,
-        paging::{LiminePat, PageTree},
-        stack::{KERNEL_STACK_SIZE_PAGES, prepare_kernel_stack},
-    },
-    msr::{get_msr, get_mtrr_cap, get_mtrr_def_type},
-    println,
+        idt::{TablePointer, IDT_POINTER},
+    }, memory::{
+        paging::{LiminePat, PageTree}, stack::{prepare_kernel_stack, KERNEL_STACK_SIZE_PAGES}, PAGE_TREE_ALLOCATOR
+    }, msr::{get_msr, get_mtrr_cap, get_mtrr_def_type}, println
 };
 use core::sync::atomic::{AtomicBool, AtomicU8};
 use std::mem_utils::VirtAddr;
 
 pub static mut CPU_LOCK: AtomicBool = AtomicBool::new(false);
 pub static mut CPUS_INITIALIZED: AtomicU8 = AtomicU8::new(0);
-pub static mut CPU_LOCALS: Option<std::Vec<VirtAddr>> = None;
 
 //custom data starts at 0x4 from ap_startup
 
@@ -27,24 +21,10 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
 
     let start_page = unsafe { crate::memory::TRAMPOLINE_RESERVED.0 } >> 12;
     unsafe {
-        CPU_LOCALS = Some(std::Vec::with_capacity(platform_info.application_processors.len() + 1));
-
         //change bsp's gdt, the static one will be used by each AP before switching to their own
         //GDTs
         //i could probably reuse current stack, as kernel doesn't preserve stack across task
         //switches
-        let bsp_stack_ptr = prepare_kernel_stack(KERNEL_STACK_SIZE_PAGES);
-        let bsp_gdt = interrupts::create_new_gdt(bsp_stack_ptr);
-        interrupts::load_gdt(bsp_gdt);
-        let bsp_local = super::cpu_locals::CpuLocals::new(
-            bsp_stack_ptr,
-            KERNEL_STACK_SIZE_PAGES as u64,
-            platform_info.boot_processor.apic_id,
-            platform_info.boot_processor.processor_id,
-            bsp_gdt,
-        );
-        let bsp_local_ptr = add_cpu_locals(bsp_local);
-        crate::msr::set_msr(0xC0000101, bsp_local_ptr.0);
 
         let destination = crate::memory::TRAMPOLINE_RESERVED.0 as *mut u8;
         let comm_lock = destination.add(56);
@@ -82,18 +62,6 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
 
             send_cpu_locals(ap_local_ptr.0, comm_lock);
             wait_for_cpus(cpu.0 as u8 + 1);
-        }
-    }
-}
-
-fn add_cpu_locals(locals: super::cpu_locals::CpuLocals) -> VirtAddr {
-    unsafe {
-        if let Some(cpu_locals) = &mut CPU_LOCALS {
-            let ptr = std::Box::leak(std::Box::new(locals)) as *const _ as u64;
-            cpu_locals.push(VirtAddr(ptr));
-            VirtAddr(cpu_locals.last().unwrap() as *const _ as u64)
-        } else {
-            panic!("CPU_LOCALS not initialized");
         }
     }
 }

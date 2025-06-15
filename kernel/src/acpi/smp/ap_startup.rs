@@ -28,10 +28,10 @@ pub extern "C" fn ap_started_wait_loop() -> ! {
 
     set_mtrrs(comm_lock);
     set_cr_registers(comm_lock);
-    set_idt();
     PageTree::reload();
 
     set_cpu_local(comm_lock);
+    set_idt();
     let locals = super::cpu_locals::CpuLocals::get();
     let processor_id = locals.processor_id;
     crate::acpi::init_acpi_ap(processor_id);

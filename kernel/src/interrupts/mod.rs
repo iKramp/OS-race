@@ -1,12 +1,20 @@
 mod gdt;
+use core::mem::MaybeUninit;
 pub use gdt::{STATIC_GDT_PTR, create_new_gdt, load_gdt};
-use std::{println, printlnc};
+use std::{boxed::Box, println, printlnc};
 #[macro_use]
 pub mod handlers;
 pub mod idt;
 mod macros;
-use crate::utils::byte_to_port;
+use crate::{acpi::cpu_locals, utils::byte_to_port};
 pub use macros::InterruptProcessorState;
+
+const PIC1: u16 = 0x20;
+const PIC2: u16 = 0xA0; /* IO base address for slave PIC */
+const PIC1_COMMAND: u16 = PIC1;
+const PIC1_DATA: u16 = PIC1 + 1;
+const PIC2_COMMAND: u16 = PIC2;
+const PIC2_DATA: u16 = PIC2 + 1;
 
 pub fn init_interrupts() {
     println!("initializing PIC");
@@ -21,13 +29,6 @@ pub fn init_interrupts() {
 }
 
 pub fn init_pic() {
-    const PIC1: u16 = 0x20;
-    const PIC2: u16 = 0xA0; /* IO base address for slave PIC */
-    const PIC1_COMMAND: u16 = PIC1;
-    const PIC1_DATA: u16 = PIC1 + 1;
-    const PIC2_COMMAND: u16 = PIC2;
-    const PIC2_DATA: u16 = PIC2 + 1;
-
     byte_to_port(PIC1_COMMAND, 0x11);
     byte_to_port(PIC2_COMMAND, 0x11);
 
@@ -46,28 +47,57 @@ pub fn init_pic() {
     byte_to_port(PIC2_DATA, 0x00);
 }
 
+pub fn disable_pic_keep_timer() {
+    byte_to_port(PIC1_DATA, 0xFE); //mask interrupts, keep timer
+    byte_to_port(PIC2_DATA, 0xFE);
+
+    byte_to_port(PIC1_DATA - 1, 0x20); //trigger EOI
+    byte_to_port(PIC2_DATA - 1, 0x20);
+}
+
+pub fn disable_pic_completely() {
+    byte_to_port(PIC1_DATA, 0xFF); //mask interrupts
+    byte_to_port(PIC2_DATA, 0xFF);
+
+    byte_to_port(PIC1_DATA - 1, 0x20); //trigger EOI
+    byte_to_port(PIC2_DATA - 1, 0x20);
+
+    disable_timer();
+
+    disconnect_imcr();
+}
+
+fn disconnect_imcr() {
+    const IMCR: u16 = 0x22;
+
+    byte_to_port(IMCR, 0x70);
+    byte_to_port(IMCR + 1, 0x01);
+}
+
 pub static mut LEGACY_PIC_TIMER_TICKS: u64 = 0;
-pub static mut TIMER_TICKS: u64 = 0;
-pub const PIC_TIMER_FREQUENCY: u32 = 200;
+pub static mut APIC_TIMER_TICKS: MaybeUninit<Box<[u64]>> = MaybeUninit::uninit();
+pub static mut APIC_TIMER_INIT: bool = false;
+pub const TIMER_DESIRED_FREQUENCY: u32 = 1; //don't need much lmao
 pub const PIC_TIMER_ORIGINAL_FREQ: u32 = 1193180;
+pub const PIC_DIVISOR: u16 = 119 * 3;
+pub const PIC_ACTUAL_FREQ: u32 = PIC_TIMER_ORIGINAL_FREQ / PIC_DIVISOR as u32;
 
 pub fn time_since_boot() -> std::time::Duration {
-    std::time::Duration::from_nanos(unsafe { TIMER_TICKS } * 1_000_000_000 / PIC_TIMER_FREQUENCY as u64)
+    debug_assert!(unsafe { APIC_TIMER_INIT });
+    let apic_id = cpu_locals::CpuLocals::get().apic_id;
+    std::time::Duration::from_nanos(
+        unsafe { APIC_TIMER_TICKS.assume_init_ref()[apic_id as usize] } * 1_000_000_000 / TIMER_DESIRED_FREQUENCY as u64,
+    )
 }
 
 fn init_timer() {
-    const DIVISOR: u16 = (PIC_TIMER_ORIGINAL_FREQ / (PIC_TIMER_FREQUENCY)) as u16;
-
     #[allow(clippy::unusual_byte_groupings)]
     byte_to_port(0x43, 0b00_11_011_0);
-    byte_to_port(0x40, (DIVISOR & 0xFF) as u8);
-    byte_to_port(0x40, ((DIVISOR >> 8) & 0xFF) as u8);
+    byte_to_port(0x40, (PIC_DIVISOR & 0xFF) as u8);
+    byte_to_port(0x40, ((PIC_DIVISOR >> 8) & 0xFF) as u8);
 }
 
-pub fn disable_timer() {
-    //#[allow(clippy::unusual_byte_groupings)]
-    //byte_to_port(0x43, 0b00_11_000_0);
-    //byte_to_port(0x40, (1000 & 0xFF) as u8);
-    //byte_to_port(0x40, ((1000 >> 8) & 0xFF) as u8);
-    //another interrupt will be triggered after this, then it stops
+fn disable_timer() {
+    #[allow(clippy::unusual_byte_groupings)]
+    byte_to_port(0x43, 0b00_11_000_0);
 }

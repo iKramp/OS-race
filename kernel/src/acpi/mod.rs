@@ -9,13 +9,14 @@ mod rsdt;
 mod sdt;
 mod smp;
 
-use std::{Vec, mem_utils::PhysAddr};
+use core::mem::MaybeUninit;
+use std::{boxed::Box, mem_utils::PhysAddr, vec, Vec};
 
 pub use apic::LAPIC_REGISTERS;
 use platform_info::PlatformInfo;
 pub use smp::cpu_locals;
 
-use crate::{limine::LIMINE_BOOTLOADER_REQUESTS, memory::PAGE_TREE_ALLOCATOR, println, printlnc};
+use crate::{interrupts::{APIC_TIMER_INIT, APIC_TIMER_TICKS}, limine::LIMINE_BOOTLOADER_REQUESTS, memory::PAGE_TREE_ALLOCATOR, println, printlnc};
 
 static mut PLATFORM_INFO: Option<PlatformInfo> = None;
 pub fn get_platform_info() -> &'static PlatformInfo {
@@ -77,6 +78,17 @@ pub fn init_acpi() {
         };
         platform_info
     };
+    unsafe {
+        APIC_TIMER_INIT = true;
+        let slots = platform_info.application_processors.len() + 1;
+        #[allow(clippy::slow_vector_initialization)] //it's non const ffs
+        let mut vec = Vec::with_capacity(slots);
+        vec.resize(slots, 0);
+        APIC_TIMER_TICKS = MaybeUninit::new(vec.into_boxed_slice());
+
+    };
+    cpu_locals::init(platform_info);
+
     apic::enable_apic(platform_info, platform_info.boot_processor.processor_id);
     ioapic::init_ioapic(platform_info);
     smp::wake_cpus(platform_info);

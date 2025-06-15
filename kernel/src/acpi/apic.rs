@@ -1,6 +1,10 @@
 #![allow(clippy::unusual_byte_groupings, static_mut_refs)]
 
-use crate::proc::interrupt_context_switch;
+use crate::{
+    acpi::cpu_locals,
+    interrupts::{disable_pic_completely, disable_pic_keep_timer, PIC_ACTUAL_FREQ, TIMER_DESIRED_FREQUENCY},
+    proc::interrupt_context_switch,
+};
 use core::mem::MaybeUninit;
 use std::mem_utils::PhysAddr;
 
@@ -9,18 +13,15 @@ use unroll::unroll_for_loops;
 use crate::{
     handler,
     interrupts::{
-        LEGACY_PIC_TIMER_TICKS, PIC_TIMER_FREQUENCY, TIMER_TICKS,
+        APIC_TIMER_TICKS, LEGACY_PIC_TIMER_TICKS,
         handlers::*,
         idt::{Entry, IDT},
     },
     memory::paging::LiminePat,
     println,
-    utils::byte_to_port,
 };
 
 pub static mut LAPIC_REGISTERS: MaybeUninit<&mut LapicRegisters> = MaybeUninit::uninit();
-const USE_LEGACY_TIMER: bool = false;
-const DIVIDE_VALUE: u32 = 16; //could be 1 on real PCs but VMs don't like it
 
 #[unroll_for_loops]
 pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo, processor_id: u8) {
@@ -120,7 +121,7 @@ static mut INITIAL_COUNT: u32 = 0;
 fn activate_timer_ap(lapic_registers: &mut LapicRegisters) {
     unsafe {
         lapic_registers.lvt_timer.bytes = TIMER_CONF;
-        lapic_registers.divide_configuration.bytes = DIVIDE_VALUE;
+        lapic_registers.divide_configuration.bytes = 0;
         lapic_registers.initial_count.bytes = INITIAL_COUNT;
     }
 }
@@ -133,84 +134,59 @@ fn activate_timer(lapic_registers: &mut LapicRegisters) {
     timer_conf &= !0xFF_u32;
     timer_conf |= 100; //init the timer vector //TODO reset
     timer_conf &= !(0b11 << 17);
-    timer_conf |= 0b01 << 17; //set to periodic
+    timer_conf |= 0b00 << 17; //set to oneshot
     timer_conf &= !(1 << 16); //unmask
+    //
+    let apic_id = cpu_locals::CpuLocals::get().apic_id as usize;
+    let this_ticks = unsafe { &mut APIC_TIMER_TICKS.assume_init_mut()[apic_id] };
 
     const TIMER_COUNT: u32 = 100000000;
     lapic_registers.lvt_timer.bytes = timer_conf;
-    lapic_registers.divide_configuration.bytes = DIVIDE_VALUE;
+    lapic_registers.divide_configuration.bytes = 0;
     lapic_registers.initial_count.bytes = TIMER_COUNT;
 
     let ticks;
     unsafe {
         let start_legacy_timer = LEGACY_PIC_TIMER_TICKS;
-        if TIMER_TICKS != 0 {
+        if *this_ticks != 0 {
             panic!("Timer is already running");
         }
-        while TIMER_TICKS < 1 {}
+        #[allow(clippy::while_immutable_condition)] //timer mutates
+        while *this_ticks < 1 {}
         ticks = LEGACY_PIC_TIMER_TICKS - start_legacy_timer + 1;
+        disable_pic_completely();
     }
+
+    const INITIAL_COUNT_APIC_FACTOR: u64 = TIMER_COUNT as u64 * PIC_ACTUAL_FREQ as u64 / TIMER_DESIRED_FREQUENCY as u64;
+
     println!("Ticks: {}", ticks);
 
-    if USE_LEGACY_TIMER {
-        timer_conf |= 1 << 16; //mask
-        unsafe { IDT.set(Entry::new(handler!(legacy_timer_tick)), 32) };
-    } else {
-        disable_pic_completely();
-        crate::interrupts::disable_timer();
+    unsafe { IDT.set(Entry::new(handler!(apic_timer_tick)), 32) };
 
-        unsafe { IDT.set(Entry::new(handler!(apic_timer_tick)), 32) };
-    }
+    let initial_count = INITIAL_COUNT_APIC_FACTOR / ticks;
+    println!(
+        "initial count constant: {} or {:x}",
+        INITIAL_COUNT_APIC_FACTOR, INITIAL_COUNT_APIC_FACTOR
+    );
+    println!("Initial count: {} or {:x}", initial_count, initial_count);
+    // for i in 0..70 {
+    //     println!("");
+    // }
+    // panic!();
 
     timer_conf |= 0b01 << 17; // set to periodic
     timer_conf &= !0xFF_u32;
     timer_conf |= 32; //set correct interrupt vector
     lapic_registers.lvt_timer.bytes = timer_conf;
-    lapic_registers.initial_count.bytes = TIMER_COUNT / ticks as u32; //set to same frequency
-    let frequency = TIMER_COUNT as u64 * DIVIDE_VALUE as u64 * PIC_TIMER_FREQUENCY as u64 / ticks;
+    lapic_registers.initial_count.bytes = initial_count as u32; //set to same frequency
+
+    let frequency = INITIAL_COUNT_APIC_FACTOR * 2 /*divide value*/ * PIC_ACTUAL_FREQ as u64 / ticks;
     println!("APIC timer is running at {} Hz", frequency);
-    println!(
-        "The selected timer is running and producing ticks at {} Hz",
-        PIC_TIMER_FREQUENCY
-    );
 
     unsafe {
-        TIMER_CONF = lapic_registers.lvt_timer.bytes;
-        INITIAL_COUNT = lapic_registers.initial_count.bytes;
+        TIMER_CONF = timer_conf;
+        INITIAL_COUNT = initial_count as u32;
     }
-}
-
-pub fn disable_pic_keep_timer() {
-    const PIC1_DATA: u16 = 0x21;
-    const PIC2_DATA: u16 = 0xA1;
-
-    byte_to_port(PIC1_DATA, 0xFE); //mask interrupts, keep timer
-    byte_to_port(PIC2_DATA, 0xFE);
-
-    byte_to_port(PIC1_DATA - 1, 0x20); //trigger EOI
-    byte_to_port(PIC2_DATA - 1, 0x20);
-
-    //disconnect_imcr();
-}
-
-pub fn disable_pic_completely() {
-    const PIC1_DATA: u16 = 0x21;
-    const PIC2_DATA: u16 = 0xA1;
-
-    byte_to_port(PIC1_DATA, 0xFF); //mask interrupts
-    byte_to_port(PIC2_DATA, 0xFF);
-
-    byte_to_port(PIC1_DATA - 1, 0x20); //trigger EOI
-    byte_to_port(PIC2_DATA - 1, 0x20);
-
-    disconnect_imcr();
-}
-
-fn disconnect_imcr() {
-    const IMCR: u16 = 0x22;
-
-    byte_to_port(IMCR, 0x70);
-    byte_to_port(IMCR + 1, 0x01);
 }
 
 #[repr(C)]
