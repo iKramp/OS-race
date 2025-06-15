@@ -8,12 +8,13 @@ mod rsdp;
 mod rsdt;
 mod sdt;
 mod smp;
+mod timer;
 
 use core::mem::MaybeUninit;
 use std::{Vec, mem_utils::PhysAddr};
 
 pub use apic::LAPIC_REGISTERS;
-pub use apic::time_since_boot;
+pub use timer::time_since_boot;
 use platform_info::PlatformInfo;
 pub use smp::cpu_locals;
 

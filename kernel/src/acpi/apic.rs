@@ -21,6 +21,8 @@ use crate::{
     println,
 };
 
+use super::timer::{activate_timer, activate_timer_ap};
+
 pub static mut LAPIC_REGISTERS: MaybeUninit<&mut LapicRegisters> = MaybeUninit::uninit();
 
 #[unroll_for_loops]
@@ -115,89 +117,6 @@ fn map_lapic_registers(lapic_address: PhysAddr) {
     }
 }
 
-static mut TIMER_CONF: u32 = 0;
-static mut INITIAL_COUNT: u32 = 0;
-
-fn activate_timer_ap(lapic_registers: &mut LapicRegisters) {
-    unsafe {
-        lapic_registers.lvt_timer.bytes = TIMER_CONF;
-        lapic_registers.divide_configuration.bytes = 0;
-        lapic_registers.initial_count.bytes = INITIAL_COUNT;
-    }
-}
-
-fn activate_timer(lapic_registers: &mut LapicRegisters) {
-    //TODO: redo this logic, instead of waiting some ticks by lapic timer, wait 10 miliseconds by
-    //legacy timer and set lapic timer divisor to very low
-    let mut timer_conf = lapic_registers.lvt_timer.bytes;
-
-    timer_conf &= !0xFF_u32;
-    timer_conf |= 100; //init the timer vector //TODO reset
-    timer_conf &= !(0b11 << 17);
-    timer_conf |= 0b00 << 17; //set to oneshot
-    timer_conf &= !(1 << 16); //unmask
-    //
-    let apic_id = cpu_locals::CpuLocals::get().apic_id as usize;
-    let this_ticks = unsafe { &mut APIC_TIMER_TICKS.assume_init_mut()[apic_id] };
-
-    const TIMER_COUNT: u32 = 100000000;
-    lapic_registers.lvt_timer.bytes = timer_conf;
-    lapic_registers.divide_configuration.bytes = 0;
-    lapic_registers.initial_count.bytes = TIMER_COUNT;
-
-    let ticks;
-    unsafe {
-        let start_legacy_timer = LEGACY_PIC_TIMER_TICKS;
-        if *this_ticks != 0 {
-            panic!("Timer is already running");
-        }
-        #[allow(clippy::while_immutable_condition)] //timer mutates
-        while *this_ticks < 1 {}
-        ticks = LEGACY_PIC_TIMER_TICKS - start_legacy_timer + 1;
-        disable_pic_completely();
-    }
-
-    const INITIAL_COUNT_APIC_FACTOR: u64 = TIMER_COUNT as u64 * PIC_ACTUAL_FREQ as u64 / TIMER_DESIRED_FREQUENCY as u64;
-
-    println!("Ticks: {}", ticks);
-
-    unsafe { IDT.set(Entry::new(handler!(apic_timer_tick)), 32) };
-
-    let initial_count = INITIAL_COUNT_APIC_FACTOR / ticks;
-    println!(
-        "initial count constant: {} or {:x}",
-        INITIAL_COUNT_APIC_FACTOR, INITIAL_COUNT_APIC_FACTOR
-    );
-    println!("Initial count: {} or {:x}", initial_count, initial_count);
-    // for i in 0..70 {
-    //     println!("");
-    // }
-    // panic!();
-
-    timer_conf |= 0b01 << 17; // set to periodic
-    timer_conf &= !0xFF_u32;
-    timer_conf |= 32; //set correct interrupt vector
-    lapic_registers.lvt_timer.bytes = timer_conf;
-    lapic_registers.initial_count.bytes = initial_count as u32; //set to same frequency
-
-    let frequency = INITIAL_COUNT_APIC_FACTOR * 2 /*divide value*/ * PIC_ACTUAL_FREQ as u64 / ticks;
-    println!("APIC timer is running at {} Hz", frequency);
-
-    unsafe {
-        TIMER_CONF = timer_conf;
-        INITIAL_COUNT = initial_count as u32;
-    }
-}
-
-pub fn time_since_boot() -> std::time::Duration {
-    debug_assert!(unsafe { APIC_TIMER_INIT });
-    let apic_id = cpu_locals::CpuLocals::get().apic_id;
-    let time_seconds = unsafe { APIC_TIMER_TICKS.assume_init_ref()[apic_id as usize] };
-    let timer_ticks_counted = unsafe { INITIAL_COUNT as u64 - LAPIC_REGISTERS.assume_init_ref().current_count.bytes as u64 };
-    let time_nanos = unsafe { timer_ticks_counted * 1_000_000_000 / INITIAL_COUNT as u64 };
-    std::time::Duration::new(time_seconds, time_nanos as u32)
-}
-
 #[repr(C)]
 pub struct LapicRegisters {
     reserved_0: LapicRegisterValueStructure,
@@ -229,19 +148,19 @@ pub struct LapicRegisters {
     lvt_corrected_machine_check_interrupt: LapicRegisterValueStructure,
     interrupt_command_register_0_32: LapicRegisterValueStructure,
     interrupt_command_register_32_64: LapicRegisterValueStructure,
-    lvt_timer: LapicRegisterValueStructure,
+    pub(super) lvt_timer: LapicRegisterValueStructure,
     lvt_thermal_sensor: LapicRegisterValueStructure,
     lvt_performance_monitoring_counters: LapicRegisterValueStructure,
     lvt_lint0: LapicRegisterValueStructure,
     lvt_lint1: LapicRegisterValueStructure,
     lvt_error: LapicRegisterValueStructure,
-    initial_count: LapicRegisterValueStructure,
-    current_count: LapicRegisterValueStructure,
+    pub(super) initial_count: LapicRegisterValueStructure,
+    pub(super) current_count: LapicRegisterValueStructure,
     reserved_12: LapicRegisterValueStructure,
     reserved_13: LapicRegisterValueStructure,
     reserved_14: LapicRegisterValueStructure,
     reserved_15: LapicRegisterValueStructure,
-    divide_configuration: LapicRegisterValueStructure,
+    pub(super) divide_configuration: LapicRegisterValueStructure,
     reserved_16: LapicRegisterValueStructure,
 }
 
