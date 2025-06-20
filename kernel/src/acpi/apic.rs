@@ -1,8 +1,7 @@
 #![allow(clippy::unusual_byte_groupings, static_mut_refs)]
 
 use crate::{
-    acpi::cpu_locals,
-    interrupts::{APIC_TIMER_INIT, PIC_ACTUAL_FREQ, TIMER_DESIRED_FREQUENCY, disable_pic_completely, disable_pic_keep_timer},
+    interrupts::{disable_pic_completely, disable_pic_keep_timer},
     proc::interrupt_context_switch,
 };
 use core::mem::MaybeUninit;
@@ -13,7 +12,6 @@ use unroll::unroll_for_loops;
 use crate::{
     handler,
     interrupts::{
-        APIC_TIMER_TICKS, LEGACY_PIC_TIMER_TICKS,
         handlers::*,
         idt::{Entry, IDT},
     },
@@ -21,7 +19,7 @@ use crate::{
     println,
 };
 
-use super::timer::{activate_timer, activate_timer_ap};
+use super::lapic_timer::{activate_timer, activate_timer_ap};
 
 pub static mut LAPIC_REGISTERS: MaybeUninit<&mut LapicRegisters> = MaybeUninit::uninit();
 
