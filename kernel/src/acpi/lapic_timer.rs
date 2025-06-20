@@ -1,10 +1,13 @@
 use std::println;
 
 use crate::{
-    acpi::{cpu_locals, LAPIC_REGISTERS},
+    acpi::{LAPIC_REGISTERS, cpu_locals},
     handler,
     interrupts::{
-        disable_pic_completely, handlers::apic_timer_tick, idt::{Entry, IDT}, APIC_TIMER_INIT, APIC_TIMER_TICKS, LEGACY_PIC_TIMER_TICKS, PIC_ACTUAL_FREQ, TIMER_DESIRED_FREQUENCY
+        APIC_TIMER_INIT, APIC_TIMER_TICKS, LEGACY_PIC_TIMER_TICKS, PIC_ACTUAL_FREQ, TIMER_DESIRED_FREQUENCY,
+        disable_pic_completely,
+        handlers::apic_timer_tick,
+        idt::{Entry, IDT},
     },
     proc::interrupt_context_switch,
 };

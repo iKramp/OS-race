@@ -2,13 +2,13 @@ mod aml;
 mod apic;
 mod fadt;
 mod ioapic;
+mod lapic_timer;
 mod madt;
 mod platform_info;
 mod rsdp;
 mod rsdt;
 mod sdt;
 mod smp;
-mod lapic_timer;
 mod timer;
 
 use core::mem::MaybeUninit;
@@ -104,11 +104,6 @@ pub fn init_acpi() {
 
     apic::enable_apic(platform_info, platform_info.boot_processor.processor_id);
     ioapic::init_ioapic(platform_info);
-
-    loop {
-        unsafe { core::arch::asm!("hlt") };
-        println!("test");
-    }
 
     smp::wake_cpus(platform_info);
     printlnc!((0, 255, 0), "ACPI initialized and APs started");

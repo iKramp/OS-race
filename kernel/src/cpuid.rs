@@ -1,5 +1,4 @@
 pub use core::arch::asm;
-use core::u32;
 
 static mut MAX_LEAF: Option<u64> = None;
 
@@ -56,7 +55,12 @@ pub fn get_cpuid_leaf(leaf: u64) -> Option<CpuidLeaf> {
         );
     }
     let ebx = ebx & (u32::MAX as u64);
-    Some(CpuidLeaf { eax, ebx: ebx as u32, ecx, edx })
+    Some(CpuidLeaf {
+        eax,
+        ebx: ebx as u32,
+        ecx,
+        edx,
+    })
 }
 
 pub fn get_manufacturer_id() -> [u8; 12] {

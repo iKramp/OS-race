@@ -19,7 +19,7 @@ use crate::{
     println,
 };
 
-use super::lapic_timer::{activate_timer, activate_timer_ap};
+use super::lapic_timer::activate_timer_ap;
 
 pub static mut LAPIC_REGISTERS: MaybeUninit<&mut LapicRegisters> = MaybeUninit::uninit();
 
