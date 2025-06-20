@@ -76,10 +76,10 @@ pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo, processor
         activate_timer_ap(lapic_registers);
         return;
     }
-    activate_timer(lapic_registers);
-    unsafe {
-        std::thread::TIMER_ACTIVE = true;
-    }
+    // activate_timer(lapic_registers);
+    // unsafe {
+    //     std::thread::TIMER_ACTIVE = true;
+    // }
 
     unsafe {
         IDT.set(Entry::new(handler!(apic_error)), 67);

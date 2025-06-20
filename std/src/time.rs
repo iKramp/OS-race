@@ -1,25 +1,29 @@
 pub use core::time::*;
 
-use crate::thread::GET_TIME_SINCE_BOOT;
+use crate::thread::GET_TIME_SINCE_EPOCH;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash, Default)]
 pub struct Instant {
-    duration_since_boot: Duration,
+    since_epoch: Duration,
 }
+
+pub const UNIX_EPOCH: Instant = Instant {
+    since_epoch: Duration::from_secs(0),
+};
 
 impl Instant {
     pub fn now() -> Instant {
         Instant {
-            duration_since_boot: unsafe { GET_TIME_SINCE_BOOT() },
+            since_epoch: unsafe { GET_TIME_SINCE_EPOCH() },
         }
     }
 
     pub fn elapsed(&self) -> Duration {
-        unsafe { GET_TIME_SINCE_BOOT() - self.duration_since_boot }
+        unsafe { GET_TIME_SINCE_EPOCH() - self.since_epoch }
     }
 
     pub fn duration_since(&self, earlier: Instant) -> Duration {
-        self.duration_since_boot - earlier.duration_since_boot
+        self.since_epoch - earlier.since_epoch
     }
 }
 
@@ -28,7 +32,7 @@ impl core::ops::Add<Duration> for Instant {
 
     fn add(self, rhs: Duration) -> Instant {
         Instant {
-            duration_since_boot: self.duration_since_boot + rhs,
+            since_epoch: self.since_epoch + rhs,
         }
     }
 }
@@ -38,7 +42,7 @@ impl core::ops::Sub<Duration> for Instant {
 
     fn sub(self, rhs: Duration) -> Instant {
         Instant {
-            duration_since_boot: self.duration_since_boot - rhs,
+            since_epoch: self.since_epoch - rhs,
         }
     }
 }
@@ -47,6 +51,6 @@ impl core::ops::Sub<Instant> for Instant {
     type Output = Duration;
 
     fn sub(self, rhs: Instant) -> Duration {
-        self.duration_since_boot - rhs.duration_since_boot
+        self.since_epoch - rhs.since_epoch
     }
 }

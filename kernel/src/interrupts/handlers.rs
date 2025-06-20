@@ -132,13 +132,6 @@ pub extern "C" fn apic_timer_tick(_proc_data: &mut InterruptProcessorState) {
     }
 }
 
-pub extern "C" fn legacy_timer_tick_testing(_proc_data: &mut InterruptProcessorState) {
-    unsafe {
-        super::LEGACY_PIC_TIMER_TICKS += 1;
-    }
-    legacy_eoi();
-}
-
 pub extern "C" fn legacy_timer_tick(_proc_data: &mut InterruptProcessorState) {
     unsafe {
         super::LEGACY_PIC_TIMER_TICKS += 1;

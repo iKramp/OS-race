@@ -22,7 +22,8 @@ fn main() {
         cmd.arg("-s");
         cmd.arg("-S");
     }
-    //cmd.arg("-cpu").arg("EPYC");
+    cmd.arg("-cpu").arg("qemu64,invtsc");
+    cmd.arg("-enable-kvm");
     cmd.arg("-smp").arg("4");
 
     #[cfg(test)]

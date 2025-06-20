@@ -43,8 +43,8 @@ pub fn init_pic() {
 
     init_timer();
 
-    byte_to_port(PIC1_DATA, 0x00); //change to 0x00 to handle keyboard
-    byte_to_port(PIC2_DATA, 0x00);
+    byte_to_port(PIC1_DATA, 0xFE); //only allow timer
+    byte_to_port(PIC2_DATA, 0xFE);
 }
 
 pub fn disable_pic_keep_timer() {

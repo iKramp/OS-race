@@ -128,7 +128,7 @@ impl Idt {
             self.set(Entry::new(handler!(other_legacy_interrupt)), i);
         }
 
-        self.set(Entry::new(handler!(legacy_timer_tick_testing)), 32);
+        self.set(Entry::new(handler!(legacy_timer_tick)), 32);
         self.set(Entry::new(handler!(legacy_keyboard_interrupt)), 33);
 
         self.set(Entry::new(handler!(apic_timer_tick)), 100);
@@ -137,8 +137,11 @@ impl Idt {
         self.set(Entry::new(handler!(spurious_interrupt)), 255);
 
         //entries set by other files:
-        //32 - selected timer (100 is free to use after apic init)
+        //32 - 64 - ioapic with 32 offset
+        //32 - pit
         //33 - apic keyboard
+        //34 - lapic scheduled event
+        //35 - selected timekeeping timer (100 is free to use after apic init)
         //32 + 12 (44) - ps2 mouse
         //32 + 13 (45) - fpu
         //32 + 14 (46) - ata????

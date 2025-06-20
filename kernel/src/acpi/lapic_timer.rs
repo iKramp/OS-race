@@ -1,4 +1,3 @@
-use core::u32;
 use std::println;
 
 use crate::{
@@ -24,8 +23,6 @@ pub(super) fn activate_timer_ap(lapic_registers: &mut LapicRegisters) {
 }
 
 pub(super) fn activate_timer(lapic_registers: &mut LapicRegisters) {
-    //TODO: redo this logic, instead of waiting some ticks by lapic timer, wait 10 miliseconds by
-    //legacy timer and set lapic timer divisor to very low
     let mut timer_conf = lapic_registers.lvt_timer.bytes;
 
     timer_conf &= !0xFF_u32;
@@ -65,11 +62,11 @@ pub(super) fn activate_timer(lapic_registers: &mut LapicRegisters) {
     timer_conf &= !0xFF_u32;
     timer_conf |= 32; //set correct interrupt vector
     lapic_registers.lvt_timer.bytes = timer_conf;
-    lapic_registers.initial_count.bytes = initial_count as u32; //set to same frequency
+    lapic_registers.initial_count.bytes = initial_count; //set to same frequency
 
     unsafe {
         TIMER_CONF = timer_conf;
-        INITIAL_COUNT = initial_count as u32;
+        INITIAL_COUNT = initial_count;
     }
 }
 

@@ -5,7 +5,7 @@ use crate::memory::{paging::LiminePat, physical_allocator};
 
 pub fn init_ioapic(platform_info: &PlatformInfo) {
     unsafe {
-        for io_apic_info in &platform_info.apic.io_apics {
+        for (io_apic_index, io_apic_info) in platform_info.apic.io_apics.iter().enumerate() {
             physical_allocator::mark_addr(PhysAddr(io_apic_info.address.into()), true);
             let io_apic_address = crate::memory::PAGE_TREE_ALLOCATOR.allocate(Some(PhysAddr(io_apic_info.address.into())), false);
             let apic_registers_page_entry = crate::memory::PAGE_TREE_ALLOCATOR
@@ -49,7 +49,7 @@ pub fn init_ioapic(platform_info: &PlatformInfo) {
                     polarity,
                     0,
                     0,
-                    vector + 32,
+                    vector + 32 * (io_apic_index as u8 + 1),
                 );
                 //println!("setting entry {:b}", table_entry.0);
                 io_apic.set_redir_table(gsi, table_entry)

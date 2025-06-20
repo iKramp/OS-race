@@ -9,7 +9,7 @@ mod rsdt;
 mod sdt;
 mod smp;
 mod lapic_timer;
-mod event_timer;
+mod timer;
 
 use core::mem::MaybeUninit;
 use std::{Vec, mem_utils::PhysAddr};
@@ -66,7 +66,7 @@ pub fn init_acpi() {
             match &header.signature {
                 b"FACP" => fadt = Some(std::mem_utils::get_at_physical_addr::<fadt::Fadt>(*table)),
                 b"APIC" => madt = Some(std::mem_utils::get_at_physical_addr::<madt::Madt>(*table)),
-                b"HPET" => hpet = Some(std::mem_utils::get_at_physical_addr::<event_timer::HpetTable>(*table)),
+                b"HPET" => hpet = Some(std::mem_utils::get_at_physical_addr::<timer::hpet::HpetTable>(*table)),
                 _ => {} //any other tables except SSDT, those are parsed after DSDT
                         //qemu only reports FACP, APIC, HPET and WAET
             }
@@ -77,6 +77,9 @@ pub fn init_acpi() {
     let fadt = fadt.expect("fadt should be present");
     let madt = madt.expect("madt should be present");
     let hpet = hpet.expect("hpet should be present");
+
+    unsafe { timer::HPET_ACPI_TABLE = MaybeUninit::new(hpet) };
+    timer::init();
 
     let entries = madt.get_madt_entries();
     let platform_info = platform_info::PlatformInfo::new(&entries, std::mem_utils::PhysAddr(madt.local_apic_address as u64));
@@ -100,8 +103,13 @@ pub fn init_acpi() {
     cpu_locals::init(platform_info);
 
     apic::enable_apic(platform_info, platform_info.boot_processor.processor_id);
-    event_timer::init(hpet);
     ioapic::init_ioapic(platform_info);
+
+    loop {
+        unsafe { core::arch::asm!("hlt") };
+        println!("test");
+    }
+
     smp::wake_cpus(platform_info);
     printlnc!((0, 255, 0), "ACPI initialized and APs started");
     unsafe { PAGE_TREE_ALLOCATOR.unmap_lower_half() };

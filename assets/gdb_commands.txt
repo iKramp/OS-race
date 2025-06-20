@@ -3,6 +3,9 @@ target remote localhost:1234
 layout src
 set directories std/src/:kernel/src/
 symbol-file kernel_build_files/kernel.elf
+define b
+hbreak $arg0
+end
 
 python
 import sys
