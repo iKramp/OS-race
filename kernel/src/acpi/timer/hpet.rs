@@ -92,7 +92,7 @@ impl Timer for HpetWrapper {
         }
     }
 
-    fn get_time() -> std::time::Instant {
+    fn get_time(&self) -> std::time::Instant {
         todo!()
     }
 }

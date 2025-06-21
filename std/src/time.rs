@@ -1,3 +1,4 @@
+use core::fmt::Debug;
 pub use core::time::*;
 
 use crate::thread::GET_TIME_SINCE_EPOCH;
@@ -15,6 +16,12 @@ impl Instant {
     pub fn now() -> Instant {
         Instant {
             since_epoch: unsafe { GET_TIME_SINCE_EPOCH() },
+        }
+    }
+
+    pub fn from_duration_since_epoch(duration: Duration) -> Instant {
+        Instant {
+            since_epoch: duration,
         }
     }
 
@@ -52,5 +59,17 @@ impl core::ops::Sub<Instant> for Instant {
 
     fn sub(self, rhs: Instant) -> Duration {
         self.since_epoch - rhs.since_epoch
+    }
+}
+
+impl Debug for Instant {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "Instant({:?})", self.since_epoch)
+    }
+}
+
+impl core::fmt::Display for Instant {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "Instant({:?})", self.since_epoch)
     }
 }
