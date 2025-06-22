@@ -12,10 +12,11 @@
 
 extern crate static_cond;
 
-use core::ffi;
+use core::{ffi, time::Duration};
 use std::{println, printlnc};
 
 mod acpi;
+mod clocks;
 mod cmd_args;
 mod cpuid;
 mod drivers;
@@ -33,7 +34,6 @@ mod tests;
 mod utils;
 mod vfs;
 mod vga;
-mod clocks;
 use limine::LIMINE_BOOTLOADER_REQUESTS;
 
 const TEST_EXECUTABLE: &[u8] = include_bytes!("../../assets/libr");
@@ -64,17 +64,8 @@ extern "C" fn _start() -> ! {
 
     clocks::init();
 
-    let start = clocks::get_time();
-    let mut since = 0;
-    loop {
-        let new_since = clocks::get_time().duration_since(start).as_secs();
-        if new_since != since {
-            println!("Time since boot: {} seconds", new_since);
-            since = new_since;
-        }
-    }
-
     acpi::init_acpi();
+
     //
     // pci::enumerate_devices();
     // vfs::init();
@@ -109,6 +100,7 @@ extern "C" fn _start() -> ! {
     #[allow(clippy::empty_loop)]
     loop {
         a += 1;
+        acpi::set_timeout(Duration::from_millis(10000));
         println!("a: {}", a);
         unsafe { core::arch::asm!("hlt") };
     }

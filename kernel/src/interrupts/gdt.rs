@@ -221,7 +221,6 @@ pub fn create_new_gdt(kernel_stack_ptr: VirtAddr) -> TablePointer {
         io_map_base_address: core::mem::size_of::<TaskStateSegment>() as u16,
     });
     init_tss(tss.as_mut(), false, Some(kernel_stack_ptr.0));
-    println!("TSS: {:#X?}", tss);
     gdt.append_128(create_128_segment_descriptor(
         tss.as_ref() as *const _ as u64,
         (core::mem::size_of::<TaskStateSegment>() - 1) as u32,

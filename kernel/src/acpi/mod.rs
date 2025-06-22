@@ -11,9 +11,7 @@ mod rsdt;
 mod sdt;
 mod smp;
 
-use core::mem::MaybeUninit;
 use std::{
-    Vec,
     collections::btree_map::BTreeMap,
     mem_utils::{PhysAddr, get_at_physical_addr},
 };
@@ -24,8 +22,9 @@ pub use hpet::HpetTable;
 use madt::Madt;
 use platform_info::PlatformInfo;
 pub use smp::cpu_locals;
+pub use lapic_timer::set_timeout;
 
-use crate::{interrupts::APIC_TIMER_INIT, limine::LIMINE_BOOTLOADER_REQUESTS, memory::PAGE_TREE_ALLOCATOR, println, printlnc};
+use crate::{limine::LIMINE_BOOTLOADER_REQUESTS, memory::PAGE_TREE_ALLOCATOR, println, printlnc};
 
 static mut PLATFORM_INFO: Option<PlatformInfo> = None;
 pub static mut ACPI_TABLE_MAP: BTreeMap<&str, PhysAddr> = BTreeMap::new();
@@ -72,21 +71,12 @@ pub fn init_acpi() {
     let platform_info = platform_info::PlatformInfo::new(&entries, std::mem_utils::PhysAddr(madt.local_apic_address as u64));
     //override madt apic address if it exists in entries
     println!("initing APIC");
-    let platform_info = unsafe {
-        PLATFORM_INFO = Some(platform_info);
-        let Some(platform_info) = &PLATFORM_INFO else {
-            panic!("a");
-        };
-        platform_info
-    };
     unsafe {
-        APIC_TIMER_INIT = true;
-        let slots = platform_info.application_processors.len() + 1;
-        #[allow(clippy::slow_vector_initialization)] //it's non const ffs
-        let mut vec = Vec::with_capacity(slots);
-        vec.resize(slots, 0);
+        PLATFORM_INFO = Some(platform_info);
     };
+    let platform_info = unsafe { PLATFORM_INFO.as_ref().unwrap() };
     cpu_locals::init(platform_info);
+
 
     apic::enable_apic(platform_info, platform_info.boot_processor.processor_id);
     ioapic::init_ioapic(platform_info);

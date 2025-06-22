@@ -44,6 +44,7 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
             if cpu.1.apic_id == 255 {
                 panic!("invalid cpu: {:?}", cpu);
             }
+            let ap_gdt = interrupts::create_new_gdt(ap_stack_top);
 
             lapic_registers.send_init_ipi(cpu.1.apic_id);
             std::thread::sleep(std::time::Duration::from_millis(10));
@@ -56,7 +57,6 @@ pub fn wake_cpus(platform_info: &PlatformInfo) {
             send_mtrrs(comm_lock);
             send_cr_registers(comm_lock);
 
-            let ap_gdt = interrupts::create_new_gdt(ap_stack_top);
             let ap_local = super::cpu_locals::CpuLocals::new(
                 ap_stack_top,
                 KERNEL_STACK_SIZE_PAGES as u64,

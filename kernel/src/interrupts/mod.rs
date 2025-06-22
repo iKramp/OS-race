@@ -83,6 +83,7 @@ fn disable_timer() {
     byte_to_port(0x43, 0b00_11_000_0);
 }
 
+///Max 50 miliseconds
 pub fn set_pit_timeout(timeout_nanoseconds: u32) {
     let divisor = PIC_TIMER_ORIGINAL_FREQ as u64 * timeout_nanoseconds as u64 / 1_000_000_000;
     let divisor_low = (divisor & 0xFF) as u8;
@@ -93,4 +94,10 @@ pub fn set_pit_timeout(timeout_nanoseconds: u32) {
     byte_to_port(0x43, 0b00_11_000_0); // set mode to one-shot
     byte_to_port(0x40, divisor_low); // set low byte
     byte_to_port(0x40, divisor_high); // set high byte
+}
+
+pub fn trigger_pit_eoi() {
+    // Trigger EOI for PIT
+    byte_to_port(PIC1_DATA - 1, 0x20);
+    byte_to_port(PIC2_DATA - 1, 0x20);
 }

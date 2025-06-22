@@ -1,9 +1,6 @@
 #![allow(clippy::unusual_byte_groupings, static_mut_refs)]
 
-use crate::{
-    interrupts::{disable_pic_completely, disable_pic_keep_timer},
-    proc::interrupt_context_switch,
-};
+use crate::{interrupts::disable_pic_completely, proc::interrupt_context_switch};
 use core::mem::MaybeUninit;
 use std::mem_utils::PhysAddr;
 
@@ -19,7 +16,7 @@ use crate::{
     println,
 };
 
-use super::lapic_timer::activate_timer_ap;
+use super::lapic_timer::{activate_timer, setup_timer_ap};
 
 pub static mut LAPIC_REGISTERS: MaybeUninit<&mut LapicRegisters> = MaybeUninit::uninit();
 
@@ -27,7 +24,6 @@ pub static mut LAPIC_REGISTERS: MaybeUninit<&mut LapicRegisters> = MaybeUninit::
 pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo, processor_id: u8) {
     let bsp = processor_id == platform_info.boot_processor.processor_id;
     if bsp {
-        disable_pic_keep_timer();
         map_lapic_registers(platform_info.apic.lapic_address);
     };
 
@@ -47,11 +43,15 @@ pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo, processor
     lapic_registers.lvt_corrected_machine_check_interrupt.bytes = 0b00000000_00000000_0_000_0_0_000_01000000_u32;
 
     //this constantly gives interrupts??
-    lapic_registers.lvt_lint0.bytes = 0b00000000_00000000_0_000_0_0_000_01000001_u32;
-    lapic_registers.lvt_lint1.bytes = 0b00000000_00000000_0_000_0_0_000_01000010_u32;
-    lapic_registers.lvt_error.bytes = 0b00000000_00000000_0_000_0_0_000_01000011_u32;
-    lapic_registers.lvt_performance_monitoring_counters.bytes = 0b00000000_00000000_0_000_0_0_000_01000100_u32;
-    lapic_registers.lvt_thermal_sensor.bytes = 0b00000000_00000000_0_000_0_0_000_01000101_u32;
+    unsafe {
+        core::ptr::addr_of_mut!(lapic_registers.lvt_lint0.bytes).write_volatile(0b00000000_00000000_0_000_0_0_000_01000001_u32);
+        core::ptr::addr_of_mut!(lapic_registers.lvt_lint1.bytes).write_volatile(0b00000000_00000000_0_000_0_0_000_01000010_u32);
+        core::ptr::addr_of_mut!(lapic_registers.lvt_error.bytes).write_volatile(0b00000000_00000000_0_000_0_0_000_01000011_u32);
+        core::ptr::addr_of_mut!(lapic_registers.lvt_performance_monitoring_counters.bytes)
+            .write_volatile(0b00000000_00000000_0_000_0_0_000_01000100_u32);
+        core::ptr::addr_of_mut!(lapic_registers.lvt_thermal_sensor.bytes)
+            .write_volatile(0b00000000_00000000_0_000_0_0_000_01000101_u32);
+    }
 
     let mut nmi_source = 0b00000000_00000000_0_000_0_0_100_00000000_u32;
     let lapic_nmi = platform_info.get_nmi_structure(processor_id);
@@ -63,23 +63,23 @@ pub fn enable_apic(platform_info: &super::platform_info::PlatformInfo, processor
         nmi_source |= 1 << 13;
     }
     if lapic_nmi.lint == 0 {
-        lapic_registers.lvt_lint0.bytes = nmi_source;
+        unsafe { core::ptr::addr_of_mut!(lapic_registers.lvt_lint0.bytes).write_volatile(nmi_source) };
     } else {
-        lapic_registers.lvt_lint1.bytes = nmi_source;
+        unsafe { core::ptr::addr_of_mut!(lapic_registers.lvt_lint1.bytes).write_volatile(nmi_source) };
     }
 
     //fully enable apic:
-    lapic_registers.spurious_interrupt.bytes = 0b0000000000000000000_0_00_0_1_11111111_u32;
-    lapic_registers.task_priority.bytes = 0;
+    unsafe {
+        core::ptr::addr_of_mut!(lapic_registers.spurious_interrupt.bytes)
+            .write_volatile(0b0000000000000000000_0_00_0_1_11111111_u32);
+        core::ptr::addr_of_mut!(lapic_registers.task_priority.bytes).write_volatile(0);
+    }
 
     if !bsp {
-        activate_timer_ap(lapic_registers);
+        setup_timer_ap(lapic_registers);
         return;
     }
-    // activate_timer(lapic_registers);
-    // unsafe {
-    //     std::thread::TIMER_ACTIVE = true;
-    // }
+    activate_timer(lapic_registers);
 
     unsafe {
         IDT.set(Entry::new(handler!(apic_error)), 67);

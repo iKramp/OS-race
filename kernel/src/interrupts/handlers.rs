@@ -118,6 +118,7 @@ pub fn apic_eoi() {
 #[inline]
 fn legacy_eoi() {
     byte_to_port(0x20, 0x20);
+    byte_to_port(0xA0, 0x20);
 }
 
 pub extern "C" fn other_apic_interrupt(_proc_data: &mut InterruptProcessorState) {
@@ -125,11 +126,7 @@ pub extern "C" fn other_apic_interrupt(_proc_data: &mut InterruptProcessorState)
 }
 
 pub extern "C" fn apic_timer_tick(_proc_data: &mut InterruptProcessorState) {
-    // let apic_id = CpuLocals::get().apic_id as usize;
-    unsafe {
-        // super::APIC_TIMER_TICKS.assume_init_mut()[apic_id] += 1;
-        apic_eoi();
-    }
+    apic_eoi();
 }
 
 pub extern "C" fn legacy_timer_tick(_proc_data: &mut InterruptProcessorState) {

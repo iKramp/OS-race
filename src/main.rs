@@ -22,9 +22,9 @@ fn main() {
         cmd.arg("-s");
         cmd.arg("-S");
     }
-    cmd.arg("-cpu").arg("qemu64,invtsc");
+    cmd.arg("-cpu").arg("host,invtsc");
     cmd.arg("-enable-kvm");
-    cmd.arg("-smp").arg("4");
+    cmd.arg("-smp").arg("1");
 
     #[cfg(test)]
     {

@@ -62,6 +62,7 @@ impl Timer for TscWrapper {
             crate::interrupts::set_pit_timeout(5_000_000); //5 milliseconds
             core::arch::asm!("hlt", options(nomem, nostack)); //wait for timer interrupt
             let tsc_end = TscWrapper::get_ticks();
+            crate::interrupts::trigger_pit_eoi();
             let ticks_counted = tsc_end - tsc_start;
             println!("TSC ticks counted: {}", ticks_counted);
             TSC_WRAPPER.ticks_per_second = ticks_counted * 1000 / 5; // 5 milliseconds
