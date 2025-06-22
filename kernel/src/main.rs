@@ -33,6 +33,7 @@ mod tests;
 mod utils;
 mod vfs;
 mod vga;
+mod clocks;
 use limine::LIMINE_BOOTLOADER_REQUESTS;
 
 const TEST_EXECUTABLE: &[u8] = include_bytes!("../../assets/libr");
@@ -43,7 +44,6 @@ extern "C" fn _start() -> ! {
     unsafe {
         core::arch::asm!("mov {}, rsp", out(reg) stack_pointer);
     }
-    unsafe { std::thread::GET_TIME_SINCE_EPOCH = acpi::time_since_boot };
     vga::init_vga_driver();
     vga::clear_screen();
 
@@ -59,6 +59,20 @@ extern "C" fn _start() -> ! {
 
     let cmd_args = cmd_args::CmdArgs::new(str.to_str().unwrap());
     println!("cmd_args: {:?}", cmd_args);
+
+    acpi::read_tables();
+
+    clocks::init();
+
+    let start = clocks::get_time();
+    let mut since = 0;
+    loop {
+        let new_since = clocks::get_time().duration_since(start).as_secs();
+        if new_since != since {
+            println!("Time since boot: {} seconds", new_since);
+            since = new_since;
+        }
+    }
 
     acpi::init_acpi();
     //

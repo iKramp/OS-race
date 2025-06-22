@@ -1,6 +1,7 @@
 mod aml;
 mod apic;
 mod fadt;
+mod hpet;
 mod ioapic;
 mod lapic_timer;
 mod madt;
@@ -9,24 +10,32 @@ mod rsdp;
 mod rsdt;
 mod sdt;
 mod smp;
-mod timer;
 
 use core::mem::MaybeUninit;
-use std::{Vec, mem_utils::PhysAddr};
+use std::{
+    Vec,
+    collections::btree_map::BTreeMap,
+    mem_utils::{PhysAddr, get_at_physical_addr},
+};
 
 pub use apic::LAPIC_REGISTERS;
-pub use lapic_timer::time_since_boot;
+use fadt::Fadt;
+pub use hpet::HpetTable;
+use madt::Madt;
 use platform_info::PlatformInfo;
 pub use smp::cpu_locals;
 
-use crate::{
-    interrupts::{APIC_TIMER_INIT, APIC_TIMER_TICKS},
-    limine::LIMINE_BOOTLOADER_REQUESTS,
-    memory::PAGE_TREE_ALLOCATOR,
-    println, printlnc,
-};
+use crate::{interrupts::APIC_TIMER_INIT, limine::LIMINE_BOOTLOADER_REQUESTS, memory::PAGE_TREE_ALLOCATOR, println, printlnc};
 
 static mut PLATFORM_INFO: Option<PlatformInfo> = None;
+pub static mut ACPI_TABLE_MAP: BTreeMap<&str, PhysAddr> = BTreeMap::new();
+
+//this is safe because it's set when only 1 core is active, after that it's read only
+pub fn get_table<T: 'static>(name: &str) -> Option<&T> {
+    let addr = unsafe { ACPI_TABLE_MAP.get(name).copied()? };
+    unsafe { Some(get_at_physical_addr::<T>(addr)) }
+}
+
 pub fn get_platform_info() -> &'static PlatformInfo {
     unsafe {
         let Some(platform_info) = &PLATFORM_INFO else {
@@ -36,50 +45,28 @@ pub fn get_platform_info() -> &'static PlatformInfo {
     }
 }
 
-pub fn init_acpi() {
+pub fn read_tables() {
     let rsdp = rsdp::get_rsdp_table(unsafe { (*LIMINE_BOOTLOADER_REQUESTS.rsdp_request.info).rsdp as u64 })
         .expect("This os doesn not support PCs without ACPI");
     let rsdt = rsdt::get_rsdt(&rsdp);
     assert!(rsdt.validate());
     println!("rsdt is valid");
 
-    let mut fadt = None;
-    let mut madt = None;
-    let mut hpet = None;
-
     let tables = rsdt.get_tables();
     for table in &tables {
-        //print header signatures
         unsafe {
             let header = std::mem_utils::get_at_physical_addr::<sdt::AcpiSdtHeader>(*table);
-            let mut signature_clone = Vec::new();
-            for i in 0..4 {
-                signature_clone.push(header.signature[i]);
-            }
-            let signature = std::string::String::from_utf8(signature_clone).unwrap();
-            println!("{}", signature);
+            let signature = std::str::from_utf8(&header.signature).unwrap();
+            println!("Found ACPI table: {} at physical address {}", signature, table.0);
+            ACPI_TABLE_MAP.insert(std::str::from_utf8(&header.signature).unwrap(), *table);
         }
     }
-    for table in &tables {
-        unsafe {
-            let header = std::mem_utils::get_at_physical_addr::<sdt::AcpiSdtHeader>(*table);
-            match &header.signature {
-                b"FACP" => fadt = Some(std::mem_utils::get_at_physical_addr::<fadt::Fadt>(*table)),
-                b"APIC" => madt = Some(std::mem_utils::get_at_physical_addr::<madt::Madt>(*table)),
-                b"HPET" => hpet = Some(std::mem_utils::get_at_physical_addr::<timer::hpet::HpetTable>(*table)),
-                _ => {} //any other tables except SSDT, those are parsed after DSDT
-                        //qemu only reports FACP, APIC, HPET and WAET
-            }
-        }
-    }
-    println!("tables parsed");
+    println!("Acpi tables read");
+}
 
-    let fadt = fadt.expect("fadt should be present");
-    let madt = madt.expect("madt should be present");
-    let hpet = hpet.expect("hpet should be present");
-
-    unsafe { timer::HPET_ACPI_TABLE = MaybeUninit::new(hpet) };
-    timer::init();
+pub fn init_acpi() {
+    let fadt = get_table::<Fadt>("FACP").expect("fadt should be present");
+    let madt = get_table::<Madt>("APIC").expect("madt should be present");
 
     let entries = madt.get_madt_entries();
     let platform_info = platform_info::PlatformInfo::new(&entries, std::mem_utils::PhysAddr(madt.local_apic_address as u64));
@@ -98,7 +85,6 @@ pub fn init_acpi() {
         #[allow(clippy::slow_vector_initialization)] //it's non const ffs
         let mut vec = Vec::with_capacity(slots);
         vec.resize(slots, 0);
-        APIC_TIMER_TICKS = MaybeUninit::new(vec.into_boxed_slice());
     };
     cpu_locals::init(platform_info);
 

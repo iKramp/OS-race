@@ -41,7 +41,7 @@ pub fn init_pic() {
     byte_to_port(PIC1_DATA, 0x01);
     byte_to_port(PIC2_DATA, 0x01);
 
-    init_timer();
+    disable_timer();
 
     byte_to_port(PIC1_DATA, 0xFE); //only allow timer
     byte_to_port(PIC2_DATA, 0xFE);
@@ -74,22 +74,23 @@ fn disconnect_imcr() {
     byte_to_port(IMCR + 1, 0x01);
 }
 
-pub static mut LEGACY_PIC_TIMER_TICKS: u64 = 0;
-pub static mut APIC_TIMER_TICKS: MaybeUninit<Box<[u64]>> = MaybeUninit::uninit();
 pub static mut APIC_TIMER_INIT: bool = false;
 pub const TIMER_DESIRED_FREQUENCY: u32 = 1; //don't need much lmao
-pub const PIC_TIMER_ORIGINAL_FREQ: u32 = 1193180;
-pub const PIC_DIVISOR: u16 = 119 * 3;
-pub const PIC_ACTUAL_FREQ: u32 = PIC_TIMER_ORIGINAL_FREQ / PIC_DIVISOR as u32;
-
-fn init_timer() {
-    #[allow(clippy::unusual_byte_groupings)]
-    byte_to_port(0x43, 0b00_11_011_0);
-    byte_to_port(0x40, (PIC_DIVISOR & 0xFF) as u8);
-    byte_to_port(0x40, ((PIC_DIVISOR >> 8) & 0xFF) as u8);
-}
+pub const PIC_TIMER_ORIGINAL_FREQ: u32 = 1_193_182;
 
 fn disable_timer() {
     #[allow(clippy::unusual_byte_groupings)]
     byte_to_port(0x43, 0b00_11_000_0);
+}
+
+pub fn set_pit_timeout(timeout_nanoseconds: u32) {
+    let divisor = PIC_TIMER_ORIGINAL_FREQ as u64 * timeout_nanoseconds as u64 / 1_000_000_000;
+    let divisor_low = (divisor & 0xFF) as u8;
+    let divisor_high = ((divisor >> 8) & 0xFF) as u8;
+
+    //one-shot mode
+    #[allow(clippy::unusual_byte_groupings)]
+    byte_to_port(0x43, 0b00_11_000_0); // set mode to one-shot
+    byte_to_port(0x40, divisor_low); // set low byte
+    byte_to_port(0x40, divisor_high); // set high byte
 }

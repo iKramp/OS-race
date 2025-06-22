@@ -1,11 +1,10 @@
-use core::mem::MaybeUninit;
 use std::{println, time::Instant};
 
-pub(super) mod hpet;
+mod hpet;
 mod rtc;
 mod tsc;
 
-pub(super) static mut HPET_ACPI_TABLE: MaybeUninit<&hpet::HpetTable> = MaybeUninit::uninit();
+static mut SELECTED_TIMER: SelectedTimer = SelectedTimer::Tsc;
 
 trait Timer {
     fn start(&self, now: Instant) -> bool;
@@ -22,4 +21,17 @@ pub fn init() {
     let now_tsc = unsafe { tsc::TSC_WRAPPER.get_time() };
     println!("Current time (TSC): {:?}", now_tsc);
     // let _success = unsafe { hpet::HPET.start(now) };
+}
+
+pub fn get_time() -> Instant {
+    match unsafe { SELECTED_TIMER } {
+        SelectedTimer::Tsc => unsafe { tsc::TSC_WRAPPER.get_time() },
+        SelectedTimer::Hpet => unsafe { hpet::HPET.get_time() },
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum SelectedTimer {
+    Tsc,
+    Hpet,
 }

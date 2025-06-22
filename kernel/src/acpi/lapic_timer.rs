@@ -4,7 +4,7 @@ use crate::{
     acpi::{LAPIC_REGISTERS, cpu_locals},
     handler,
     interrupts::{
-        APIC_TIMER_INIT, APIC_TIMER_TICKS, LEGACY_PIC_TIMER_TICKS, PIC_ACTUAL_FREQ, TIMER_DESIRED_FREQUENCY,
+        APIC_TIMER_INIT, TIMER_DESIRED_FREQUENCY,
         disable_pic_completely,
         handlers::apic_timer_tick,
         idt::{Entry, IDT},
@@ -39,15 +39,14 @@ pub(super) fn activate_timer(lapic_registers: &mut LapicRegisters) {
     lapic_registers.divide_configuration.bytes = 0;
     lapic_registers.initial_count.bytes = TIMER_COUNT;
 
-    let ticks;
-    unsafe {
-        let end_legacy_timer = LEGACY_PIC_TIMER_TICKS + PIC_ACTUAL_FREQ as u64 / 100; //10 ms
-        #[allow(clippy::while_immutable_condition)] //timer mutates
-        while LEGACY_PIC_TIMER_TICKS < end_legacy_timer {}
-        ticks = lapic_registers.current_count.bytes;
-        lapic_registers.initial_count.bytes = 0; //disable
-        disable_pic_completely();
-    }
+    let end_time = crate::clocks::get_time() + std::time::Duration::from_millis(5);
+    
+    while crate::clocks::get_time() < end_time {}
+
+    let ticks = lapic_registers.current_count.bytes;
+
+    lapic_registers.initial_count.bytes = 0; //disable
+    disable_pic_completely();
     let ticks_counted = TIMER_COUNT - ticks;
 
     println!("Ticks: {}", ticks);
@@ -61,7 +60,6 @@ pub(super) fn activate_timer(lapic_registers: &mut LapicRegisters) {
     // }
     // panic!();
 
-    timer_conf |= 0b01 << 17; // set to periodic
     timer_conf &= !0xFF_u32;
     timer_conf |= 32; //set correct interrupt vector
     lapic_registers.lvt_timer.bytes = timer_conf;
@@ -71,13 +69,4 @@ pub(super) fn activate_timer(lapic_registers: &mut LapicRegisters) {
         TIMER_CONF = timer_conf;
         INITIAL_COUNT = initial_count;
     }
-}
-
-pub fn time_since_boot() -> std::time::Duration {
-    debug_assert!(unsafe { APIC_TIMER_INIT });
-    let apic_id = cpu_locals::CpuLocals::get().apic_id;
-    let time_seconds = unsafe { APIC_TIMER_TICKS.assume_init_ref()[apic_id as usize] };
-    let timer_ticks_counted = unsafe { INITIAL_COUNT as u64 - LAPIC_REGISTERS.assume_init_ref().current_count.bytes as u64 };
-    let time_nanos = unsafe { timer_ticks_counted * 1_000_000_000 / INITIAL_COUNT as u64 };
-    std::time::Duration::new(time_seconds, time_nanos as u32)
 }

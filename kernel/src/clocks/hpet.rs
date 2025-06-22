@@ -1,8 +1,14 @@
-use std::{mem_utils::PhysAddr, printlnc};
+use std::{
+    mem_utils::{PhysAddr, get_at_physical_addr},
+    printlnc,
+};
 
 use bitfield::bitfield;
 
-use crate::memory::{PAGE_TREE_ALLOCATOR, paging::LiminePat};
+use crate::{
+    acpi,
+    memory::{PAGE_TREE_ALLOCATOR, paging::LiminePat},
+};
 
 use super::Timer;
 
@@ -21,9 +27,8 @@ pub(super) struct HpetWrapper {
 }
 
 impl HpetWrapper {
-    fn get_registers(table: &HpetTable) -> bool {
-        let phys_addr = PhysAddr(table.base_addr.addr);
-        let virt_addr = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(phys_addr), false) };
+    fn get_registers(reg_phys_addr: PhysAddr) -> bool {
+        let virt_addr = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(reg_phys_addr), false) };
         let entry = unsafe {
             PAGE_TREE_ALLOCATOR
                 .get_page_table_entry_mut(virt_addr)
@@ -82,7 +87,14 @@ impl HpetWrapper {
 
 impl Timer for HpetWrapper {
     fn start(&self, now: std::time::Instant) -> bool {
-        let hpet_regs = unsafe { super::HPET_ACPI_TABLE.assume_init_read() };
+        let hpet_table;
+        unsafe {
+            let Some(hpet_table_phys_addr) = acpi::ACPI_TABLE_MAP.get("HPET") else {
+                return false;
+            };
+            hpet_table = get_at_physical_addr::<acpi::HpetTable>(*hpet_table_phys_addr);
+        }
+        let hpet_regs = hpet_table.get_addr();
         if !Self::get_registers(hpet_regs) {
             return false;
         }
@@ -168,39 +180,4 @@ bitfield! {
     ///route in the IO APIC
     int_route, set_int_route: 13, 9;
     //more useless fields
-}
-
-#[repr(C, packed)]
-pub(in crate::acpi) struct HpetTable {
-    header: crate::acpi::sdt::AcpiSdtHeader,
-    et_block_id: EventTimerBlockID,
-    base_addr: AcpiMemoryDescriptor,
-    hpet_number: u8,
-    min_count: u16,
-    page_prot_attr: u8,
-}
-
-bitfield! {
-    struct EventTimerBlockID(u32);
-    impl Debug;
-    pci_vendor_id, _: 31, 16;
-    legacy_replacement_capable, _: 15;
-    count_size_cap, _: 13;
-    num_comparators, _: 12, 8;
-    hardware_rev_id, _: 7, 0;
-}
-
-#[repr(C, packed)]
-struct AcpiMemoryDescriptor {
-    mem_space: AcpiMemorySpace,
-    reg_bit_width: u8,
-    reg_bit_offset: u8,
-    rreserved: u8,
-    addr: u64,
-}
-
-#[repr(u8)]
-enum AcpiMemorySpace {
-    SystemMemory = 0,
-    SystemIO = 1,
 }

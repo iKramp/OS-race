@@ -1,10 +1,7 @@
 use core::arch::asm;
-use std::printlnc;
+use std::{println, printlnc};
 
-use crate::{
-    cpuid,
-    interrupts::{LEGACY_PIC_TIMER_TICKS, PIC_ACTUAL_FREQ},
-};
+use crate::cpuid;
 
 use super::Timer;
 
@@ -60,15 +57,16 @@ impl Timer for TscWrapper {
 
         let tsc_start;
         unsafe {
-            let end_legacy_timer = LEGACY_PIC_TIMER_TICKS + PIC_ACTUAL_FREQ as u64 / 1000; //1 ms
+            println!("TSC: starting timer");
             tsc_start = TscWrapper::get_ticks();
-            #[allow(clippy::while_immutable_condition)] //timer mutates
-            while LEGACY_PIC_TIMER_TICKS < end_legacy_timer {}
+            crate::interrupts::set_pit_timeout(5_000_000); //5 milliseconds
+            core::arch::asm!("hlt", options(nomem, nostack)); //wait for timer interrupt
             let tsc_end = TscWrapper::get_ticks();
             let ticks_counted = tsc_end - tsc_start;
-            TSC_WRAPPER.ticks_per_second = ticks_counted * 1000;
+            println!("TSC ticks counted: {}", ticks_counted);
+            TSC_WRAPPER.ticks_per_second = ticks_counted * 1000 / 5; // 5 milliseconds
         }
-        unsafe { 
+        unsafe {
             TSC_WRAPPER.start = now;
             TSC_WRAPPER.ticks_on_start = tsc_start;
         }
@@ -79,7 +77,8 @@ impl Timer for TscWrapper {
     fn get_time(&self) -> std::time::Instant {
         let ticks = TscWrapper::get_ticks();
         let tps = unsafe { TSC_WRAPPER.ticks_per_second };
-        let elapsed = ticks - tps;
+        let ticks_on_start = unsafe { TSC_WRAPPER.ticks_on_start };
+        let elapsed = ticks - ticks_on_start;
         let seconds = elapsed / tps;
         let secons_ticks = seconds * tps;
         let nanos = ((elapsed - secons_ticks) * 1_000_000_000) / tps;
