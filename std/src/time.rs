@@ -20,9 +20,7 @@ impl Instant {
     }
 
     pub fn from_duration_since_epoch(duration: Duration) -> Instant {
-        Instant {
-            since_epoch: duration,
-        }
+        Instant { since_epoch: duration }
     }
 
     pub fn elapsed(&self) -> Duration {

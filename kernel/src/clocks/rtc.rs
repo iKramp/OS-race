@@ -1,8 +1,5 @@
-use std::println;
-
-use crate::utils::{byte_from_port, byte_to_port};
-
 use super::Timer;
+use crate::utils::{byte_from_port, byte_to_port};
 
 const CMOS_REG_SELECT: u16 = 0x70;
 const CMOS_REG_DATA: u16 = 0x71;

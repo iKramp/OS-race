@@ -1,7 +1,6 @@
 mod gdt;
-use core::mem::MaybeUninit;
 pub use gdt::{STATIC_GDT_PTR, create_new_gdt, load_gdt};
-use std::{boxed::Box, println, printlnc};
+use std::{println, printlnc};
 #[macro_use]
 pub mod handlers;
 pub mod idt;

@@ -19,10 +19,10 @@ use std::{
 pub use apic::LAPIC_REGISTERS;
 use fadt::Fadt;
 pub use hpet::HpetTable;
+pub use lapic_timer::set_timeout;
 use madt::Madt;
 use platform_info::PlatformInfo;
 pub use smp::cpu_locals;
-pub use lapic_timer::set_timeout;
 
 use crate::{limine::LIMINE_BOOTLOADER_REQUESTS, memory::PAGE_TREE_ALLOCATOR, println, printlnc};
 
@@ -76,7 +76,6 @@ pub fn init_acpi() {
     };
     let platform_info = unsafe { PLATFORM_INFO.as_ref().unwrap() };
     cpu_locals::init(platform_info);
-
 
     apic::enable_apic(platform_info, platform_info.boot_processor.processor_id);
     ioapic::init_ioapic(platform_info);

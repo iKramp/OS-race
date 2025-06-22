@@ -44,7 +44,7 @@ pub(super) fn activate_timer(lapic_registers: &mut LapicRegisters) {
         let start_time = crate::clocks::get_time();
         let end_time = start_time + Duration::from_millis(5);
         while crate::clocks::get_time() < end_time {}
-        
+
         ticks = core::ptr::addr_of!(lapic_registers.current_count.bytes).read_volatile();
         core::ptr::addr_of_mut!(lapic_registers.initial_count.bytes).write_volatile(0); //disable
         crate::interrupts::trigger_pit_eoi();
@@ -86,20 +86,20 @@ pub fn set_timeout(duration: Duration) {
     // 128      | 0b1010
     // 1        | 0b1011
 
-    let tics_seconds = seconds * (unsafe { FREQUENCY } );
-    let ticks_nanos = nanos * (unsafe { FREQUENCY } ) / 1_000_000_000;
+    let tics_seconds = seconds * (unsafe { FREQUENCY });
+    let ticks_nanos = nanos * (unsafe { FREQUENCY }) / 1_000_000_000;
     let ticks = tics_seconds + ticks_nanos;
     let leading_zeros = ticks.leading_zeros();
     let (division, ticks) = match leading_zeros {
-        32.. => (0b1011, ticks),     //no division
-        31 => (0b0000, ticks / 2),   //divide by 2
-        30 => (0b0001, ticks / 4),   //divide by 4
-        29 => (0b0010, ticks / 8),   //divide by 8
-        28 => (0b0011, ticks / 16),  //divide by 16
-        27 => (0b1000, ticks / 32),  //divide by 32
-        26 => (0b1001, ticks / 64),  //divide by 64
-        25 => (0b1010, ticks / 128), //divide by 128
-        _ => (0b1010, u32::MAX as u64),            //more than 10 minutes timeout, treat as max
+        32.. => (0b1011, ticks),        //no division
+        31 => (0b0000, ticks / 2),      //divide by 2
+        30 => (0b0001, ticks / 4),      //divide by 4
+        29 => (0b0010, ticks / 8),      //divide by 8
+        28 => (0b0011, ticks / 16),     //divide by 16
+        27 => (0b1000, ticks / 32),     //divide by 32
+        26 => (0b1001, ticks / 64),     //divide by 64
+        25 => (0b1010, ticks / 128),    //divide by 128
+        _ => (0b1010, u32::MAX as u64), //more than 10 minutes timeout, treat as max
     };
     let lapic_registers = unsafe { super::LAPIC_REGISTERS.assume_init_mut() };
     unsafe {
