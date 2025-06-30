@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 #![allow(clippy::identity_op)]
 
-use core::fmt::Debug;
+use core::{fmt::Debug, time::Duration};
 use std::{
     mem_utils::{PhysAddr, VirtAddr, get_at_physical_addr, get_at_virtual_addr, memset_virtual_addr},
     println,
@@ -59,7 +59,7 @@ impl AhciController {
         ghc.ghc.SetHR(true);
         unsafe { (&raw mut self.abar.ghc).write_volatile(GlobalHBAControl(ghc.ghc.0)) };
         while ghc.ghc.HR() {
-            unsafe { core::arch::asm!("hlt") };
+            std::thread::sleep(Duration::from_micros(10));
             ghc.ghc = unsafe { (&raw const self.abar.ghc).read_volatile() };
         }
 
@@ -139,7 +139,7 @@ impl AhciController {
                     if !bohc.BB() || start.elapsed().as_secs() > 2 {
                         break;
                     }
-                    unsafe { core::arch::asm!("hlt") };
+                    std::thread::sleep(Duration::from_micros(10));
                 }
                 println!("Bios handoff complete");
                 break;
@@ -148,7 +148,7 @@ impl AhciController {
                 println!("Bios handoff timeout");
                 break;
             }
-            unsafe { core::arch::asm!("hlt") };
+            std::thread::sleep(Duration::from_micros(10));
         }
     }
 
@@ -159,18 +159,17 @@ impl AhciController {
             if port_command.ST() {
                 port_command.SetST(false);
                 port.set_property(0x18, port_command.0);
-                unsafe { core::arch::asm!("hlt") }; //i need to find a better system to sleep, 1ms
-                //is too long
+                std::thread::sleep(Duration::from_micros(10));
             }
             while port_command.CR() {
-                unsafe { core::arch::asm!("hlt") };
+                std::thread::sleep(Duration::from_micros(10));
                 port_command = PortCommand(port.get_property(0x18));
             }
             if port_command.FR() {
                 port_command.SetFRE(false);
                 port.set_property(0x18, port_command.0);
                 while port_command.FR() {
-                    unsafe { core::arch::asm!("hlt") };
+                    std::thread::sleep(Duration::from_micros(10));
                     port_command = PortCommand(port.get_property(0x18));
                 }
             }
@@ -280,7 +279,7 @@ impl VirtualPort {
         //here a register FIS is sent immediately
 
         while !port_cmd.FR() {
-            unsafe { core::arch::asm!("hlt") };
+            std::thread::sleep(Duration::from_micros(10));
             port_cmd = PortCommand(self.get_property(0x18));
         }
 
@@ -301,7 +300,7 @@ impl VirtualPort {
                 println!("Port {} not working", self.index);
                 return false;
             }
-            unsafe { core::arch::asm!("hlt") };
+            std::thread::sleep(Duration::from_micros(10));
             sata_status = SATAStatus(self.get_property(0x28));
         }
         //clear error register
@@ -310,7 +309,7 @@ impl VirtualPort {
         //wait for device to be ready
         let mut task_file_data = TaskFileData(self.get_property(0x20));
         while task_file_data.STS_BSY() || task_file_data.STS_DRQ() || task_file_data.STS_ERR() {
-            unsafe { core::arch::asm!("hlt") };
+            std::thread::sleep(Duration::from_micros(10));
             task_file_data = TaskFileData(self.get_property(0x20));
         }
 
@@ -357,7 +356,7 @@ impl VirtualPort {
 
         let mut ci = self.get_property(0x38);
         while ci & (1 << identify_cmd_index) != 0 {
-            unsafe { core::arch::asm!("hlt") };
+            std::thread::sleep(Duration::from_micros(10));
             ci = self.get_property(0x38);
         }
 
@@ -429,7 +428,7 @@ impl VirtualPort {
         //spin on busy
         let mut port_cmd = TaskFileData(self.get_property(0x20));
         while port_cmd.STS_BSY() {
-            unsafe { core::arch::asm!("hlt") };
+            std::thread::sleep(Duration::from_micros(10));
             port_cmd = TaskFileData(self.get_property(0x20));
         }
 
@@ -497,7 +496,7 @@ impl Disk for VirtualPort {
         //for now synchronous
         let mut ci = self.get_property(0x38);
         while ci & (1 << read_cmd_index) != 0 {
-            unsafe { core::arch::asm!("hlt") };
+            std::thread::sleep(Duration::from_micros(10));
             ci = self.get_property(0x38);
         }
 
@@ -548,7 +547,7 @@ impl Disk for VirtualPort {
         //for now synchronous
         let mut ci = self.get_property(0x38);
         while ci & (1 << write_cmd_index) != 0 {
-            unsafe { core::arch::asm!("hlt") };
+            std::thread::sleep(Duration::from_micros(10));
             ci = self.get_property(0x38);
         }
 

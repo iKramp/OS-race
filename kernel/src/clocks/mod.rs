@@ -19,15 +19,11 @@ pub fn init() {
         panic!("HPET not yet ready to use");
     }
     let now_tsc = unsafe { tsc::TSC_WRAPPER.get_time() };
+    unsafe {
+        std::time::GET_TIME = || tsc::TSC_WRAPPER.get_time();
+    }
     println!("Current time (TSC): {:?}", now_tsc);
     // let _success = unsafe { hpet::HPET.start(now) };
-}
-
-pub fn get_time() -> Instant {
-    match unsafe { SELECTED_TIMER } {
-        SelectedTimer::Tsc => unsafe { tsc::TSC_WRAPPER.get_time() },
-        SelectedTimer::Hpet => unsafe { hpet::HPET.get_time() },
-    }
 }
 
 #[derive(Debug, Clone, Copy)]

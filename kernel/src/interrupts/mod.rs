@@ -22,8 +22,6 @@ pub fn init_interrupts() {
     gdt::init_boot_gdt(); //add a separate TSS for each core
     println!("initializing IDT");
     idt::init_idt();
-    unsafe { core::arch::asm!("hlt") };
-    println!("Some println");
     printlnc!((0, 255, 0), "interrupts initialized");
 }
 

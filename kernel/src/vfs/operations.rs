@@ -27,7 +27,7 @@ pub fn add_disk(mut disk: Box<dyn Disk + Send>) {
     vfs.disks.insert(guid, (disk, partition_guids));
 
     for partition in partitions {
-        let device = partition.1.device.clone();
+        let device = partition.1.device;
         vfs.available_partitions.insert(partition.0, partition.1);
         vfs.devices.insert(
             device,
@@ -78,22 +78,12 @@ pub fn mount_partition_resolved(part_id: Uuid, mountpoint: ResolvedPath) -> Resu
         .to_string());
     };
 
-    let current_num = fs_tree::CURRENT_NUM.load(core::sync::atomic::Ordering::Relaxed);
-
-    //mounting root. This is the first FS cache operation and can only happen once per boot
-    if mountpoint.0.is_empty() && current_num != 0 {
-        return Err("Root already mounted".to_string());
-    }
-
-    if !mountpoint.0.is_empty() {
-        panic!("mounting non-root not implemented yet");
-    }
-
     let mounted_partition = MountedPartition { disk, partition };
     let mut fs = fs_factory.mount(mounted_partition);
     let inode = fs.stat(ROOT_INODE_INDEX);
     fs_tree::init(inode);
     vfs.mounted_partitions.insert(part_id, fs);
+    vfs.mount_points.insert(mountpoint.0, part_id);
 
     Ok(())
 }
@@ -105,7 +95,7 @@ pub fn unmount_partition(part_id: Uuid) {
 }
 
 pub fn get_dir_entries(path: ResolvedPath) -> Result<Box<[DirEntry]>, String> {
-    let inode_num = fs_tree::get_inode_num(path).ok_or("Path not found")?;
+    let inode_num = fs_tree::get_inode_index(path).ok_or("Path not found")?;
     let inode = fs_tree::get_inode(inode_num).ok_or("Inode not found")?;
     let mut vfs = VFS.lock();
     let device_details = vfs.devices.get(&inode.device).ok_or("Device not found")?;
@@ -115,7 +105,7 @@ pub fn get_dir_entries(path: ResolvedPath) -> Result<Box<[DirEntry]>, String> {
 }
 
 pub fn create_file(path: ResolvedPath, name: &str, inode_type: InodeType) {
-    let parent_inode_num = fs_tree::get_inode_num(path).unwrap();
+    let parent_inode_num = fs_tree::get_inode_index(path).unwrap();
     let parent_inode = fs_tree::get_inode(parent_inode_num).unwrap();
     let mut vfs = VFS.lock();
     let device_details = vfs.devices.get(&parent_inode.device).unwrap();
@@ -127,7 +117,7 @@ pub fn create_file(path: ResolvedPath, name: &str, inode_type: InodeType) {
 }
 
 pub fn write_file(path: ResolvedPath, content: &[PhysAddr], offset: u64, size: u64) {
-    let inode_num = fs_tree::get_inode_num(path).unwrap();
+    let inode_num = fs_tree::get_inode_index(path).unwrap();
     let inode = fs_tree::get_inode(inode_num).unwrap();
     let mut vfs = VFS.lock();
     let device_details = vfs.devices.get(&inode.device).unwrap();
@@ -137,7 +127,7 @@ pub fn write_file(path: ResolvedPath, content: &[PhysAddr], offset: u64, size: u
 }
 
 pub fn read_file(path: ResolvedPath, buffer: &[PhysAddr], offset: u64, size: u64) {
-    let inode_num = fs_tree::get_inode_num(path).unwrap();
+    let inode_num = fs_tree::get_inode_index(path).unwrap();
     let inode = fs_tree::get_inode(inode_num).unwrap();
     let mut vfs = VFS.lock();
     let device_details = vfs.devices.get(&inode.device).unwrap();

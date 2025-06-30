@@ -3,6 +3,7 @@
 use crate::interrupts::{self, idt::IDT_POINTER};
 use crate::println;
 use core::arch::asm;
+use core::time::Duration;
 
 use crate::{
     memory::paging::PageTree,
@@ -41,7 +42,7 @@ pub extern "C" fn ap_started_wait_loop() -> ! {
 
     loop {
         unsafe {
-            core::arch::asm!("hlt");
+            std::thread::sleep(Duration::from_millis(100));
             if crate::proc::PROC_INITIALIZED {
                 //if proc initialized, we can start executing processes
                 break;

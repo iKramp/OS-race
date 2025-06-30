@@ -1,7 +1,7 @@
 use core::fmt::Debug;
 pub use core::time::*;
 
-use crate::thread::GET_TIME_SINCE_EPOCH;
+pub static mut GET_TIME: fn() -> Instant = || UNIX_EPOCH;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash, Default)]
 pub struct Instant {
@@ -14,9 +14,7 @@ pub const UNIX_EPOCH: Instant = Instant {
 
 impl Instant {
     pub fn now() -> Instant {
-        Instant {
-            since_epoch: unsafe { GET_TIME_SINCE_EPOCH() },
-        }
+        unsafe { GET_TIME() }
     }
 
     pub fn from_duration_since_epoch(duration: Duration) -> Instant {
@@ -24,7 +22,7 @@ impl Instant {
     }
 
     pub fn elapsed(&self) -> Duration {
-        unsafe { GET_TIME_SINCE_EPOCH() - self.since_epoch }
+        unsafe { GET_TIME() }.duration_since(*self)
     }
 
     pub fn duration_since(&self, earlier: Instant) -> Duration {

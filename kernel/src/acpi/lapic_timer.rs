@@ -1,5 +1,5 @@
 use core::time::Duration;
-use std::println;
+use std::{println, time::Instant};
 
 use crate::{
     handler,
@@ -41,9 +41,9 @@ pub(super) fn activate_timer(lapic_registers: &mut LapicRegisters) {
         core::ptr::addr_of_mut!(lapic_registers.divide_configuration.bytes).write_volatile(0b1011);
         core::ptr::addr_of_mut!(lapic_registers.initial_count.bytes).write_volatile(TIMER_COUNT);
 
-        let start_time = crate::clocks::get_time();
+        let start_time = Instant::now();
         let end_time = start_time + Duration::from_millis(5);
-        while crate::clocks::get_time() < end_time {}
+        while Instant::now() < end_time {}
 
         ticks = core::ptr::addr_of!(lapic_registers.current_count.bytes).read_volatile();
         core::ptr::addr_of_mut!(lapic_registers.initial_count.bytes).write_volatile(0); //disable
@@ -70,7 +70,16 @@ pub(super) fn activate_timer(lapic_registers: &mut LapicRegisters) {
     unsafe {
         TIMER_CONF = timer_conf;
         FREQUENCY = frequency;
+        std::thread::SLEEP = sleep_duration;
     }
+}
+
+fn sleep_duration(duration: Duration) {
+    if duration.as_micros() < 1 {
+        return; //no need to sleep
+    }
+    set_timeout(duration);
+    unsafe { core::arch::asm!("hlt") };
 }
 
 pub fn set_timeout(duration: Duration) {
