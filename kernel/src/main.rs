@@ -100,7 +100,7 @@ extern "C" fn _start() -> ! {
     #[allow(clippy::empty_loop)]
     loop {
         a += 1;
-        acpi::set_timeout(Duration::from_millis(10000));
+        acpi::set_timeout(Duration::from_secs(1));
         println!("a: {}", a);
         unsafe { core::arch::asm!("hlt") };
     }
