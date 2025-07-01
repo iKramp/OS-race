@@ -70,7 +70,7 @@ impl ReadDirOperation {
 
     fn execute(&self) {
         let path = vfs::resolve_path(self.folder_name, "/");
-        let entries = vfs::get_dir_entries(path);
+        let entries = vfs::get_dir_entries((&path).into());
         println!("Read dir: {}", self.folder_name);
         println!("Dir entries: {:?}", entries);
     }
@@ -85,7 +85,8 @@ impl CreateFileOperation {
         let split_index = self.file_name.rfind('/').unwrap();
         let (parent_path, file_name) = self.file_name.split_at(split_index + 1); //slash is in the
         println!("Creating file: {}", self.file_name);
-        vfs::create_file(vfs::resolve_path(parent_path, "/"), file_name, InodeType::new_file(0));
+        let path = vfs::resolve_path(parent_path, "/");
+        vfs::create_file((&path).into(), file_name, InodeType::new_file(0));
         println!("Created file: {:?}", self.file_name);
     }
 }
@@ -136,7 +137,7 @@ impl WriteFileOperation {
         }
 
         println!("Writing file: {} of size: {}", self.file_name, content.len());
-        vfs::write_file(path, &frames, self.offset, self.content.len() as u64);
+        vfs::write_file((&path).into(), &frames, self.offset, self.content.len() as u64);
 
         for frame in frames {
             unsafe { crate::memory::physical_allocator::deallocate_frame(frame) };
@@ -158,7 +159,8 @@ impl CreateFolderOperation {
         let split_index = self.folder_name.rfind('/').unwrap();
         let (parent_path, file_name) = self.folder_name.split_at(split_index + 1); //slash is in the
         println!("Creating folder: {}", self.folder_name);
-        vfs::create_file(vfs::resolve_path(parent_path, "/"), file_name, InodeType::new_file(0))
+        let path = vfs::resolve_path(parent_path, "/");
+        vfs::create_file((&path).into(), file_name, InodeType::new_file(0))
     }
 }
 
@@ -202,7 +204,7 @@ impl ReadFileOperation {
             let frame = crate::memory::physical_allocator::allocate_frame();
             buffer.push(frame);
         }
-        vfs::read_file(path, &buffer, real_offset, real_length);
+        vfs::read_file((&path).into(), &buffer, real_offset, real_length);
         let mut final_data = Vec::with_capacity(self.length as usize);
         let mut frame_ptr = (self.offset as usize) & 0xFFF;
         for (index, frame) in buffer.iter().enumerate() {

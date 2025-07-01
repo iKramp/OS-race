@@ -2,6 +2,7 @@ use std::{
     boxed::Box,
     format,
     mem_utils::PhysAddr,
+    printlnc,
     string::{String, ToString},
     vec::Vec,
 };
@@ -13,7 +14,7 @@ use crate::drivers::{
     gpt::GPTDriver,
 };
 
-use super::{DeviceDetails, InodeType, ROOT_INODE_INDEX, ResolvedPath, VFS, fs_tree, resolve_path};
+use super::{DeviceDetails, InodeType, ROOT_INODE_INDEX, ResolvedPath, ResolvedPathBorrowed, VFS, fs_tree, resolve_path};
 
 pub fn add_disk(mut disk: Box<dyn Disk + Send>) {
     //for now only GPT
@@ -83,18 +84,36 @@ pub fn mount_partition_resolved(part_id: Uuid, mountpoint: ResolvedPath) -> Resu
     let inode = fs.stat(ROOT_INODE_INDEX);
     fs_tree::init(inode);
     vfs.mounted_partitions.insert(part_id, fs);
-    vfs.mount_points.insert(mountpoint.0, part_id);
+    vfs.mount_points.insert(mountpoint.take(), part_id);
 
     Ok(())
 }
 
-pub fn unmount_partition(part_id: Uuid) {
+pub fn unmount_partition(path: ResolvedPathBorrowed) {
+    let parent_path = path.index(0..path.len() - 1);
+    let parent_inode_num = fs_tree::get_inode_index(parent_path).unwrap();
+    let current_name = path.get(path.len() - 1).unwrap();
+
     let mut vfs = VFS.lock();
-    let mut partition = vfs.mounted_partitions.remove(&part_id).unwrap();
-    partition.unmount();
+    let Some(partition_id) = vfs.mount_points.remove(path.inner()) else {
+        printlnc!((0, 0, 255), "Partition not mounted at {:?}", path);
+        return;
+    };
+    fs_tree::unmount_inode(parent_inode_num, current_name);
+
+    let count = vfs.mount_points.iter().filter(|(_, v)| **v == partition_id).count();
+    if count > 0 {
+        return;
+    }
+    if let Some(mut partition) = vfs.mounted_partitions.remove(&partition_id) {
+        partition.unmount();
+    }
+    if let Some(partition) = vfs.available_partitions.get(&partition_id) {
+        fs_tree::remove_device(partition.device);
+    }
 }
 
-pub fn get_dir_entries(path: ResolvedPath) -> Result<Box<[DirEntry]>, String> {
+pub fn get_dir_entries(path: ResolvedPathBorrowed) -> Result<Box<[DirEntry]>, String> {
     let inode_num = fs_tree::get_inode_index(path).ok_or("Path not found")?;
     let inode = fs_tree::get_inode(inode_num).ok_or("Inode not found")?;
     let mut vfs = VFS.lock();
@@ -104,7 +123,7 @@ pub fn get_dir_entries(path: ResolvedPath) -> Result<Box<[DirEntry]>, String> {
     Ok(fs.read_dir(&inode))
 }
 
-pub fn create_file(path: ResolvedPath, name: &str, inode_type: InodeType) {
+pub fn create_file(path: ResolvedPathBorrowed, name: &str, inode_type: InodeType) {
     let parent_inode_num = fs_tree::get_inode_index(path).unwrap();
     let parent_inode = fs_tree::get_inode(parent_inode_num).unwrap();
     let mut vfs = VFS.lock();
@@ -116,7 +135,7 @@ pub fn create_file(path: ResolvedPath, name: &str, inode_type: InodeType) {
     fs_tree::insert_inode(parent_inode_num, name.to_string().into_boxed_str(), file_inode);
 }
 
-pub fn write_file(path: ResolvedPath, content: &[PhysAddr], offset: u64, size: u64) {
+pub fn write_file(path: ResolvedPathBorrowed, content: &[PhysAddr], offset: u64, size: u64) {
     let inode_num = fs_tree::get_inode_index(path).unwrap();
     let inode = fs_tree::get_inode(inode_num).unwrap();
     let mut vfs = VFS.lock();
@@ -126,7 +145,7 @@ pub fn write_file(path: ResolvedPath, content: &[PhysAddr], offset: u64, size: u
     fs.write(inode.index, offset, size, content);
 }
 
-pub fn read_file(path: ResolvedPath, buffer: &[PhysAddr], offset: u64, size: u64) {
+pub fn read_file(path: ResolvedPathBorrowed, buffer: &[PhysAddr], offset: u64, size: u64) {
     let inode_num = fs_tree::get_inode_index(path).unwrap();
     let inode = fs_tree::get_inode(inode_num).unwrap();
     let mut vfs = VFS.lock();

@@ -9,6 +9,8 @@
 #![feature(arbitrary_self_types_pointers)]
 #![feature(c_str_module)]
 #![feature(str_from_raw_parts)]
+#![feature(slice_index_methods)]
+#![feature(new_range_api)]
 
 extern crate static_cond;
 
@@ -75,7 +77,8 @@ extern "C" fn _start() -> ! {
         panic!("Failed to mount root partition");
     }
 
-    println!("{:?}", vfs::get_dir_entries(vfs::resolve_path("/", "/")));
+    let path = vfs::resolve_path("/", "/");
+    println!("{:?}", vfs::get_dir_entries((&path).into()));
 
     proc::init();
 

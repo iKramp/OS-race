@@ -9,17 +9,14 @@ use crate::drivers::{
 mod fs_tree;
 mod inode;
 mod operations;
+mod path;
 pub use inode::*;
 pub use operations::*;
+pub use path::*;
 
 //0 is unknown, 1 is bad blocks, 2 is root
 pub const ROOT_INODE_INDEX: u32 = 2;
 pub static VFS: Mutex<Vfs> = Mutex::new(Vfs::new());
-
-///A wrapper type for path, that have been resolved to a list of path components
-///That is, the path starts from root and does not contain any "." or ".." components
-#[repr(transparent)]
-pub struct ResolvedPath(Box<[Box<str>]>);
 
 //just a wrapper
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -76,14 +73,13 @@ pub fn init() {
 
 pub fn resolve_path(path: &str, working_dir: &str) -> ResolvedPath {
     if path.starts_with('/') {
-        ResolvedPath(resolve_single_path(path))
+        resolve_single_path(path)
     } else {
-        let resolved_path = resolve_single_path(format!("{}/{}", working_dir, path).as_str());
-        ResolvedPath(resolved_path)
+        resolve_single_path(format!("{}/{}", working_dir, path).as_str())
     }
 }
 
-fn resolve_single_path(path: &str) -> Box<[Box<str>]> {
+fn resolve_single_path(path: &str) -> ResolvedPath {
     let chunks = path.split('/');
     let mut path = Vec::new();
     for chunk in chunks {
@@ -100,5 +96,5 @@ fn resolve_single_path(path: &str) -> Box<[Box<str>]> {
         path.push(chunk.into());
     }
 
-    path.into()
+    ResolvedPath::new(path.into())
 }

@@ -1,6 +1,6 @@
-use std::{boxed::Box, collections::btree_map::BTreeMap, sync::mutex::Mutex, vec::Vec};
+use std::{boxed::Box, collections::btree_map::BTreeMap, printlnc, sync::mutex::Mutex, vec::Vec};
 
-use super::{DeviceId, Inode, ResolvedPath, VFS};
+use super::{DeviceId, Inode, ResolvedPath, ResolvedPathBorrowed, VFS};
 
 pub(super) static INODE_CACHE: Mutex<InodeCache> = Mutex::new(InodeCache::new());
 
@@ -49,10 +49,10 @@ pub fn get_inode(inode_index: InodeIndex) -> Option<Inode> {
     cache.inodes.get(&inode_index).map(|(inode, _)| inode).cloned()
 }
 
-pub fn get_inode_index(path: ResolvedPath) -> Option<InodeIndex> {
+pub fn get_inode_index(path: ResolvedPathBorrowed) -> Option<InodeIndex> {
     let cache = &mut *INODE_CACHE.lock();
     let mut current = cache.root;
-    for component in path.0.iter() {
+    for component in path.iter() {
         let no_children = cache.inodes.get(&current).unwrap().1.children.is_empty();
         if no_children {
             load_dir(current, &mut cache.inodes);
@@ -111,3 +111,27 @@ pub fn insert_inode(parent_cache_num: InodeIndex, name: Box<str>, inode: Inode) 
     let parent = cache.inodes.get_mut(&parent_cache_num).unwrap();
     parent.1.children.push((name, inode_index));
 }
+
+pub fn mount_inode(parent_cache_num: InodeIndex, name: Box<str>, inode: Inode) {
+    //just an alias for insert_inode
+    insert_inode(parent_cache_num, name, inode);
+}
+
+pub fn unmount_inode(parent_cache_num: InodeIndex, name: &str) {
+    let mut cache = INODE_CACHE.lock();
+    let parent = cache.inodes.get_mut(&parent_cache_num).unwrap();
+    parent.1.children.retain(|child| *child.0 != *name);
+}
+
+/// Removes all inodes associated with a specific device ID. Called when device is fully unmounted
+pub fn remove_device(device_id: DeviceId) {
+    let mut cache = INODE_CACHE.lock();
+    cache.inodes.retain(|_, (inode, _)| inode.device != device_id);
+    if cache.root.device_id == device_id {
+        cache.root = InodeIndex {
+            device_id: DeviceId(0),
+            index: 0,
+        };
+    }
+}
+
