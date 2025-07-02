@@ -1,5 +1,4 @@
 use bitfield::bitfield;
-use uuid::Uuid;
 
 use super::DeviceId;
 
@@ -13,7 +12,7 @@ pub struct Inode {
     pub uid: u16,
     pub gid: u16,
     ///this is set to a device uuid if the inode represents a device
-    pub device_represented: Option<Uuid>,
+    pub device_represented: Option<DeviceId>,
     ///len of a symlink is the length of the pathname
     pub size: u64,
     //available if this represents a device, otherwise inherits from device

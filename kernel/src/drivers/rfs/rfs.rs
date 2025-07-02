@@ -22,19 +22,13 @@ use std::{
 
 const GROUP_BLOCK_SIZE: u64 = 4096 * 8;
 
-pub struct RfsFactory {}
+pub struct RfsFactory;
 
 impl RfsFactory {
-    pub fn guid() -> Uuid {
-        Uuid::from_u128(0xb1b3b44dbece44dfba0e964a35a05a16)
-    }
+    pub const UUID: Uuid = Uuid::from_u128(0xb1b3b44dbece44dfba0e964a35a05a16);
 }
 
 impl FileSystemFactory for RfsFactory {
-    fn guid(&self) -> Uuid {
-        Self::guid()
-    }
-
     fn mount(&self, partition: MountedPartition) -> Box<dyn FileSystem + Send> {
         Box::new(Rfs::new(partition))
     }
@@ -724,37 +718,8 @@ impl FileSystem for Rfs {
         (vfs_inode, parent_vfs_inode)
     }
 
-    #[allow(unreachable_code, unused)]
-    fn remove(&mut self, inode: u32) {
-        todo!("this is wrong, unlink and delete only if link count is 0");
-        let (working_block, working_block_binding) = get_working_block();
-        let root = self.get_node(self.root_block).1;
-        let inode_block_index = root.find_inode_block(inode, self).unwrap();
-        self.partition.read(inode_block_index as usize * 8, 8, &[working_block]);
-        let inode_meatadata = unsafe { get_at_virtual_addr::<Inode>(working_block_binding) };
-        let levels = inode_meatadata.size.ptr_levels() as u32;
-
-        if inode_meatadata.inode_type_mode.is_dir() && inode_meatadata.size.size() != 0 {
-            todo!("Directory not empty. Return error value instead");
-        }
-
-        if levels == 0 {
-            self.free_block(inode_block_index);
-        } else {
-            let pointers = unsafe { get_at_virtual_addr::<[u32; 4026 / 8 * 7 / 4]>(working_block_binding + 512) };
-            for i in 0..(4096 / 8 * 7 / 4) {
-                if levels == 1 {
-                    self.free_block(pointers[i]);
-                } else {
-                    self.delete_block(levels - 1, pointers[i]);
-                }
-            }
-        }
-        unsafe { PAGE_TREE_ALLOCATOR.deallocate(working_block_binding) };
-        self.remove_inode_cache_entry(inode);
-        root.delete_key_root(self.root_block, inode, self);
-        self.remove_inode_from_bitmask(inode);
-        self.clean_after_operation();
+    fn unlink(&mut self, parent_inode: u32, name: &str) {
+        todo!()
     }
 
     fn link(&mut self, inode_index: u32, parent_inode_index: u32, name: &str) -> vfs::Inode {
@@ -897,9 +862,14 @@ impl FileSystem for Rfs {
         self.clean_after_operation();
     }
 
-    fn read_dir(&mut self, inode: &vfs::Inode) -> Box<[crate::drivers::disk::DirEntry]> {
-        assert!(inode.device == self.partition.partition.device);
-        let needed_blocks = inode.size.div_ceil(4096);
+    fn read_dir(&mut self, inode_index: u32) -> Box<[crate::drivers::disk::DirEntry]> {
+        let root = self.get_node(self.root_block).1;
+        let inode_block_index = root.find_inode_block(inode_index, self).unwrap();
+        let (inode_block, inode_block_binding) = get_working_block();
+        self.partition.read(inode_block_index as usize * 8, 1, &[inode_block]);
+        let inode: &mut Inode = unsafe { get_at_virtual_addr(inode_block_binding) };
+
+        let needed_blocks = inode.size.size().div_ceil(4096);
         if needed_blocks == 0 {
             return Box::new([]);
         }
@@ -907,10 +877,10 @@ impl FileSystem for Rfs {
             .map(|_| physical_allocator::allocate_frame())
             .collect::<Box<[_]>>();
         let virt_addr_start = unsafe { PAGE_TREE_ALLOCATOR.mmap_contigious(&phys_addresses, false) };
-        self.read(inode.index, 0, inode.size, &phys_addresses);
+        self.read(inode_index, 0, inode.size.size(), &phys_addresses);
         let mut entries = Vec::new();
         let mut offset = 0;
-        while offset < inode.size {
+        while offset < inode.size.size() {
             let dir_entry = unsafe { get_at_virtual_addr::<DirEntry>(virt_addr_start + offset) };
             let name = str::from_utf8(&dir_entry.name).unwrap();
             let name = name.trim_matches('\0');

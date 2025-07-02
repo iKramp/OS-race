@@ -1,4 +1,5 @@
 use std::{boxed::Box, collections::btree_map::BTreeMap, format, sync::mutex::Mutex, vec::Vec};
+use dtmpfs::DtmpfsFactory;
 use uuid::Uuid;
 
 use crate::drivers::{
@@ -6,6 +7,7 @@ use crate::drivers::{
     rfs::RfsFactory,
 };
 
+mod dtmpfs;
 mod fs_tree;
 mod inode;
 mod operations;
@@ -28,6 +30,12 @@ pub struct DeviceDetails {
     pub partition: Uuid,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct InodeIndex {
+    pub device_id: DeviceId,
+    pub index: u64,
+}
+
 pub struct Vfs {
     ///Map from disk guid to disk object (driver) and a list of partition guids
     disks: BTreeMap<Uuid, (Box<dyn Disk + Send>, Vec<Uuid>)>,
@@ -41,8 +49,6 @@ pub struct Vfs {
     devices: BTreeMap<DeviceId, DeviceDetails>,
     ///counts devices
     device_counter: u64,
-    ///map from path to filesystem uuid
-    mount_points: BTreeMap<Box<[Box<str>]>, Uuid>,
 }
 
 impl Vfs {
@@ -54,7 +60,6 @@ impl Vfs {
             available_partitions: BTreeMap::new(),
             devices: BTreeMap::new(),
             device_counter: 0,
-            mount_points: BTreeMap::new(),
         }
     }
 
@@ -66,9 +71,11 @@ impl Vfs {
 }
 
 pub fn init() {
-    VFS.lock()
-        .filesystem_driver_factories
-        .insert(RfsFactory::guid(), Box::new(RfsFactory {}));
+    let mut vfs = VFS.lock();
+    vfs.filesystem_driver_factories
+        .insert(RfsFactory::UUID, Box::new(RfsFactory {}));
+    vfs.filesystem_driver_factories
+        .insert(DtmpfsFactory::UUID, Box::new(DtmpfsFactory {}));
 }
 
 pub fn resolve_path(path: &str, working_dir: &str) -> ResolvedPath {

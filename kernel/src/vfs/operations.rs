@@ -10,11 +10,15 @@ use std::{
 use uuid::Uuid;
 
 use crate::drivers::{
-    disk::{DirEntry, Disk, MountedPartition, PartitionSchemeDriver},
+    disk::{DirEntry, Disk, FileSystem, MountedPartition, PartitionSchemeDriver},
     gpt::GPTDriver,
 };
 
-use super::{DeviceDetails, InodeType, ROOT_INODE_INDEX, ResolvedPath, ResolvedPathBorrowed, VFS, fs_tree, resolve_path};
+use super::{
+    DeviceDetails, InodeType, ROOT_INODE_INDEX, ResolvedPath, ResolvedPathBorrowed, VFS,
+    fs_tree::{self},
+    resolve_path,
+};
 
 pub fn add_disk(mut disk: Box<dyn Disk + Send>) {
     //for now only GPT
@@ -81,12 +85,36 @@ pub fn mount_partition_resolved(part_id: Uuid, mountpoint: ResolvedPath) -> Resu
 
     let mounted_partition = MountedPartition { disk, partition };
     let mut fs = fs_factory.mount(mounted_partition);
-    let inode = fs.stat(ROOT_INODE_INDEX);
-    fs_tree::init(inode);
+
+    if mountpoint.inner().is_empty() {
+        //mounting root
+        mount_new_root(&mut fs);
+        //anything else?
+    }
+
+    let fs_root_inode = fs.stat(ROOT_INODE_INDEX);
     vfs.mounted_partitions.insert(part_id, fs);
-    vfs.mount_points.insert(mountpoint.take(), part_id);
+    let parent_inode =
+        fs_tree::get_inode_index(mountpoint.index(0..mountpoint.inner().len() - 1)).ok_or("mountpoint not found")?;
+    fs_tree::mount_inode(parent_inode, fs_root_inode);
 
     Ok(())
+}
+
+fn mount_new_root(fs: &mut Box<dyn FileSystem + Send>) {
+    let inode = fs.stat(ROOT_INODE_INDEX);
+    let inode_index = inode.index;
+    fs_tree::init(inode);
+
+    //root checks
+    let root_dirs = fs.read_dir(inode_index);
+    let required_dirs = ["dev", "proc"];
+    for required_dir in required_dirs.iter() {
+        if !root_dirs.iter().any(|entry| entry.name.as_ref() == *required_dir) {
+            //create the required directory
+            fs.create(required_dir, ROOT_INODE_INDEX, InodeType::new_dir(0o755), 0, 0);
+        }
+    }
 }
 
 pub fn unmount_partition(path: ResolvedPathBorrowed) {
@@ -94,22 +122,14 @@ pub fn unmount_partition(path: ResolvedPathBorrowed) {
     let parent_inode_num = fs_tree::get_inode_index(parent_path).unwrap();
     let current_name = path.get(path.len() - 1).unwrap();
 
-    let mut vfs = VFS.lock();
-    let Some(partition_id) = vfs.mount_points.remove(path.inner()) else {
-        printlnc!((0, 0, 255), "Partition not mounted at {:?}", path);
-        return;
-    };
-    fs_tree::unmount_inode(parent_inode_num, current_name);
-
-    let count = vfs.mount_points.iter().filter(|(_, v)| **v == partition_id).count();
-    if count > 0 {
-        return;
-    }
-    if let Some(mut partition) = vfs.mounted_partitions.remove(&partition_id) {
-        partition.unmount();
-    }
-    if let Some(partition) = vfs.available_partitions.get(&partition_id) {
-        fs_tree::remove_device(partition.device);
+    let inode_num = fs_tree::get_inode_index(path).unwrap();
+    let last_part_mount = fs_tree::unmount_inode(parent_inode_num, current_name);
+    if last_part_mount {
+        let mut vfs = VFS.lock();
+        let partition_id = vfs.devices.get(&inode_num.device_id).unwrap().partition;
+        if let Some(mut partition) = vfs.mounted_partitions.remove(&partition_id) {
+            partition.unmount();
+        }
     }
 }
 
@@ -120,7 +140,7 @@ pub fn get_dir_entries(path: ResolvedPathBorrowed) -> Result<Box<[DirEntry]>, St
     let device_details = vfs.devices.get(&inode.device).ok_or("Device not found")?;
     let partition_id = device_details.partition;
     let fs = vfs.mounted_partitions.get_mut(&partition_id).ok_or("FS not found")?;
-    Ok(fs.read_dir(&inode))
+    Ok(fs.read_dir(inode_num.index as u32))
 }
 
 pub fn create_file(path: ResolvedPathBorrowed, name: &str, inode_type: InodeType) {

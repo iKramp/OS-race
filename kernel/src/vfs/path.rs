@@ -7,7 +7,7 @@ use std::boxed::Box;
 pub struct ResolvedPath(Box<[Box<str>]>);
 
 #[repr(transparent)]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ResolvedPathBorrowed<'a>(&'a [Box<str>]);
 
 impl<'a> core::convert::From<&'a ResolvedPath> for ResolvedPathBorrowed<'a> {
@@ -27,7 +27,7 @@ impl ResolvedPath {
         ResolvedPath(path)
     }
 
-    pub fn index(&self, range: core::range::Range<usize>) -> ResolvedPathBorrowed<'_> {
+    pub fn index(&self, range: core::ops::Range<usize>) -> ResolvedPathBorrowed<'_> {
         ResolvedPathBorrowed(&self.0[range])
     }
 
