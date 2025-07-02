@@ -718,7 +718,7 @@ impl FileSystem for Rfs {
         (vfs_inode, parent_vfs_inode)
     }
 
-    fn unlink(&mut self, parent_inode: u32, name: &str) {
+    fn unlink(&mut self, _parent_inode: u32, _name: &str) {
         todo!()
     }
 

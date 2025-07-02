@@ -2,7 +2,6 @@ use std::{
     boxed::Box,
     format,
     mem_utils::PhysAddr,
-    printlnc,
     string::{String, ToString},
     vec::Vec,
 };
@@ -62,6 +61,15 @@ pub fn mount_partition(part_id: Uuid, mountpoint: &str) -> Result<(), String> {
 }
 
 pub fn mount_partition_resolved(part_id: Uuid, mountpoint: ResolvedPath) -> Result<(), String> {
+    if !mountpoint.inner().is_empty() {
+        let parent_path = mountpoint.index(0..mountpoint.inner().len() - 1);
+        let parent = fs_tree::get_inode_index(parent_path).ok_or("Invalid mountpoint")?;
+        let mountpoint = fs_tree::get_inode_index((&mountpoint).into()).ok_or("Invalid mountpoint")?;
+        if parent.device_id != mountpoint.device_id {
+            return Err("Mountpoint already used".to_string());
+        }
+    }
+
     let mut vfs = VFS.lock();
     let Some(partition) = vfs.available_partitions.get(&part_id) else {
         return Err("Partition not found".to_string());

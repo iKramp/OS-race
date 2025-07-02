@@ -42,7 +42,7 @@ impl ResolvedPath {
     pub fn take(self) -> Box<[Box<str>]> {
         self.0
     }
-    
+
     pub fn inner(&self) -> &[Box<str>] {
         &self.0
     }

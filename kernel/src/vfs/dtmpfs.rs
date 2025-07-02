@@ -32,7 +32,6 @@ impl DtmpfsFactory {
 }
 
 impl FileSystemFactory for DtmpfsFactory {
-
     fn mount(&self, _partition: crate::drivers::disk::MountedPartition) -> std::boxed::Box<dyn FileSystem + Send> {
         let mut fs = Dtmpfs {
             root: 2, // Root inode index

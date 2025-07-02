@@ -138,7 +138,11 @@ pub fn unmount_inode(parent_cache_num: InodeIndex, name: &str) -> bool {
     };
     let index = child.1;
     let unmounted_device = cache.mount_points.remove(&index).map_or(DeviceId(u64::MAX), |v| v.device_id);
-    let count = cache.mount_points.values().filter(|&&v| v.device_id == unmounted_device).count();
+    let count = cache
+        .mount_points
+        .values()
+        .filter(|&&v| v.device_id == unmounted_device)
+        .count();
     drop(cache);
     if count == 0 {
         remove_device(unmounted_device);
@@ -158,4 +162,3 @@ pub fn remove_device(device_id: DeviceId) {
         };
     }
 }
-
