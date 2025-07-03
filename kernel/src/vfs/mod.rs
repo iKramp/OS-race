@@ -17,13 +17,11 @@ pub use operations::*;
 pub use path::*;
 
 //0 is unknown, 1 is bad blocks, 2 is root
-pub const ROOT_INODE_INDEX: u32 = 2;
+pub const ROOT_INODE_INDEX: u64 = 2;
 pub static VFS: Mutex<Vfs> = Mutex::new(Vfs::new());
 
-//just a wrapper
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-#[repr(transparent)]
-pub struct DeviceId(u64);
+pub type DeviceId = u64;
+pub type InodeIndex = u64;
 
 pub struct DeviceDetails {
     pub drive: Uuid,
@@ -31,9 +29,9 @@ pub struct DeviceDetails {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct InodeIndex {
+pub struct InodeIdentifier {
     pub device_id: DeviceId,
-    pub index: u64,
+    pub index: InodeIndex,
 }
 
 pub struct Vfs {
@@ -64,7 +62,7 @@ impl Vfs {
     }
 
     pub fn allocate_device(&mut self) -> DeviceId {
-        let id = DeviceId(self.device_counter);
+        let id = self.device_counter;
         self.device_counter += 1;
         id
     }

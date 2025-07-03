@@ -148,7 +148,7 @@ pub fn get_dir_entries(path: ResolvedPathBorrowed) -> Result<Box<[DirEntry]>, St
     let device_details = vfs.devices.get(&inode.device).ok_or("Device not found")?;
     let partition_id = device_details.partition;
     let fs = vfs.mounted_partitions.get_mut(&partition_id).ok_or("FS not found")?;
-    Ok(fs.read_dir(inode_num.index as u32))
+    Ok(fs.read_dir(inode_num.index))
 }
 
 pub fn create_file(path: ResolvedPathBorrowed, name: &str, inode_type: InodeType) {

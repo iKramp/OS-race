@@ -13,16 +13,16 @@ use uuid::Uuid;
 
 use crate::drivers::disk::{FileSystem, FileSystemFactory};
 
-use super::InodeType;
+use super::{InodeIndex, InodeType};
 
 pub(super) struct Dtmpfs {
-    root: u32,
-    inodes: BTreeMap<u32, DtmpfsNode>,
-    inode_index: u32,
+    root: u64,
+    inodes: BTreeMap<u64, DtmpfsNode>,
+    inode_index: u64,
 }
 
 struct DtmpfsNode {
-    children: Vec<(String, u32)>, // (name, inode)
+    children: Vec<(String, u64)>, // (name, inode)
 }
 
 pub(super) struct DtmpfsFactory;
@@ -46,11 +46,11 @@ impl FileSystemFactory for DtmpfsFactory {
 impl FileSystem for Dtmpfs {
     fn unmount(&mut self) {}
 
-    fn read(&mut self, _inode: u32, _offset_bytes: u64, _size_bytes: u64, _buffer: &[std::mem_utils::PhysAddr]) {
+    fn read(&mut self, _inode: InodeIndex, _offset_bytes: u64, _size_bytes: u64, _buffer: &[std::mem_utils::PhysAddr]) {
         panic!("Reading is not supported in dtmpfs");
     }
 
-    fn read_dir(&mut self, inode: u32) -> std::boxed::Box<[crate::drivers::disk::DirEntry]> {
+    fn read_dir(&mut self, inode: InodeIndex) -> std::boxed::Box<[crate::drivers::disk::DirEntry]> {
         let mut entries = Vec::new();
         if let Some(node) = self.inodes.get(&inode) {
             for (name, child_inode) in &node.children {
@@ -63,19 +63,19 @@ impl FileSystem for Dtmpfs {
         entries.into_boxed_slice()
     }
 
-    fn write(&mut self, _inode: u32, _offset: u64, _size: u64, _buffer: &[std::mem_utils::PhysAddr]) -> super::Inode {
+    fn write(&mut self, _inode: InodeIndex, _offset: u64, _size: u64, _buffer: &[std::mem_utils::PhysAddr]) -> super::Inode {
         panic!("Writing is not supported in dtmpfs");
     }
 
-    fn stat(&mut self, inode: u32) -> super::Inode {
+    fn stat(&mut self, inode: InodeIndex) -> super::Inode {
         super::Inode {
             index: inode,
-            device: super::DeviceId(0),
+            device: 0,
             type_mode: InodeType::new_dir(0o755), //rwxr-xr-x
             link_cnt: 0,
             uid: 0,
             gid: 0,
-            device_represented: Some(super::DeviceId(0)),
+            device_represented: Some(0),
             size: 0,
             preferred_block_size: 0,
             blocks: 0,
@@ -85,14 +85,14 @@ impl FileSystem for Dtmpfs {
         }
     }
 
-    fn set_stat(&mut self, _inode_index: u32, _inode_data: super::Inode) {
+    fn set_stat(&mut self, _inode_index: InodeIndex, _inode_data: super::Inode) {
         panic!("Setting stat is not supported in dtmpfs");
     }
 
     fn create(
         &mut self,
         name: &str,
-        parent_dir: u32,
+        parent_dir: InodeIndex,
         _type_mode: super::InodeType,
         _uid: u16,
         _gid: u16,
@@ -109,21 +109,21 @@ impl FileSystem for Dtmpfs {
         (self.stat(parent_dir), self.stat(inode_index))
     }
 
-    fn unlink(&mut self, parent_inode: u32, name: &str) {
+    fn unlink(&mut self, parent_inode: InodeIndex, name: &str) {
         if let Some(parent_node) = self.inodes.get_mut(&parent_inode) {
             parent_node.children.retain(|(n, _)| n != name);
         }
     }
 
-    fn link(&mut self, _inode: u32, _parent_dir: u32, _name: &str) -> super::Inode {
+    fn link(&mut self, _inode: InodeIndex, _parent_dir: InodeIndex, _name: &str) -> super::Inode {
         panic!("Linking is not supported in dtmpfs");
     }
 
-    fn truncate(&mut self, _inode: u32, _size: u64) {
+    fn truncate(&mut self, _inode: InodeIndex, _size: u64) {
         panic!("Truncating is not supported in dtmpfs");
     }
 
-    fn rename(&mut self, inode: u32, parent_inode: u32, name: &str) {
+    fn rename(&mut self, inode: InodeIndex, parent_inode: InodeIndex, name: &str) {
         let Some(parent_node) = self.inodes.get_mut(&parent_inode) else {
             return;
         };

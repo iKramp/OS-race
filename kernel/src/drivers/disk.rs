@@ -3,7 +3,7 @@ use std::{boxed::Box, mem_utils::PhysAddr, string::String, vec::Vec};
 
 use uuid::Uuid;
 
-use crate::vfs::{DeviceId, Inode, InodeType};
+use crate::vfs::{DeviceId, Inode, InodeIndex, InodeType};
 
 pub trait Disk: Debug {
     fn read(&mut self, sector: usize, sec_count: usize, buffer: &[PhysAddr]) -> u64;
@@ -25,19 +25,19 @@ pub trait FileSystemFactory {
 pub trait FileSystem {
     fn unmount(&mut self);
     ///Offset must be page aligned
-    fn read(&mut self, inode: u32, offset_bytes: u64, size_bytes: u64, buffer: &[PhysAddr]);
-    fn read_dir(&mut self, inode: u32) -> Box<[DirEntry]>;
+    fn read(&mut self, inode: InodeIndex, offset_bytes: u64, size_bytes: u64, buffer: &[PhysAddr]);
+    fn read_dir(&mut self, inode: InodeIndex) -> Box<[DirEntry]>;
     ///Offset must be page aligned. Returns the new inode
-    fn write(&mut self, inode: u32, offset: u64, size: u64, buffer: &[PhysAddr]) -> Inode;
-    fn stat(&mut self, inode: u32) -> Inode;
-    fn set_stat(&mut self, inode_index: u32, inode_data: Inode);
+    fn write(&mut self, inode: InodeIndex, offset: u64, size: u64, buffer: &[PhysAddr]) -> Inode;
+    fn stat(&mut self, inode: InodeIndex) -> Inode;
+    fn set_stat(&mut self, inode_index: InodeIndex, inode_data: Inode);
     ///returns the new parent inode in the first field and the new inode in the second
-    fn create(&mut self, name: &str, parent_dir: u32, type_mode: InodeType, uid: u16, gid: u16) -> (Inode, Inode);
-    fn unlink(&mut self, parent_inode: u32, name: &str);
+    fn create(&mut self, name: &str, parent_dir: InodeIndex, type_mode: InodeType, uid: u16, gid: u16) -> (Inode, Inode);
+    fn unlink(&mut self, parent_inode: InodeIndex, name: &str);
     ///returns the new parent inode
-    fn link(&mut self, inode: u32, parent_dir: u32, name: &str) -> Inode;
-    fn truncate(&mut self, inode: u32, size: u64);
-    fn rename(&mut self, inode: u32, parent_inode: u32, name: &str);
+    fn link(&mut self, inode: InodeIndex, parent_dir: InodeIndex, name: &str) -> Inode;
+    fn truncate(&mut self, inode: InodeIndex, size: u64);
+    fn rename(&mut self, inode: InodeIndex, parent_inode: InodeIndex, name: &str);
 }
 
 #[derive(Debug)]
@@ -75,6 +75,6 @@ impl MountedPartition {
 
 #[derive(Debug)]
 pub struct DirEntry {
-    pub inode: u32,
+    pub inode: InodeIndex,
     pub name: Box<str>,
 }

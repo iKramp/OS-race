@@ -9,8 +9,8 @@ use crate::{
         disk::{FileSystem, FileSystemFactory, MountedPartition},
         rfs::BLOCK_SIZE_SECTORS,
     },
-    memory::{PAGE_TREE_ALLOCATOR, paging::LiminePat, physical_allocator},
-    vfs::{self, InodeType, ROOT_INODE_INDEX},
+    memory::{paging::LiminePat, physical_allocator, PAGE_TREE_ALLOCATOR},
+    vfs::{self, InodeIndex, InodeType, ROOT_INODE_INDEX},
 };
 use core::str;
 use std::{
@@ -285,7 +285,7 @@ impl Rfs {
         root_node.set_key(
             0,
             Key {
-                index: ROOT_INODE_INDEX,
+                index: ROOT_INODE_INDEX as u32,
                 inode_block: 3,
             },
         );
@@ -505,7 +505,7 @@ impl FileSystem for Rfs {
         self.inode_tree_cache.clear();
     }
 
-    fn read(&mut self, inode: u32, offset_bytes: u64, size_bytes: u64, buffer: &[PhysAddr]) {
+    fn read(&mut self, inode: InodeIndex, offset_bytes: u64, size_bytes: u64, buffer: &[PhysAddr]) {
         if size_bytes == 0 {
             return;
         }
@@ -513,7 +513,7 @@ impl FileSystem for Rfs {
         assert!(offset_bytes % 4096 == 0);
         let aligned_size = size_bytes.div_ceil(4096) * 4096;
         let root = self.get_node(self.root_block).1;
-        let inode_block_index = root.find_inode_block(inode, self).unwrap();
+        let inode_block_index = root.find_inode_block(inode as u32, self).unwrap();
         let (inode_block, inode_block_binding) = get_working_block();
         self.partition.read(inode_block_index as usize * 8, 1, &[inode_block]);
         let inode_data: &mut Inode = unsafe { get_at_virtual_addr(inode_block_binding) };
@@ -567,7 +567,8 @@ impl FileSystem for Rfs {
         self.clean_after_operation();
     }
 
-    fn write(&mut self, inode: u32, offset: u64, size: u64, buffer: &[PhysAddr]) -> vfs::Inode {
+    fn write(&mut self, inode: InodeIndex, offset: u64, size: u64, buffer: &[PhysAddr]) -> vfs::Inode {
+        let inode = inode as u32;
         assert!(offset % 4096 == 0);
         assert!(size.div_ceil(4096) <= buffer.len() as u64);
         //get info about file currently
@@ -652,7 +653,8 @@ impl FileSystem for Rfs {
         vfs_inode
     }
 
-    fn stat(&mut self, inode: u32) -> crate::vfs::Inode {
+    fn stat(&mut self, inode: InodeIndex) -> crate::vfs::Inode {
+        let inode = inode as u32;
         let root = self.get_node(self.root_block).1;
         let inode_block_index = root.find_inode_block(inode, self).unwrap();
         let (inode_block, inode_block_binding) = get_working_block();
@@ -664,9 +666,9 @@ impl FileSystem for Rfs {
         vfs_inode
     }
 
-    fn set_stat(&mut self, inode_index: u32, vfs_inode_data: vfs::Inode) {
+    fn set_stat(&mut self, inode_index: InodeIndex, vfs_inode_data: vfs::Inode) {
         let root = self.get_node(self.root_block).1;
-        let inode_block_index = root.find_inode_block(inode_index, self).unwrap();
+        let inode_block_index = root.find_inode_block(inode_index as u32, self).unwrap();
         let (inode_block, inode_block_binding) = get_working_block();
         self.partition.read(inode_block_index as usize * 8, 1, &[inode_block]);
         let inode_data: &mut Inode = unsafe { get_at_virtual_addr(inode_block_binding) };
@@ -679,7 +681,7 @@ impl FileSystem for Rfs {
     fn create(
         &mut self,
         name: &str,
-        parent_dir: u32,
+        parent_dir: InodeIndex,
         type_mode: crate::vfs::InodeType,
         uid: u16,
         gid: u16,
@@ -711,23 +713,23 @@ impl FileSystem for Rfs {
             self,
         );
 
-        let parent_vfs_inode = self.link(inode_index, parent_dir, name);
+        let parent_vfs_inode = self.link(inode_index as InodeIndex, parent_dir, name);
 
         unsafe { PAGE_TREE_ALLOCATOR.deallocate(inode_block_binding) };
 
         (vfs_inode, parent_vfs_inode)
     }
 
-    fn unlink(&mut self, _parent_inode: u32, _name: &str) {
+    fn unlink(&mut self, _parent_inode: InodeIndex, _name: &str) {
         todo!()
     }
 
-    fn link(&mut self, inode_index: u32, parent_inode_index: u32, name: &str) -> vfs::Inode {
+    fn link(&mut self, inode_index: InodeIndex, parent_inode_index: InodeIndex, name: &str) -> vfs::Inode {
         //TODO: i don't increase link count ??
         let root = self.get_node(self.root_block).1;
         let (working_block, working_block_binding) = get_working_block();
 
-        let parent_inode_block_index = root.find_inode_block(parent_inode_index, self).unwrap();
+        let parent_inode_block_index = root.find_inode_block(parent_inode_index as u32, self).unwrap();
         self.partition
             .read(parent_inode_block_index as usize * BLOCK_SIZE_SECTORS, 1, &[working_block]);
         let inode_data: &mut Inode = unsafe { get_at_virtual_addr(working_block_binding) };
@@ -757,7 +759,7 @@ impl FileSystem for Rfs {
         }
         let temp_offset = offset & 0xFFF;
         let dir_entry = DirEntry {
-            inode: inode_index,
+            inode: inode_index as u32,
             name: name_byte_arr,
         };
         let dir_entry_bytes = &dir_entry as *const DirEntry as *const u8;
@@ -794,13 +796,13 @@ impl FileSystem for Rfs {
         vfs_inode
     }
 
-    fn truncate(&mut self, _inode: u32, _size: u64) {
+    fn truncate(&mut self, _inode: InodeIndex, _size: InodeIndex) {
         todo!()
     }
 
-    fn rename(&mut self, inode: u32, parent_inode: u32, name: &str) {
+    fn rename(&mut self, inode: InodeIndex, parent_inode: InodeIndex, name: &str) {
         let root_block_index = self.get_node(self.root_block).1;
-        let parent_inode_block_index = root_block_index.find_inode_block(parent_inode, self).unwrap();
+        let parent_inode_block_index = root_block_index.find_inode_block(parent_inode as u32, self).unwrap();
         let (working_block, working_block_binding) = get_working_block();
         self.partition
             .read(parent_inode_block_index as usize * 8, 1, &[working_block]);
@@ -827,7 +829,7 @@ impl FileSystem for Rfs {
         for i in 0..(dir_size / core::mem::size_of::<DirEntry>() as u64) {
             let dir_entry =
                 unsafe { get_at_virtual_addr::<DirEntry>(folder_binding + i * core::mem::size_of::<DirEntry>() as u64) };
-            if dir_entry.inode == inode {
+            if dir_entry.inode == inode as u32 {
                 let name_bytes = name.as_bytes();
                 let mut name_byte_arr: [u8; 128] = [0; 128];
                 for char in name_bytes.iter().enumerate() {
@@ -862,9 +864,9 @@ impl FileSystem for Rfs {
         self.clean_after_operation();
     }
 
-    fn read_dir(&mut self, inode_index: u32) -> Box<[crate::drivers::disk::DirEntry]> {
+    fn read_dir(&mut self, inode_index: InodeIndex) -> Box<[crate::drivers::disk::DirEntry]> {
         let root = self.get_node(self.root_block).1;
-        let inode_block_index = root.find_inode_block(inode_index, self).unwrap();
+        let inode_block_index = root.find_inode_block(inode_index as u32, self).unwrap();
         let (inode_block, inode_block_binding) = get_working_block();
         self.partition.read(inode_block_index as usize * 8, 1, &[inode_block]);
         let inode: &mut Inode = unsafe { get_at_virtual_addr(inode_block_binding) };
@@ -886,7 +888,7 @@ impl FileSystem for Rfs {
             let name = name.trim_matches('\0');
             let name = Box::from(name);
             entries.push(crate::drivers::disk::DirEntry {
-                inode: dir_entry.inode,
+                inode: dir_entry.inode as u64,
                 name,
             });
             offset += core::mem::size_of::<DirEntry>() as u64;

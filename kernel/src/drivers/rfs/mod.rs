@@ -45,7 +45,7 @@ struct Inode {
 impl Inode {
     fn to_vfs(&self, index: u32, partition: &Partition) -> vfs::Inode {
         vfs::Inode {
-            index,
+            index: index as u64,
             device: partition.device,
             type_mode: self.inode_type_mode.clone(),
             link_cnt: self.link_count,

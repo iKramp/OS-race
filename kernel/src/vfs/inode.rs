@@ -1,11 +1,11 @@
 use bitfield::bitfield;
 
-use super::DeviceId;
+use super::{DeviceId, InodeIndex};
 
 //this is returned by the stat() syscall
 #[derive(Debug, Clone)]
 pub struct Inode {
-    pub index: u32,
+    pub index: InodeIndex,
     pub device: DeviceId, //some map to major/minor (minor are partitions)
     pub type_mode: InodeType,
     pub link_cnt: u16,
