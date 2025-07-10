@@ -12,6 +12,7 @@ mod fs_tree;
 mod inode;
 mod operations;
 mod path;
+mod adapters;
 pub use inode::*;
 pub use operations::*;
 pub use path::*;
