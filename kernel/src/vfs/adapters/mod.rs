@@ -1,8 +1,8 @@
 use std::{boxed::Box, mem_utils::PhysAddr};
 
-use crate::drivers::disk::{DirEntry, FileSystem};
+use crate::drivers::disk::DirEntry;
 
-use super::{Inode, InodeIndex};
+use super::{filesystem_trait::FileSystem, Inode, InodeIndex};
 
 mod proc_adapter;
 
@@ -53,7 +53,7 @@ impl VfsAdapterTrait for VfsAdpater {
                 let mut inode = FileSystem::write(&mut self.proc, inode & !MASK, offset, size, buffer);
                 inode.index |= PROC_NAMESPACE;
                 inode
-            },
+            }
             _ => unreachable!(),
         }
     }
@@ -98,7 +98,14 @@ impl<T: VfsAdapterTrait> FileSystem for T {
         unreachable!()
     }
 
-    fn create(&mut self, _name: &str, _parent_dir: InodeIndex, _type_mode: super::InodeType, _uid: u16, _gid: u16) -> (Inode, Inode) {
+    fn create(
+        &mut self,
+        _name: &str,
+        _parent_dir: InodeIndex,
+        _type_mode: super::InodeType,
+        _uid: u16,
+        _gid: u16,
+    ) -> (Inode, Inode) {
         unreachable!()
     }
 

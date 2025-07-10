@@ -16,12 +16,12 @@ use crate::{
     vfs::VFS,
 };
 
-use super::disk::{Disk, Partition, PartitionSchemeDriver};
+use super::disk::{BlockDevice, Partition, PartitionSchemeDriver};
 
 pub struct GPTDriver {}
 
 impl PartitionSchemeDriver for GPTDriver {
-    fn partitions(&self, disk: &mut dyn Disk) -> Vec<(Uuid, Partition)> {
+    fn partitions(&self, disk: &mut dyn BlockDevice) -> Vec<(Uuid, Partition)> {
         println!("GPT partitions");
         let first_lba = physical_allocator::allocate_frame();
         let first_lba_binding = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(first_lba), false) };
@@ -78,7 +78,7 @@ impl PartitionSchemeDriver for GPTDriver {
                         size_sectors: (entry.ending_lba - entry.starting_lba + 1) as usize,
                         name,
                         device: vfs.allocate_device(),
-                        fs_uuid,
+                        fs_type: fs_uuid,
                     },
                 ))
             }
@@ -97,7 +97,7 @@ impl PartitionSchemeDriver for GPTDriver {
         partitions
     }
 
-    fn guid(&self, disk: &mut dyn Disk) -> Uuid {
+    fn guid(&self, disk: &mut dyn BlockDevice) -> Uuid {
         let first_lba = physical_allocator::allocate_frame();
         let first_lba_binding = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(first_lba), false) };
         unsafe {

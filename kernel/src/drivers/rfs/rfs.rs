@@ -5,12 +5,9 @@ use super::{
     btree::{BtreeNode, Key},
 };
 use crate::{
-    drivers::{
-        disk::{FileSystem, FileSystemFactory, MountedPartition},
-        rfs::BLOCK_SIZE_SECTORS,
-    },
+    drivers::{disk::MountedPartition, rfs::BLOCK_SIZE_SECTORS},
     memory::{paging::LiminePat, physical_allocator, PAGE_TREE_ALLOCATOR},
-    vfs::{self, InodeIndex, InodeType, ROOT_INODE_INDEX},
+    vfs::{self, FileSystem, FileSystemFactory, InodeIndex, InodeType, ROOT_INODE_INDEX },
 };
 use core::str;
 use std::{

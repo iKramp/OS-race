@@ -13,7 +13,7 @@ use bitfield::bitfield;
 use crate::{
     drivers::{
         ahci::fis::{D2HRegisterFis, IdentifyStructure, PioSetupFis},
-        disk::Disk,
+        disk::BlockDevice,
     },
     memory::{PAGE_TREE_ALLOCATOR, paging::LiminePat, physical_allocator},
     pci::device_config::{self, Bar},
@@ -451,7 +451,7 @@ impl VirtualPort {
     }
 }
 
-impl Disk for VirtualPort {
+impl BlockDevice for VirtualPort {
     ///Returns the virtual address of the read data and the command index used
     fn read(&mut self, start_sec_index: usize, sec_count: usize, buffer: &[PhysAddr]) -> u64 {
         assert!(sec_count <= self.sectors as usize);

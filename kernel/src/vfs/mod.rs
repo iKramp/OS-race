@@ -3,7 +3,7 @@ use std::{boxed::Box, collections::btree_map::BTreeMap, format, sync::mutex::Mut
 use uuid::Uuid;
 
 use crate::drivers::{
-    disk::{Disk, FileSystem, FileSystemFactory, Partition},
+    disk::{BlockDevice, Partition},
     rfs::RfsFactory,
 };
 
@@ -13,9 +13,11 @@ mod inode;
 mod operations;
 mod path;
 mod adapters;
+mod filesystem_trait;
 pub use inode::*;
 pub use operations::*;
 pub use path::*;
+pub use filesystem_trait::{FileSystem, FileSystemFactory};
 
 //0 is unknown, 1 is bad blocks, 2 is root
 pub const ROOT_INODE_INDEX: u64 = 2;
@@ -37,7 +39,7 @@ pub struct InodeIdentifier {
 
 pub struct Vfs {
     ///Map from disk guid to disk object (driver) and a list of partition guids
-    disks: BTreeMap<Uuid, (Box<dyn Disk + Send>, Vec<Uuid>)>,
+    disks: BTreeMap<Uuid, (Box<dyn BlockDevice + Send>, Vec<Uuid>)>,
     ///maps from filesystem type guid to filesystem driver factory
     filesystem_driver_factories: BTreeMap<Uuid, Box<dyn FileSystemFactory + Send>>,
     ///maps from partition guid to filesystem driver
@@ -75,32 +77,4 @@ pub fn init() {
         .insert(RfsFactory::UUID, Box::new(RfsFactory {}));
     vfs.filesystem_driver_factories
         .insert(DtmpfsFactory::UUID, Box::new(DtmpfsFactory {}));
-}
-
-pub fn resolve_path(path: &str, working_dir: &str) -> ResolvedPath {
-    if path.starts_with('/') {
-        resolve_single_path(path)
-    } else {
-        resolve_single_path(format!("{}/{}", working_dir, path).as_str())
-    }
-}
-
-fn resolve_single_path(path: &str) -> ResolvedPath {
-    let chunks = path.split('/');
-    let mut path = Vec::new();
-    for chunk in chunks {
-        if chunk.is_empty() {
-            continue;
-        }
-        if chunk == "." {
-            continue;
-        }
-        if chunk == ".." {
-            path.pop();
-            continue;
-        }
-        path.push(chunk.into());
-    }
-
-    ResolvedPath::new(path.into())
 }

@@ -1,5 +1,3 @@
-use crate::drivers::disk::FileSystem;
-
 use super::VfsAdapterTrait;
 
 

@@ -37,6 +37,7 @@ mod utils;
 mod vfs;
 mod vga;
 use limine::LIMINE_BOOTLOADER_REQUESTS;
+use vfs::ResolvedPath;
 
 const TEST_EXECUTABLE: &[u8] = include_bytes!("../../assets/libr");
 
@@ -71,7 +72,7 @@ extern "C" fn _start() -> ! {
     pci::enumerate_devices();
     vfs::init();
 
-    let res = vfs::mount_partition(cmd_args.root_partition, "/");
+    let res = vfs::mount_blkdev_partition(cmd_args.root_partition, ResolvedPath::root());
     if let Err(e) = res {
         println!("{}", e);
         panic!("Failed to mount root partition");

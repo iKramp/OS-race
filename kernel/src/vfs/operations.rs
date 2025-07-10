@@ -3,23 +3,24 @@ use std::{
     format,
     mem_utils::PhysAddr,
     string::{String, ToString},
+    sync::mutex::MutexGuard,
     vec::Vec,
 };
 
 use uuid::Uuid;
 
 use crate::drivers::{
-    disk::{DirEntry, Disk, FileSystem, MountedPartition, PartitionSchemeDriver},
+    disk::{BlockDevice, DirEntry, MountedPartition, PartitionSchemeDriver},
     gpt::GPTDriver,
 };
 
 use super::{
     DeviceDetails, InodeType, ROOT_INODE_INDEX, ResolvedPath, ResolvedPathBorrowed, VFS,
+    filesystem_trait::FileSystem,
     fs_tree::{self},
-    resolve_path,
 };
 
-pub fn add_disk(mut disk: Box<dyn Disk + Send>) {
+pub fn add_disk(mut disk: Box<dyn BlockDevice + Send>) {
     //for now only GPT
     let gpt_driver = GPTDriver {};
     let guid = gpt_driver.guid(&mut *disk);
@@ -51,16 +52,7 @@ fn remove_disk(uuid: Uuid) {
     }
 }
 
-pub fn mount_partition_working_dir(part_id: Uuid, mountpoint: &str, working_dir: &str) -> Result<(), String> {
-    let mountpoint = resolve_path(mountpoint, working_dir);
-    mount_partition_resolved(part_id, mountpoint)
-}
-
-pub fn mount_partition(part_id: Uuid, mountpoint: &str) -> Result<(), String> {
-    mount_partition_working_dir(part_id, mountpoint, "/")
-}
-
-pub fn mount_partition_resolved(part_id: Uuid, mountpoint: ResolvedPath) -> Result<(), String> {
+pub fn mount_blkdev_partition(part_id: Uuid, mountpoint: ResolvedPath) -> Result<(), String> {
     if !mountpoint.inner().is_empty() {
         let parent_path = mountpoint.index(0..mountpoint.inner().len() - 1);
         let parent = fs_tree::get_inode_index(parent_path).ok_or("Invalid mountpoint")?;
@@ -80,30 +72,39 @@ pub fn mount_partition_resolved(part_id: Uuid, mountpoint: ResolvedPath) -> Resu
     let drive_id = device_detail.drive;
     let disk = vfs.disks.get_mut(&drive_id).unwrap();
     let disk = &raw mut *disk.0;
-    let disk: &'static mut dyn Disk = unsafe { &mut *disk };
-    let Some(fs_factory) = vfs.filesystem_driver_factories.get(&partition.fs_uuid) else {
+    let disk: &'static mut dyn BlockDevice = unsafe { &mut *disk };
+    let Some(fs_factory) = vfs.filesystem_driver_factories.get(&partition.fs_type) else {
         return Err(format!(
             "No filesystem driver loaded for \n
                 partition type: {}, \n
                 partition: {}",
-            partition.fs_uuid, part_id
+            partition.fs_type, part_id
         )
         .to_string());
     };
 
     let mounted_partition = MountedPartition { disk, partition };
     let mut fs = fs_factory.mount(mounted_partition);
+    if let Err(e) = mount_filesystem(mountpoint, &mut fs) {
+        fs.unmount();
+        Err(e)
+    } else {
+        vfs.mounted_partitions.insert(part_id, fs);
+        Ok(())
+    }
+}
 
+fn mount_filesystem(mountpoint: ResolvedPath, fs: &mut Box<dyn FileSystem + Send>) -> Result<(), String> {
     if mountpoint.inner().is_empty() {
         //mounting root
-        mount_new_root(&mut fs);
+        mount_new_root(fs);
         //anything else?
     }
 
     let fs_root_inode = fs.stat(ROOT_INODE_INDEX);
-    vfs.mounted_partitions.insert(part_id, fs);
+    //we disallow the mounting of root failing so no checks :3
     let parent_inode =
-        fs_tree::get_inode_index(mountpoint.index(0..mountpoint.inner().len() - 1)).ok_or("mountpoint not found")?;
+        fs_tree::get_inode_index((&mountpoint).into()).ok_or("mountpoint not found")?;
     fs_tree::mount_inode(parent_inode, fs_root_inode);
 
     Ok(())
@@ -125,7 +126,7 @@ fn mount_new_root(fs: &mut Box<dyn FileSystem + Send>) {
     }
 }
 
-pub fn unmount_partition(path: ResolvedPathBorrowed) {
+pub fn unmount(path: ResolvedPathBorrowed) {
     let parent_path = path.index(0..path.len() - 1);
     let parent_inode_num = fs_tree::get_inode_index(parent_path).unwrap();
     let current_name = path.get(path.len() - 1).unwrap();
@@ -134,10 +135,14 @@ pub fn unmount_partition(path: ResolvedPathBorrowed) {
     let last_part_mount = fs_tree::unmount_inode(parent_inode_num, current_name);
     if last_part_mount {
         let mut vfs = VFS.lock();
-        let partition_id = vfs.devices.get(&inode_num.device_id).unwrap().partition;
-        if let Some(mut partition) = vfs.mounted_partitions.remove(&partition_id) {
-            partition.unmount();
-        }
+        let Some(device) = vfs.devices.get(&inode_num.device_id) else {
+            return;
+        };
+        let partition_id = device.partition;
+        let Some(mut partition) = vfs.mounted_partitions.remove(&partition_id) else {
+            return;
+        };
+        partition.unmount();
     }
 }
 

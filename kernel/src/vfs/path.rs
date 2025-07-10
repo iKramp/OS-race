@@ -1,4 +1,4 @@
-use std::boxed::Box;
+use std::{boxed::Box, format, vec::Vec};
 
 ///A wrapper type for path, that have been resolved to a list of path components
 ///That is, the path starts from root and does not contain any "." or ".." components
@@ -25,6 +25,10 @@ impl<'a> core::convert::From<&ResolvedPathBorrowed<'a>> for ResolvedPathBorrowed
 impl ResolvedPath {
     pub fn new(path: Box<[Box<str>]>) -> Self {
         ResolvedPath(path)
+    }
+
+    pub fn root() -> Self {
+        ResolvedPath(Box::new([]))
     }
 
     pub fn index(&self, range: core::ops::Range<usize>) -> ResolvedPathBorrowed<'_> {
@@ -72,4 +76,32 @@ impl ResolvedPathBorrowed<'_> {
     pub fn inner(&self) -> &[Box<str>] {
         self.0
     }
+}
+
+pub fn resolve_path(path: &str, working_dir: &str) -> ResolvedPath {
+    if path.starts_with('/') {
+        resolve_single_path(path)
+    } else {
+        resolve_single_path(format!("{}/{}", working_dir, path).as_str())
+    }
+}
+
+fn resolve_single_path(path: &str) -> ResolvedPath {
+    let chunks = path.split('/');
+    let mut path = Vec::new();
+    for chunk in chunks {
+        if chunk.is_empty() {
+            continue;
+        }
+        if chunk == "." {
+            continue;
+        }
+        if chunk == ".." {
+            path.pop();
+            continue;
+        }
+        path.push(chunk.into());
+    }
+
+    ResolvedPath::new(path.into())
 }

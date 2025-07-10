@@ -11,9 +11,7 @@ use std::{
 
 use uuid::Uuid;
 
-use crate::drivers::disk::{FileSystem, FileSystemFactory};
-
-use super::{InodeIndex, InodeType};
+use super::{filesystem_trait::{FileSystem, FileSystemFactory}, InodeIndex, InodeType};
 
 pub(super) struct Dtmpfs {
     root: u64,
