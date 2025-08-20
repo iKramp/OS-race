@@ -11,6 +11,7 @@
 #![feature(str_from_raw_parts)]
 #![feature(slice_index_methods)]
 #![feature(new_range_api)]
+#![feature(rustc_attrs)]
 
 extern crate static_cond;
 

@@ -20,7 +20,7 @@ impl InodeCache {
         InodeCache {
             inodes: BTreeMap::new(),
             root: InodeIdentifier {
-                device_id: 0,
+                device_id: DeviceId::new(0),
                 index: 0,
             },
             mount_points: BTreeMap::new(),
@@ -137,7 +137,7 @@ pub fn unmount_inode(parent_cache_num: InodeIdentifier, name: &str) -> bool {
         return false;
     };
     let index = child.1;
-    let unmounted_device = cache.mount_points.remove(&index).map_or(u64::MAX, |v| v.device_id);
+    let unmounted_device = cache.mount_points.remove(&index).map_or(DeviceId::new(u64::MAX), |v| v.device_id);
     let count = cache
         .mount_points
         .values()
@@ -157,7 +157,7 @@ pub fn remove_device(device_id: DeviceId) {
     cache.inodes.retain(|_, (inode, _)| inode.device != device_id);
     if cache.root.device_id == device_id {
         cache.root = InodeIdentifier {
-            device_id: 0,
+            device_id: DeviceId::new(0),
             index: 0,
         };
     }

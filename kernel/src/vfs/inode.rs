@@ -3,6 +3,7 @@ use bitfield::bitfield;
 use super::{DeviceId, InodeIndex};
 
 //this is returned by the stat() syscall
+#[repr(C)]
 #[derive(Debug, Clone)]
 pub struct Inode {
     pub index: InodeIndex,
@@ -15,13 +16,13 @@ pub struct Inode {
     pub device_represented: Option<DeviceId>,
     ///len of a symlink is the length of the pathname
     pub size: u64,
+    pub access_time: u32,
+    pub modification_time: u32,
+    pub stat_change_time: u32,
     //available if this represents a device, otherwise inherits from device
     pub preferred_block_size: u16,
     ///number of blocks used by this inode, in 512 byte units!!!!!
     pub blocks: u32,
-    pub access_time: u32,
-    pub modification_time: u32,
-    pub stat_change_time: u32,
 }
 
 const FILE_MODE_MASK: u32 = 0xFFF00000;

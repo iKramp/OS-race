@@ -1,5 +1,5 @@
 use dtmpfs::DtmpfsFactory;
-use std::{boxed::Box, collections::btree_map::BTreeMap, format, sync::mutex::Mutex, vec::Vec};
+use std::{boxed::Box, collections::btree_map::BTreeMap, sync::mutex::Mutex, vec::Vec};
 use uuid::Uuid;
 
 use crate::drivers::{
@@ -23,7 +23,17 @@ pub use filesystem_trait::{FileSystem, FileSystemFactory};
 pub const ROOT_INODE_INDEX: u64 = 2;
 pub static VFS: Mutex<Vfs> = Mutex::new(Vfs::new());
 
-pub type DeviceId = u64;
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[rustc_layout_scalar_valid_range_end(0xFFFF_FFFF_FFFF_FFFE)]
+pub struct DeviceId(u64);
+
+impl DeviceId {
+    pub const fn new(id: u64) -> Self {
+        unsafe { DeviceId(id) }
+    }
+}
+
 pub type InodeIndex = u64;
 
 pub struct DeviceDetails {
@@ -67,7 +77,7 @@ impl Vfs {
     pub fn allocate_device(&mut self) -> DeviceId {
         let id = self.device_counter;
         self.device_counter += 1;
-        id
+        DeviceId::new(id)
     }
 }
 
