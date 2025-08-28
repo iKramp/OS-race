@@ -1,4 +1,4 @@
-use core::mem::MaybeUninit;
+use core::{mem::MaybeUninit, sync::atomic::{AtomicPtr, AtomicU64}};
 use std::{boxed::Box, mem_utils::VirtAddr, vec::Vec};
 
 use crate::{
@@ -6,6 +6,7 @@ use crate::{
     interrupts::{self, idt::TablePointer},
     memory::stack::{KERNEL_STACK_SIZE_PAGES, prepare_kernel_stack},
     proc::Pid,
+    task_runner::AsyncTaskHolder,
 };
 
 pub static mut CPU_LOCALS: MaybeUninit<Box<[VirtAddr]>> = MaybeUninit::uninit();
@@ -20,6 +21,7 @@ pub struct CpuLocals {
     pub current_process: Pid,
     pub apic_id: u8,
     pub processor_id: u8,
+    pub async_task_list: AtomicPtr<AsyncTaskHolder>,
 }
 
 pub fn init(platform_info: &PlatformInfo) {
@@ -62,6 +64,7 @@ impl CpuLocals {
             processor_id,
             gdt_ptr,
             current_process: Pid(0),
+            async_task_list: AtomicPtr::new(core::ptr::null_mut()),
         }
     }
 

@@ -37,6 +37,7 @@ mod tests;
 mod utils;
 mod vfs;
 mod vga;
+mod task_runner;
 use limine::LIMINE_BOOTLOADER_REQUESTS;
 use vfs::ResolvedPath;
 

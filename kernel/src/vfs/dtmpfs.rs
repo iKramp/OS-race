@@ -11,7 +11,10 @@ use std::{
 
 use uuid::Uuid;
 
-use super::{filesystem_trait::{FileSystem, FileSystemFactory}, InodeIndex, InodeType};
+use super::{
+    DeviceId, InodeIndex, InodeType,
+    filesystem_trait::{FileSystem, FileSystemFactory},
+};
 
 pub(super) struct Dtmpfs {
     root: u64,
@@ -66,20 +69,22 @@ impl FileSystem for Dtmpfs {
     }
 
     fn stat(&mut self, inode: InodeIndex) -> super::Inode {
-        super::Inode {
-            index: inode,
-            device: 0,
-            type_mode: InodeType::new_dir(0o755), //rwxr-xr-x
-            link_cnt: 0,
-            uid: 0,
-            gid: 0,
-            device_represented: Some(0),
-            size: 0,
-            preferred_block_size: 0,
-            blocks: 0,
-            access_time: 0,
-            modification_time: 0,
-            stat_change_time: 0,
+        unsafe {
+            super::Inode {
+                index: inode,
+                device: DeviceId(0),
+                type_mode: InodeType::new_dir(0o755), //rwxr-xr-x
+                link_cnt: 0,
+                uid: 0,
+                gid: 0,
+                device_represented: Some(DeviceId(0)),
+                size: 0,
+                preferred_block_size: 0,
+                blocks: 0,
+                access_time: 0,
+                modification_time: 0,
+                stat_change_time: 0,
+            }
         }
     }
 
