@@ -55,8 +55,8 @@ This table will be expanded
 1. uint64 envc - environment variable count
 1. char** envp - environment variables
 #### Return Value:
-1. On success, returns the PID of the new process.
-1. On failure, returns -1 and sets errno.
+ - On success, returns the PID of the new process.
+ - On failure, returns -1 and sets errno.
 #### Description:  
 Spawns a new process by loading and executing the binary at the given path with the provided arguments and environment variables.
 Returns the PID of the new process on success. Unlike linux fork + execve combo, this does NOT create a copy of the calling process.
@@ -65,8 +65,8 @@ Returns the PID of the new process on success. Unlike linux fork + execve combo,
 #### Args:
 1. uint64 flags - clone flags (idk yet, but it's here)
 #### Return value:
-1. On success, PID of the new process in the existing process, 0 in the new process
-1. On failure, -1 and sets errno
+ - On success, PID of the new process in the existing process, 0 in the new process
+ - On failure, -1 and sets errno
 #### Flags argument:
 1. bit 0: CLONE_MEM - if set, the new process has a clone of the memory space instead of sharing it
 1. bit 1: NO_FD - if set, the new process does not inherit open file descriptors (except for standard in/out/err)
@@ -81,8 +81,8 @@ Clones the current process. The new "environment" is identical to the old one, b
 1. uint64 flags - open mode flags
 1. uint64 create_mode - file creation mode
 #### Return Value:
-1. On success, returns a non-negative file descriptor
-1. On failure, returns -1 and sets errno
+ - On success, returns a non-negative file descriptor
+ - On failure, returns -1 and sets errno
 #### Flags:
 1. flags:
     1. bit 0: READ - allow reading
@@ -113,70 +113,75 @@ The fd has to be currently open if used, as a permission check.
 #### Args:
 1. int64 fd - file descriptor to close
 #### Return Value:
-1. On success, returns 0
-1. On failure, returns -1 and sets errno
+ - On success, returns 0
+ - On failure, returns -1 and sets errno
 #### Description:
 Closes the given file descriptor, releasing any associated resources and flushing buffers.
 
 ### Syscall 6: fread
-Args:
-    1: int64 fd - file descriptor to read from
-    2: void* buf - buffer to read data into
-    3: uint64 count - number of bytes to read
-Return Value:
-    On success, returns the number of bytes read. Errno may still be set to indicate additional information, like EOF (in which case the read succeeded, but reached the end.
-    On failure, returns -1 and sets errno
-Description:
-    Reads up to count bytes from the file descriptor fd into the buffer buf. The actual number of bytes read may be less than count.
+#### Args:
+1. int64 fd - file descriptor to read from
+1. void* buf - buffer to read data into
+1. uint64 count - number of bytes to read
+#### Return Value:
+ - On success, returns the number of bytes read. Errno may still be set to indicate additional information, like EOF (in which case the read succeeded, but reached the end.
+ - On failure, returns -1 and sets errno
+#### Description:
+Reads up to count bytes from the file descriptor fd into the buffer buf. The actual number of bytes read may be less than count.
 
 ### Syscall 7: fwrite
-Args:
-    1: int64 fd - file descriptor to write to
-    2: const void* buf - buffer containing data to write
-    3: uint64 count - number of bytes to write
-Return Value:
-    On success, returns the number of bytes written. Errno may still be set to indicate additional information.
-    On failure, returns -1 and sets errno
-Description:
-    Writes up to count bytes from the buffer buf to the file descriptor fd. The actual number of bytes written may be less than count.
+#### Args:
+1. int64 fd - file descriptor to write to
+1. const void* buf - buffer containing data to write
+1. uint64 count - number of bytes to write
+#### Return Value:
+ - On success, returns the number of bytes written. Errno may still be set to indicate additional information.
+ - On failure, returns -1 and sets errno
+#### Description:
+Writes up to count bytes from the buffer buf to the file descriptor fd. The actual number of bytes written may be less than count.
 
 ### Syscall 8: fseek
-Args:
-    1: int64 fd - file descriptor to seek
-    2: int64 offset - offset to seek to
-    3: uint64 whence - seek mode
-Return Value:
-    On success, returns the new offset from the beginning of the file
-    On failure, returns -1 and sets errno
-Whence values:
-    0: SEEK_SET - set the offset to offset bytes from the beginning
-    1: SEEK_CUR - set the offset to current location plus offset
-    2: SEEK_END - set the offset to the size of the file plus offset
-Description:
-    Repositions the file offset of the open file descriptor fd according to the offset and whence parameters.
+#### Args:
+1. int64 fd - file descriptor to seek
+1. int64 offset - offset to seek to
+1. uint64 whence - seek mode
+#### Return Value:
+ - On success, returns the new offset from the beginning of the file
+ - On failure, returns -1 and sets errno
+#### Whence values:
+1. SEEK_SET(0) - set the offset to offset bytes from the beginning
+1. SEEK_CUR(1) - set the offset to current location plus offset
+1. SEEK_END(2) - set the offset to the size of the file plus offset
+#### Description:
+Repositions the file offset of the open file descriptor fd according to the offset and whence parameters.
 
 ### Syscall 9: mmap
-Args:
-    1: int64 fd - file descriptor to map (or -1 for anonymous mapping)
-    2: uint64 offset - offset in the file to start the mapping
-    3: void* addr - desired starting address for the mapping (can be NULL)
-    4: uint64 size - length of the mapping in bytes, capped at size of fd (so -1 for whole file)
-    6: uint64 flags - mapping flags
-Return Value:
-    On success, returns the starting address of the mapped area
-    On failure, returns NULL and sets errno
-Flags:
-    bit 0: READ - pages may be read
-    bit 1: WRITE - pages may be written
-    bit 2: EXECUTE - pages may be executed
-    bit 3: CLEAR - pages are zeroed on mapping
-    bit 3: STACK - mapping is intended to be used as a stack, meaning it can grow downwards
-Description:
-    Maps a file or device into memory. If fd is -1, an anonymous mapping is created. The mapping starts at the specified offset in the file and spans size bytes.
-    The addr parameter can be used to suggest a starting address for the mapping; if NULL, the kernel chooses the address.
-    The flags parameter specifies the desired memory protection of the mapping.
+#### Args:
+1. int64 fd - file descriptor to map (or -1 for anonymous mapping)
+1. uint64 offset - offset in the file to start the mapping
+1. void* addr - desired starting address for the mapping (can be NULL)
+1. uint64 size - length of the mapping in bytes, capped at size of fd (so -1 for whole file)
+1. uint64 flags - mapping flags
+#### Return Value:
+ - On success, returns the starting address of the mapped area
+ - On failure, returns NULL and sets errno
+#### Flags:
+1. bit 0: READ - pages may be read
+1. bit 1: WRITE - pages may be written
+1. bit 2: EXECUTE - pages may be executed
+1. bit 3: CLEAR - pages are zeroed on mapping
+1. bit 3: STACK - mapping is intended to be used as a stack, meaning it can grow downwards
+#### Description:
+Maps a file or device into memory. If fd is -1, an anonymous mapping is created. The mapping starts at the specified offset in the file and spans size bytes.
+The addr parameter can be used to suggest a starting address for the mapping; if NULL, the kernel chooses the address.
+The flags parameter specifies the desired memory protection of the mapping.
 
 ### Syscall 10: munmap
-Args:
-    1: void* addr - starting address of the mapping to unmap
-    2: uint64 size - length of the mapping in bytes
+#### Args:
+1. void* addr - starting address of the mapping to unmap
+1. uint64 size - length of the mapping in bytes
+#### Return Value:
+ - On success, returns 0. If part of the region is not mapped but unmap is still successful, errno is set along with 0 in return value.
+ - On failure, returns -1 and sets errno
+#### Description:
+Unmaps a previously mapped region of memory starting at addr and spanning size bytes. This releases the mapping and any associated resources.
