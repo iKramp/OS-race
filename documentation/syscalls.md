@@ -42,141 +42,141 @@ This table will be expanded
 ## DETAILED SYSCALL DOCUMENTATION
 
 ### Syscall 1: exit
-Args:
-    1: uint64 status - exit status code
-Description:
+Args:  
+    1: uint64 status - exit status code  
+Description:  
     Terminates the calling process with the given status code. Any children are also terminated (sub-threads)
 
 ### Syscall 2: exec
-Args:
-    1: const char* path - path to the executable
-    2: uint64 argc - argument count
-    3: char** argv - argument list
-    4: uint64 envc - environment variable count
-    5: char** envp - environment variables
-Return Value:
-    On success, returns the PID of the new process.
-    On failure, returns -1 and sets errno.
-Description:
-    Spawns a new process by loading and executing the binary at the given path with the provided arguments and environment variables.
-    Returns the PID of the new process on success. Unlike linux fork + execve combo, this does NOT create a copy of the calling process.
+Args:  
+    1: const char* path - path to the executable  
+    2: uint64 argc - argument count  
+    3: char** argv - argument list  
+    4: uint64 envc - environment variable count  
+    5: char** envp - environment variables  
+Return Value:  
+    On success, returns the PID of the new process.  
+    On failure, returns -1 and sets errno.  
+Description:  
+    Spawns a new process by loading and executing the binary at the given path with the provided arguments and environment variables.  
+    Returns the PID of the new process on success. Unlike linux fork + execve combo, this does NOT create a copy of the calling process.  
 
 ### Syscall 3: clone
-Args:
-    1: uint64 flags - clone flags (idk yet, but it's here)
-Return value:
-    On success, PID of the new process in the existing process, 0 in the new process
-    On failure, -1 and sets errno
-Flags argument:
-    bit 0: CLONE_MEM - if set, the new process has a clone of the memory space instead of sharing it
-    bit 1: NO_FD - if set, the new process does not inherit open file descriptors (except for standard in/out/err)
-    bit 2: NO_STDIO - if set, the new process does not inherit standard input/output/error
-Description:
-    Clones the current process. The new "environment" is identical to the old one, but flags dictates what should be shared and what separate
+Args:  
+    1: uint64 flags - clone flags (idk yet, but it's here)  
+Return value:  
+    On success, PID of the new process in the existing process, 0 in the new process  
+    On failure, -1 and sets errno  
+Flags argument:  
+    bit 0: CLONE_MEM - if set, the new process has a clone of the memory space instead of sharing it  
+    bit 1: NO_FD - if set, the new process does not inherit open file descriptors (except for standard in/out/err)  
+    bit 2: NO_STDIO - if set, the new process does not inherit standard input/output/error  
+Description:  
+    Clones the current process. The new "environment" is identical to the old one, but flags dictates what should be shared and what separate  
 
 ### Syscall 4: fopen
-Args:
-    1: const char* path - path to the file, absolute or relative to current working directory
-    2: int64 fd - if set and path is relative, it will be relative to fd, not cwd
-    3: uint64 flags - open mode flags
-    4: uint64 create_mode - file creation mode
-Return Value:
-    On success, returns a non-negative file descriptor
-    On failure, returns -1 and sets errno
-Flags:
-    flags:
-        bit 0: READ - allow reading
-        bit 1: WRITE - allow writing
-        bit 2: APPEND - append to the end of the file
-        bit 3: CREATE - create the file if it does not exist
-        bit 4: TRUNCATE - truncate the file to zero length if it exists
-    create_mode:
-        bit 0: USER_READ - user read permission
-        bit 1: USER_WRITE - user write permission
-        bit 2: USER_EXECUTE - user execute permission
-        bit 3: GROUP_READ - group read permission
-        bit 4: GROUP_WRITE - group write permission
-        bit 5: GROUP_EXECUTE - group execute permission
-        bit 6: OTHER_READ - other read permission
-        bit 7: OTHER_WRITE - other write permission
-        bit 8: OTHER_EXECUTE - other execute permission
-        bit 9: STICKY - sticky bit - same as linux for directories
-        bit 10: SETUID - set user ID on execution
-        bit 11: SETGID - set group ID on execution
-        bit 12: DIRECTORY - create as a directory
-Description:
-    Opens the file at the given path with the specified flags. If the path is absolute, it will go from root.
-    If it is relative, it will either go from cwd (fd is 0) or from the directory represented by fd.
-    The fd has to be currently open if used, as a permission check.
+Args:  
+    1: const char* path - path to the file, absolute or relative to current working directory  
+    2: int64 fd - if set and path is relative, it will be relative to fd, not cwd  
+    3: uint64 flags - open mode flags  
+    4: uint64 create_mode - file creation mode  
+Return Value:  
+    On success, returns a non-negative file descriptor  
+    On failure, returns -1 and sets errno  
+Flags:  
+    flags:  
+        bit 0: READ - allow reading  
+        bit 1: WRITE - allow writing  
+        bit 2: APPEND - append to the end of the file  
+        bit 3: CREATE - create the file if it does not exist  
+        bit 4: TRUNCATE - truncate the file to zero length if it exists  
+    create_mode:  
+        bit 0: USER_READ - user read permission  
+        bit 1: USER_WRITE - user write permission  
+        bit 2: USER_EXECUTE - user execute permission  
+        bit 3: GROUP_READ - group read permission  
+        bit 4: GROUP_WRITE - group write permission  
+        bit 5: GROUP_EXECUTE - group execute permission  
+        bit 6: OTHER_READ - other read permission  
+        bit 7: OTHER_WRITE - other write permission  
+        bit 8: OTHER_EXECUTE - other execute permission  
+        bit 9: STICKY - sticky bit - same as linux for directories  
+        bit 10: SETUID - set user ID on execution  
+        bit 11: SETGID - set group ID on execution  
+        bit 12: DIRECTORY - create as a directory  
+Description:  
+    Opens the file at the given path with the specified flags. If the path is absolute, it will go from root.  
+    If it is relative, it will either go from cwd (fd is 0) or from the directory represented by fd.  
+    The fd has to be currently open if used, as a permission check.  
 
 ### Syscall 5: fclose
-Args:
-    1: int64 fd - file descriptor to close
-Return Value:
-    On success, returns 0
-    On failure, returns -1 and sets errno
-Description:
-    Closes the given file descriptor, releasing any associated resources and flushing buffers.
+Args:  
+    1: int64 fd - file descriptor to close  
+Return Value:  
+    On success, returns 0  
+    On failure, returns -1 and sets errno  
+Description:  
+    Closes the given file descriptor, releasing any associated resources and flushing buffers.  
 
 ### Syscall 6: fread
-Args:
-    1: int64 fd - file descriptor to read from
-    2: void* buf - buffer to read data into
-    3: uint64 count - number of bytes to read
-Return Value:
-    On success, returns the number of bytes read. Errno may still be set to indicate additional information, like EOF (in which case the read succeeded, but reached the end.
-    On failure, returns -1 and sets errno
-Description:
-    Reads up to count bytes from the file descriptor fd into the buffer buf. The actual number of bytes read may be less than count.
+Args:  
+    1: int64 fd - file descriptor to read from  
+    2: void* buf - buffer to read data into  
+    3: uint64 count - number of bytes to read  
+Return Value:  
+    On success, returns the number of bytes read. Errno may still be set to indicate additional information, like EOF (in which case the read succeeded, but reached the end.  
+    On failure, returns -1 and sets errno  
+Description:  
+    Reads up to count bytes from the file descriptor fd into the buffer buf. The actual number of bytes read may be less than count.  
 
 ### Syscall 7: fwrite
-Args:
-    1: int64 fd - file descriptor to write to
-    2: const void* buf - buffer containing data to write
-    3: uint64 count - number of bytes to write
-Return Value:
-    On success, returns the number of bytes written. Errno may still be set to indicate additional information.
-    On failure, returns -1 and sets errno
-Description:
-    Writes up to count bytes from the buffer buf to the file descriptor fd. The actual number of bytes written may be less than count.
+Args:  
+    1: int64 fd - file descriptor to write to  
+    2: const void* buf - buffer containing data to write  
+    3: uint64 count - number of bytes to write  
+Return Value:  
+    On success, returns the number of bytes written. Errno may still be set to indicate additional information.  
+    On failure, returns -1 and sets errno  
+Description:  
+    Writes up to count bytes from the buffer buf to the file descriptor fd. The actual number of bytes written may be less than count.  
 
 ### Syscall 8: fseek
-Args:
-    1: int64 fd - file descriptor to seek
-    2: int64 offset - offset to seek to
-    3: uint64 whence - seek mode
-Return Value:
-    On success, returns the new offset from the beginning of the file
-    On failure, returns -1 and sets errno
-Whence values:
-    0: SEEK_SET - set the offset to offset bytes from the beginning
-    1: SEEK_CUR - set the offset to current location plus offset
-    2: SEEK_END - set the offset to the size of the file plus offset
-Description:
-    Repositions the file offset of the open file descriptor fd according to the offset and whence parameters.
+Args:  
+    1: int64 fd - file descriptor to seek  
+    2: int64 offset - offset to seek to  
+    3: uint64 whence - seek mode  
+Return Value:  
+    On success, returns the new offset from the beginning of the file  
+    On failure, returns -1 and sets errno  
+Whence values:  
+    0: SEEK_SET - set the offset to offset bytes from the beginning  
+    1: SEEK_CUR - set the offset to current location plus offset  
+    2: SEEK_END - set the offset to the size of the file plus offset  
+Description:  
+    Repositions the file offset of the open file descriptor fd according to the offset and whence parameters.  
 
 ### Syscall 9: mmap
-Args:
-    1: int64 fd - file descriptor to map (or -1 for anonymous mapping)
-    2: uint64 offset - offset in the file to start the mapping
-    3: void* addr - desired starting address for the mapping (can be NULL)
-    4: uint64 size - length of the mapping in bytes, capped at size of fd (so -1 for whole file)
-    6: uint64 flags - mapping flags
-Return Value:
-    On success, returns the starting address of the mapped area
-    On failure, returns NULL and sets errno
-Flags:
-    bit 0: READ - pages may be read
-    bit 1: WRITE - pages may be written
-    bit 2: EXECUTE - pages may be executed
-    bit 3: CLEAR - pages are zeroed on mapping
-    bit 3: STACK - mapping is intended to be used as a stack, meaning it can grow downwards
-Description:
-    Maps a file or device into memory. If fd is -1, an anonymous mapping is created. The mapping starts at the specified offset in the file and spans size bytes.
-    The addr parameter can be used to suggest a starting address for the mapping; if NULL, the kernel chooses the address.
-    The flags parameter specifies the desired memory protection of the mapping.
+Args:  
+    1: int64 fd - file descriptor to map (or -1 for anonymous mapping)  
+    2: uint64 offset - offset in the file to start the mapping  
+    3: void* addr - desired starting address for the mapping (can be NULL)  
+    4: uint64 size - length of the mapping in bytes, capped at size of fd (so -1 for whole file)  
+    6: uint64 flags - mapping flags  
+Return Value:  
+    On success, returns the starting address of the mapped area  
+    On failure, returns NULL and sets errno  
+Flags:  
+    bit 0: READ - pages may be read  
+    bit 1: WRITE - pages may be written  
+    bit 2: EXECUTE - pages may be executed  
+    bit 3: CLEAR - pages are zeroed on mapping  
+    bit 3: STACK - mapping is intended to be used as a stack, meaning it can grow downwards  
+Description:  
+    Maps a file or device into memory. If fd is -1, an anonymous mapping is created. The mapping starts at the specified offset in the file and spans size bytes.  
+    The addr parameter can be used to suggest a starting address for the mapping; if NULL, the kernel chooses the address.  
+    The flags parameter specifies the desired memory protection of the mapping.  
 
 ### Syscall 10: munmap
-Args:
-    1: void* addr - starting address of the mapping to unmap
-    2: uint64 size - length of the mapping in bytes
+Args:  
+    1: void* addr - starting address of the mapping to unmap  
+    2: uint64 size - length of the mapping in bytes  
