@@ -75,7 +75,7 @@ Returns the PID of the new process on success. Unlike linux fork + execve combo,
 Clones the current process. The new "environment" is identical to the old one, but flags dictates what should be shared and what separate
 
 ### Syscall 4: fopen
-Args:
+#### Args:
     1: const char* path - path to the file, absolute or relative to current working directory
     2: int64 fd - if set and path is relative, it will be relative to fd, not cwd
     3: uint64 flags - open mode flags
