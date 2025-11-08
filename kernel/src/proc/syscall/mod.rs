@@ -45,35 +45,33 @@ fn enable_syscall() {
 
 //syscalls are limited to 5 64bit parameters. If more data is needed, set up a structure and pass a
 //pointer to it
-#[naked]
+#[unsafe(naked)]
 extern "C" fn handler_wrapper() -> ! {
     //INFO: any kind of change here should be matched with the one in dispatcher.rs
-    unsafe {
-        core::arch::naked_asm!(
-            //push preserved regs, get kernel stack from gsbase, set current rsp to rax, switch
-            //stack is aligned to 16 here
-            "sub rsp, 8*8",
-            "mov [rsp + 8*7], rcx", //return rip
-            "mov [rsp + 8*6], rbx",
-            "mov [rsp + 8*5], rbp",
-            "mov [rsp + 8*4], r12",
-            "mov [rsp + 8*3], r13",
-            "mov [rsp + 8*2], r14",
-            "mov [rsp + 8*1], r15",
-            "mov [rsp + 8*0], r11", //rflags is in r11
-            "mov r9, rsp",
+    core::arch::naked_asm!(
+        //push preserved regs, get kernel stack from gsbase, set current rsp to rax, switch
+        //stack is aligned to 16 here
+        "sub rsp, 8*8",
+        "mov [rsp + 8*7], rcx", //return rip
+        "mov [rsp + 8*6], rbx",
+        "mov [rsp + 8*5], rbp",
+        "mov [rsp + 8*4], r12",
+        "mov [rsp + 8*3], r13",
+        "mov [rsp + 8*2], r14",
+        "mov [rsp + 8*1], r15",
+        "mov [rsp + 8*0], r11", //rflags is in r11
+        "mov r9, rsp",
 
-            "swapgs",
-            "mov cx, 0",
-            "mov ss, cx",
+        "swapgs",
+        "mov cx, 0",
+        "mov ss, cx",
 
-            "mov rcx, gs:0", //kernel stack address
-            "mov rsp, [rcx]",
+        "mov rcx, gs:0", //kernel stack address
+        "mov rsp, [rcx]",
 
-            "call {}",
-            sym handler
-        )
-    }
+        "call {}",
+        sym handler
+    )
 }
 
 #[allow(unused_variables)]

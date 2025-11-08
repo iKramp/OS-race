@@ -73,6 +73,10 @@ pub static mut LIMINE_BOOTLOADER_REQUESTS: BootloaderRequests = BootloaderReques
     _request_end_marker: [0xadc0e0531bb10d03, 0x9572709f31764c62],
 };
 
+pub fn get_all() -> &'static mut BootloaderRequests {
+    unsafe { &mut LIMINE_BOOTLOADER_REQUESTS }
+}
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct BootloaderRequests {

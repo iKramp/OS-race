@@ -7,130 +7,127 @@ macro_rules! handler {
     (
         $name:ident $(, $flag:ident )* $(,)?
     ) => {{
-        #[naked]
+        #[unsafe(naked)]
         extern "C" fn wrapper() -> ! {
             //TODO: any kind of change here should be matched with the one in dispatcher.rs
-            unsafe {
-                core::arch::naked_asm!(
-                    //potentially padding, but we always start with a clean stack if we're the first
-                    //level. IS aligned to 16 bytes
-                    //
-                    //pre-pushed values
-                    //
-                    //ss (64 bit)
-                    //rsp
-                    //rflags
-                    //cs (64 bit)
-                    //rip
-                    //
-                    //possibly error code
+            core::arch::naked_asm!(
+                //potentially padding, but we always start with a clean stack if we're the first
+                //level. IS aligned to 16 bytes
+                //
+                //pre-pushed values
+                //
+                //ss (64 bit)
+                //rsp
+                //rflags
+                //cs (64 bit)
+                //rip
+                //
+                //possibly error code
 
-                    handler!(@if_not_flag has_code, $($flag)* {
-                        "push 0"
-                    }),
+                handler!(@if_not_flag has_code, $($flag)* {
+                    "push 0"
+                }),
 
-                    //save all general purpose registers
-                    "push rax",
-                    "push rbx",
-                    "push rcx",
-                    "push rdx",
-                    "push rsi",
-                    "push rdi",
-                    "push rbp",
-                    //not pushing stack pointer, that's already changed
-                    "push r8",
-                    "push r9",
-                    "push r10",
-                    "push r11",
-                    "push r12",
-                    "push r13",
-                    "push r14",
-                    "push r15",
+                //save all general purpose registers
+                "push rax",
+                "push rbx",
+                "push rcx",
+                "push rdx",
+                "push rsi",
+                "push rdi",
+                "push rbp",
+                //not pushing stack pointer, that's already changed
+                "push r8",
+                "push r9",
+                "push r10",
+                "push r11",
+                "push r12",
+                "push r13",
+                "push r14",
+                "push r15",
 
 
-                    handler!(@if_else_flag slow_swap, $($flag)*, {
-                        "
-                            mov ebx, 1 //idk some flag linux sets
-                            mov ecx, 0xc0000101 //gs_base
-                            rdmsr
-                            test edx, edx
-                            js 3f
+                handler!(@if_else_flag slow_swap, $($flag)*, {
+                    "
+                        mov ebx, 1 //idk some flag linux sets
+                        mov ecx, 0xc0000101 //gs_base
+                        rdmsr
+                        test edx, edx
+                        js 3f
 
-                            swapgs
-                            push 0x1 //swapped
-                            jmp 4f
-                            3:
-                            push 0x0 //not swapped
-                            4:
-                        "
-                    } {
-                        //mov pushed cs to register by offsetting from rsp
-                        "
-                            xor rax, rax
-                            mov rax, [rsp + 8 * 17] //cs
-                                                    //skip swap if rax == 8
-                            cmp rax, 8
-                            je 3f
+                        swapgs
+                        push 0x1 //swapped
+                        jmp 4f
+                        3:
+                        push 0x0 //not swapped
+                        4:
+                    "
+                } {
+                    //mov pushed cs to register by offsetting from rsp
+                    "
+                        xor rax, rax
+                        mov rax, [rsp + 8 * 17] //cs
+                                                //skip swap if rax == 8
+                        cmp rax, 8
+                        je 3f
 
-                            swapgs
-                            push 0x1 //swapped
-                            jmp 4f
-                            3:
-                            push 0x0 //not swapped
-                            4:
-                        "
-                    }),
+                        swapgs
+                        push 0x1 //swapped
+                        jmp 4f
+                        3:
+                        push 0x0 //not swapped
+                        4:
+                    "
+                }),
 
-                    "mov rdi, rsp",
-                    "add rdi, 8", //start of proc data
+                "mov rdi, rsp",
+                "add rdi, 8", //start of proc data
 
-                    handler!(@if_else_flag slow_swap, $($flag)*, {
-                        "
-                            mov rsi, 1 //atomic interrupt
-                        "
-                    } {
-                        "
-                            mov rsi, 0 //not atomic interrupt
-                        "
-                    }),
+                handler!(@if_else_flag slow_swap, $($flag)*, {
+                    "
+                        mov rsi, 1 //atomic interrupt
+                    "
+                } {
+                    "
+                        mov rsi, 0 //not atomic interrupt
+                    "
+                }),
 
-                    "lea rdx, [rip + {0}]", //main handler
-                    //stack should be aligned
+                "lea rdx, [rip + {0}]", //main handler
+                //stack should be aligned
 
-                    "call {1}",
+                "call {1}",
 
-                    "pop rax", //gs was swapped
-                    "cmp rax, 0",
-                    "je 5f",
+                "pop rax", //gs was swapped
+                "cmp rax, 0",
+                "je 5f",
 
-                    "swapgs",
-                    "5:",
+                "swapgs",
+                "5:",
 
-                    "pop r15",
-                    "pop r14",
-                    "pop r13",
-                    "pop r12",
-                    "pop r11",
-                    "pop r10",
-                    "pop r9",
-                    "pop r8",
-                    "pop rbp",
-                    "pop rdi",
-                    "pop rsi",
-                    "pop rdx",
-                    "pop rcx",
-                    "pop rbx",
-                    "pop rax",
+                "pop r15",
+                "pop r14",
+                "pop r13",
+                "pop r12",
+                "pop r11",
+                "pop r10",
+                "pop r9",
+                "pop r8",
+                "pop rbp",
+                "pop rdi",
+                "pop rsi",
+                "pop rdx",
+                "pop rcx",
+                "pop rbx",
+                "pop rax",
 
-                    //remove err code from stack
-                    "add rsp, 8",
+                //remove err code from stack
+                "add rsp, 8",
 
-                    "iretq",
-                    sym $name,
-                    sym general_interrupt_handler,
-                )
-
-            }
+                "iretq",
+                sym $name,
+                sym general_interrupt_handler,
+            )
         }
         wrapper
     }};

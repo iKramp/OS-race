@@ -49,6 +49,9 @@ extern "C" fn _start() -> ! {
     unsafe {
         core::arch::asm!("mov {}, rsp", out(reg) stack_pointer);
     }
+
+    let limine_things = limine::get_all();
+
     vga::init_vga_driver();
     vga::clear_screen();
 

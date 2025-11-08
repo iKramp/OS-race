@@ -34,7 +34,7 @@ fn main() {
 
     // Set the flag to generate the linker map file
     println!("cargo:rustc-link-arg=-T{}", link_script_file.display());
-    //println!("cargo:rustc-link-arg=Map=/home/nejc/programming/OS-race/kernel.map");
+    //println!("cargo:rustc-link-arg=Map=/home/nejc/dev/meowOS/kernel.map");
 
     // Re-run the build script if the build configuration changes
     println!("cargo:rerun-if-changed=build.rs");

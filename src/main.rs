@@ -2,9 +2,9 @@ fn main() {
     //demangle the kernel.map file
     //let _ = std::process::Command::new("rustfilt")
     //    .arg("-i")
-    //    .arg("/home/nejc/programming/OS-race/kernel.map")
+    //    .arg("/home/nejc/dev/meowOS/kernel.map")
     //    .arg("-o")
-    //    .arg("/home/nejc/programming/Os-race/kernel.map");
+    //    .arg("/home/nejc/dev/meowOS/kernel.map");
     //
 
     //chose whether to debug with GDB
@@ -50,7 +50,7 @@ fn main() {
         let _ = std::process::Command::new("kitty")
             .arg("gdb")
             .arg("-x")
-            .arg("~/programming/OS-race/assets/gdb_commands.txt")
+            .arg("~/dev/meowOS/assets/gdb_commands.txt")
             .spawn()
             .unwrap()
             .wait()
