@@ -1,2 +1,2 @@
-# OS-race
-A poorly written OS for a challenge between me, zorz42 and borbrudar
+# meowOS
+A poorly written OS that tries to be linux-like but hates fork/execve combo
