@@ -4,4 +4,6 @@
 bindeps = true
 
 [build]
-rustflags = ["-C", "force-frame-pointers=yes", "-g"]
+rustflags = [
+    "-C", "force-frame-pointers=yes", "-g"
+]

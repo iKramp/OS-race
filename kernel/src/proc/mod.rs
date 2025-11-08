@@ -90,6 +90,7 @@ pub fn init() {
     }
 
     syscall::init();
+    set_proc_initialized();
 }
 
 pub fn init_ap() {

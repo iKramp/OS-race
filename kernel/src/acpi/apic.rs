@@ -4,6 +4,7 @@ use crate::interrupts::{disable_pic_completely, general_interrupt_handler};
 use core::mem::MaybeUninit;
 use std::mem_utils::PhysAddr;
 
+use reg_map::RegMap;
 use unroll::unroll_for_loops;
 
 use crate::{
@@ -116,6 +117,7 @@ fn map_lapic_registers(lapic_address: PhysAddr) {
 }
 
 #[repr(C)]
+#[derive(RegMap)]
 pub struct LapicRegisters {
     reserved_0: LapicRegisterValueStructure,
     reserved_1: LapicRegisterValueStructure,
@@ -181,6 +183,7 @@ impl LapicRegisters {
 }
 
 #[repr(C)]
+#[derive(RegMap)]
 pub struct LapicRegisterValueStructure {
     pub bytes: u32,
     padding_0: u32,
@@ -188,6 +191,7 @@ pub struct LapicRegisterValueStructure {
 }
 
 #[repr(C)]
+#[derive(RegMap)]
 struct EightDWordStructure {
     bits_000_031: LapicRegisterValueStructure,
     bits_032_063: LapicRegisterValueStructure,

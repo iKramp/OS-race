@@ -36,6 +36,8 @@ Errno value is 0 on success, otherwise it is the error code. Return value may st
 | 8 | fseek | seeks to a position in a file descriptor |
 | 9 | mmap | maps a file or device into memory |
 | 10 | munmap | unmaps a mapped region of memory |
+| 11 | sleep | puts the calling process to sleep for a specified duration |
+| 12 | time | gets the current system time |
 
 This table will be expanded
 
@@ -185,3 +187,23 @@ The flags parameter specifies the desired memory protection of the mapping.
  - On failure, returns -1 and sets errno
 #### Description:
 Unmaps a previously mapped region of memory starting at addr and spanning size bytes. This releases the mapping and any associated resources.
+
+### Syscall 11: sleep
+#### Args:
+1. uint64 microseconds - duration to sleep in microseconds
+#### Return Value:
+ - On success, returns 0
+ - On failure, returns -1 and sets errno
+#### Description:
+Puts the calling process to sleep for at least the specified duration in microseconds. Resolution of the sleep is up to the kernel (might be rounded up to the nearest 100 micros). Sleep of 0 microseconds just yields to the kernel and does not invoke any kind of sleep.
+
+### Syscall 12: time
+#### Args:
+1. uint64* seconds - pointer to store the current time in seconds since epoch
+1. uint64* nanoseconds - pointer to store the current time in nanoseconds part
+#### Return Value:
+ - On success, returns 0
+ - On failure, returns -1 and sets errno
+#### Description:
+Retrieves the current system time. The time is returned in seconds and nanoseconds since the Unix epoch (January 1, 1970). The seconds and nanoseconds are stored in the provided pointers.
+

@@ -45,10 +45,10 @@ fn enable_syscall() {
 
 //syscalls are limited to 5 64bit parameters. If more data is needed, set up a structure and pass a
 //pointer to it
-#[unsafe(naked)]
+#[naked]
 extern "C" fn handler_wrapper() -> ! {
     //INFO: any kind of change here should be matched with the one in dispatcher.rs
-    core::arch::naked_asm!(
+    unsafe { core::arch::naked_asm!(
         //push preserved regs, get kernel stack from gsbase, set current rsp to rax, switch
         //stack is aligned to 16 here
         "sub rsp, 8*8",
@@ -71,7 +71,7 @@ extern "C" fn handler_wrapper() -> ! {
 
         "call {}",
         sym handler
-    )
+    )}
 }
 
 #[allow(unused_variables)]
@@ -85,7 +85,19 @@ extern "C" fn handler(arg1: u64, arg2: u64, arg3: u64, _return_rcx: u64, arg4: u
 
     #[allow(clippy::single_match)]
     match arg1 {
-        1 => syscall::handlers::console_write(arg2, 0, 0),
+        0 => todo!("implement illegal syscall"),
+        1 => syscall::handlers::console_write(arg2, 0, 0), //implement exit
+        2 => todo!("implement exec"),
+        3 => todo!("implement clone"),
+        4 => todo!("implement fopen"),
+        5 => todo!("implement fclose"),
+        6 => todo!("implement fread"),
+        7 => todo!("implement fwrite"),
+        8 => todo!("implement fseek"),
+        9 => todo!("implement mmap"),
+        10 => todo!("implement munmap"),
+        11 => todo!("implement sleep"),
+        12 => todo!("implement time"),
         _ => {}
     }
 

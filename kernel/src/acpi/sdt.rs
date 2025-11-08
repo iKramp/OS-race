@@ -1,5 +1,7 @@
-#[repr(C, packed)]
-#[derive(Debug)]
+use reg_map::RegMap;
+
+#[repr(C)]
+#[derive(Debug, RegMap)]
 pub struct AcpiSdtHeader {
     pub signature: [u8; 4],
     pub length: u32,

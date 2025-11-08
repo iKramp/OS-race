@@ -50,8 +50,6 @@ extern "C" fn _start() -> ! {
         core::arch::asm!("mov {}, rsp", out(reg) stack_pointer);
     }
 
-    let limine_things = limine::get_all();
-
     vga::init_vga_driver();
     vga::clear_screen();
 
@@ -79,18 +77,18 @@ extern "C" fn _start() -> ! {
     pci::enumerate_devices();
     vfs::init();
 
-    let res = vfs::mount_blkdev_partition(cmd_args.root_partition, ResolvedPath::root());
-    if let Err(e) = res {
-        println!("{}", e);
-        panic!("Failed to mount root partition");
-    }
-
-    let path = vfs::resolve_path("/", "/");
-    println!("{:?}", vfs::get_dir_entries((&path).into()));
+    // let res = vfs::mount_blkdev_partition(cmd_args.root_partition, ResolvedPath::root());
+    // if let Err(e) = res {
+    //     println!("{}", e);
+    //     panic!("Failed to mount root partition");
+    // }
+    //
+    // let path = vfs::resolve_path("/", "/");
+    // println!("{:?}", vfs::get_dir_entries((&path).into()));
 
     proc::init();
 
-    file_operations::do_file_operations();
+    // file_operations::do_file_operations();
 
     // vga_text::hello_message();
 
@@ -105,13 +103,5 @@ extern "C" fn _start() -> ! {
     //start first proc
     unsafe { core::arch::asm!("int 254") };
 
-    println!("looping infinitely now");
-    let mut a = 0;
-    #[allow(clippy::empty_loop)]
-    loop {
-        a += 1;
-        acpi::set_timeout(Duration::from_secs(1));
-        println!("a: {}", a);
-        unsafe { core::arch::asm!("hlt") };
-    }
+    panic!("Returned to _start after first context switch");
 }

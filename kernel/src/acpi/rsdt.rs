@@ -1,8 +1,12 @@
-use std::mem_utils::*;
+use std::{boxed::Box, mem_utils::*};
 
-pub trait RootSystemDescriptorTable: std::fmt::Debug {
+use reg_map::RegMap;
+
+use crate::acpi::sdt::{AcpiSdtHeader, AcpiSdtHeaderPtr};
+
+pub trait RootSystemDescriptorTable {
     fn validate(&self) -> bool {
-        let addr = self as *const Self as *const u8 as u64;
+        let addr = self.get_addr() as u64;
         let mut sum: u16 = 0;
         for i in 0..self.length() {
             unsafe {
@@ -12,6 +16,7 @@ pub trait RootSystemDescriptorTable: std::fmt::Debug {
         sum & 0xFF == 0
     }
 
+    fn get_addr(&self) -> *const u8;
     fn length(&self) -> u32;
     fn get_table(&self, signature: [u8; 4]) -> Option<PhysAddr>;
     fn get_tables(&self) -> std::Vec<PhysAddr>;
@@ -19,34 +24,39 @@ pub trait RootSystemDescriptorTable: std::fmt::Debug {
     fn print_signature(&self);
 }
 
-pub fn get_rsdt(rsdp: &super::rsdp::Rsdp) -> &'static dyn RootSystemDescriptorTable {
+pub fn get_rsdt(rsdp: &super::rsdp::Rsdp) -> Box<dyn RootSystemDescriptorTable> {
     unsafe {
         let address = rsdp.address();
 
+        #[cfg(debug_assertions)]
         match rsdp {
             super::rsdp::Rsdp::V1(_) => crate::println!("V1"),
             super::rsdp::Rsdp::V2(_) => crate::println!("V2"),
         }
         match rsdp {
-            super::rsdp::Rsdp::V1(_) => get_at_physical_addr::<Rsdt>(address),
-            super::rsdp::Rsdp::V2(_) => get_at_physical_addr::<Xsdt>(address),
+            super::rsdp::Rsdp::V1(_) => Box::new(RsdtPtr::from_ptr(address.0 as *mut _)),
+            super::rsdp::Rsdp::V2(_) => Box::new(XsdtPtr::from_ptr(address.0 as *mut _)),
         }
     }
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(RegMap)]
 struct Rsdt {
-    header: super::sdt::AcpiSdtHeader,
+    header: AcpiSdtHeader,
 }
 
-impl RootSystemDescriptorTable for Rsdt {
+impl RootSystemDescriptorTable for RsdtPtr<'static> {
+    fn get_addr(&self) -> *const u8 {
+        self.as_ptr() as *const u8
+    }
+
     fn length(&self) -> u32 {
-        self.header.length
+        self.header().length().read()
     }
     fn get_table(&self, signature: [u8; 4]) -> Option<PhysAddr> {
         unsafe {
-            let start_table_ptr = VirtAddr((self as *const Self) as u64 + 36);
+            let start_table_ptr = VirtAddr((self.get_addr()) as u64 + 36);
             let num_entries = (self.length() - 36) / 4;
             for entry_index in 0..num_entries {
                 let table_entry_ptr = start_table_ptr + (entry_index as u64 * 4);
@@ -63,7 +73,7 @@ impl RootSystemDescriptorTable for Rsdt {
     fn get_tables(&self) -> std::Vec<PhysAddr> {
         let mut tables = std::Vec::new();
         unsafe {
-            let start_table_ptr = VirtAddr((self as *const Self) as u64 + 36);
+            let start_table_ptr = VirtAddr((self.get_addr()) as u64 + 36);
             let num_entries = (self.length() - 36) / 4;
             for entry_index in 0..num_entries {
                 let table_entry_ptr = start_table_ptr + (entry_index as u64 * 4);
@@ -87,23 +97,28 @@ impl RootSystemDescriptorTable for Rsdt {
         }
     }
     fn print_signature(&self) {
-        crate::println!("{:?}", self.header.signature.map(|a| a as char))
+        crate::println!("{:?}", self.header().signature().iter().map(|a| a.read() as char).collect::<std::Vec<char>>())
     }
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, RegMap)]
 struct Xsdt {
-    header: super::sdt::AcpiSdtHeader,
+    header: AcpiSdtHeader,
 }
 
-impl RootSystemDescriptorTable for Xsdt {
-    fn length(&self) -> u32 {
-        self.header.length
+impl RootSystemDescriptorTable for XsdtPtr<'static> {
+    fn get_addr(&self) -> *const u8 {
+        self.as_ptr() as *const u8
     }
+
+    fn length(&self) -> u32 {
+        self.header().length().read()
+    }
+
     fn get_table(&self, signature: [u8; 4]) -> Option<PhysAddr> {
         unsafe {
-            let start_table_ptr = VirtAddr((self as *const Self) as u64 + 36);
+            let start_table_ptr = VirtAddr((self.get_addr()) as u64 + 36);
             let num_entries = (self.length() - 36) / 8;
             for entry_index in 0..num_entries {
                 let table_entry_ptr = start_table_ptr + (entry_index as u64 * 8);
@@ -116,10 +131,11 @@ impl RootSystemDescriptorTable for Xsdt {
             None
         }
     }
+
     fn get_tables(&self) -> std::Vec<PhysAddr> {
         let mut tables = std::Vec::new();
         unsafe {
-            let start_table_ptr = VirtAddr((self as *const Self) as u64 + 36);
+            let start_table_ptr = VirtAddr((self.get_addr()) as u64 + 36);
             let num_entries = (self.length() - 36) / 8;
             for entry_index in 0..num_entries {
                 let table_entry_ptr = start_table_ptr + (entry_index as u64 * 8);
@@ -129,9 +145,10 @@ impl RootSystemDescriptorTable for Xsdt {
         }
         tables
     }
+
     fn print_tables(&self) {
         unsafe {
-            let start_table_ptr = VirtAddr((self as *const Self) as u64 + 36);
+            let start_table_ptr = VirtAddr((self.get_addr()) as u64 + 36);
             let num_entries = (self.length() - 36) / 8;
             for entry_index in 0..num_entries {
                 let table_entry_ptr = start_table_ptr + (entry_index as u64 * 8);
@@ -141,7 +158,8 @@ impl RootSystemDescriptorTable for Xsdt {
             }
         }
     }
+
     fn print_signature(&self) {
-        crate::println!("{:?}", self.header.signature.map(|a| a as char))
+        crate::println!("{:?}", self.header().signature().iter().map(|a| a.read() as char).collect::<std::Vec<char>>())
     }
 }

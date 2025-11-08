@@ -7,10 +7,10 @@ macro_rules! handler {
     (
         $name:ident $(, $flag:ident )* $(,)?
     ) => {{
-        #[unsafe(naked)]
+        #[naked]
         extern "C" fn wrapper() -> ! {
             //TODO: any kind of change here should be matched with the one in dispatcher.rs
-            core::arch::naked_asm!(
+            unsafe { core::arch::naked_asm!(
                 //potentially padding, but we always start with a clean stack if we're the first
                 //level. IS aligned to 16 bytes
                 //
@@ -127,7 +127,7 @@ macro_rules! handler {
                 "iretq",
                 sym $name,
                 sym general_interrupt_handler,
-            )
+            )}
         }
         wrapper
     }};
