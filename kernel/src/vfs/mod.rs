@@ -1,5 +1,5 @@
 use dtmpfs::DtmpfsFactory;
-use std::{boxed::Box, collections::btree_map::BTreeMap, sync::mutex::Mutex, vec::Vec};
+use std::{boxed::Box, collections::btree_map::BTreeMap, sync::no_int_spinlock::NoIntSpinlock, vec::Vec};
 use uuid::Uuid;
 
 use crate::drivers::{
@@ -7,21 +7,21 @@ use crate::drivers::{
     rfs::RfsFactory,
 };
 
+mod adapters;
 mod dtmpfs;
+mod filesystem_trait;
 mod fs_tree;
 mod inode;
 mod operations;
 mod path;
-mod adapters;
-mod filesystem_trait;
+pub use filesystem_trait::{FileSystem, FileSystemFactory};
 pub use inode::*;
 pub use operations::*;
 pub use path::*;
-pub use filesystem_trait::{FileSystem, FileSystemFactory};
 
 //0 is unknown, 1 is bad blocks, 2 is root
 pub const ROOT_INODE_INDEX: u64 = 2;
-pub static VFS: Mutex<Vfs> = Mutex::new(Vfs::new());
+pub static VFS: NoIntSpinlock<Vfs> = NoIntSpinlock::new(Vfs::new());
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

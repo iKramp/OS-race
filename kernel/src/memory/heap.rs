@@ -1,5 +1,5 @@
 use std::mem_utils::*;
-use std::sync::mutex::Mutex;
+use std::sync::no_int_spinlock::NoIntSpinlock;
 
 use super::PAGE_TREE_ALLOCATOR;
 
@@ -193,13 +193,13 @@ pub struct Heap {
 }
 
 pub struct HeapWrapper {
-    heap: Mutex<Heap>,
+    heap: NoIntSpinlock<Heap>,
 }
 
 impl HeapWrapper {
     pub const fn new() -> Self {
         Self {
-            heap: Mutex::new(Heap::new()),
+            heap: NoIntSpinlock::new(Heap::new()),
         }
     }
 }

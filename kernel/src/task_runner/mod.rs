@@ -7,12 +7,23 @@ use std::boxed::Box;
 
 use crate::acpi::cpu_locals::CpuLocals;
 
+pub struct AsyncTaskStore {
+    task_list: AtomicPtr<AsyncTaskHolder>,
+    id_counter: u64,
+
+}
+
 //probably won't change return type, tasks should modify process state or other things themselves (through
 //a pointer)
 pub type AsyncTask = dyn Future<Output = ()>;
 pub struct AsyncTaskHolder {
     task: Pin<Box<AsyncTask>>,
     next_task: AtomicPtr<AsyncTaskHolder>,
+}
+
+pub struct TaskToWake {
+    pub task_id: u64,
+    pub next_task: AtomicPtr<TaskToWake>,
 }
 
 pub fn add_task(task: Pin<Box<AsyncTask>>) {

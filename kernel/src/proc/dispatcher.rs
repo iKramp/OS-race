@@ -1,4 +1,4 @@
-use crate::{interrupts::InterruptProcessorState, memory::paging};
+use crate::{interrupts::{disable_interrupts, InterruptProcessorState}, memory::paging};
 
 use super::{CpuStateType, ProcessData, StackCpuStateData, syscall::SyscallCpuState};
 
@@ -22,15 +22,18 @@ pub(super) fn dispatch(new_proc: &ProcessData) -> ! {
 
     let new_page_tree = &new_proc.memory_context.get().page_tree;
     paging::PageTree::set_level4_addr(new_page_tree.root());
+    let locals = crate::acpi::cpu_locals::CpuLocals::get();
+    disable_interrupts();
     unsafe {
         core::arch::asm!(
-            "cli", //disable interrupts
             //this is a bit tricky. We can do this because context switch is only called on
             //syscalls (they did swapgs) and non-async interrupts, and those interrupts can check
             //(and did do so) if they are the root interrupt, meaning they did swapgs
             "swapgs"
         );
     }
+
+    locals.int_depth -= 1;
 
     match &new_proc.cpu_state {
         CpuStateType::Interrupt(interrupt_frame) => return_interrupted(interrupt_frame),
@@ -93,11 +96,4 @@ fn return_syscalled(cpu_state: &SyscallCpuState) -> ! {
         )
     };
     unreachable!()
-}
-
-pub(super) fn is_root_interrupt(on_stack_data: &StackCpuStateData) -> bool {
-    match on_stack_data {
-        StackCpuStateData::Interrupt(interrupt_state) => interrupt_state.interrupt_frame.cs == 0x23,
-        StackCpuStateData::Syscall(_) => true,
-    }
 }

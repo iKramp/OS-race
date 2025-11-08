@@ -1,3 +1,7 @@
+use crate::proc::interrupt_context_switch;
+
+use super::{disable_interrupts, enable_interrupts};
+
 #[macro_export]
 macro_rules! handler {
     (
@@ -79,25 +83,23 @@ macro_rules! handler {
 
                     "mov rdi, rsp",
                     "add rdi, 8", //start of proc data
-                    "mov rbx, rdi", //save rdi for later
 
-                    "sti", //enable interrupts (nesting)
-
-                    //stack should be aligned
-
-                    "call {0}",
-
-                    handler!(@if_not_flag slow_swap, $($flag)* {
+                    handler!(@if_else_flag slow_swap, $($flag)*, {
                         "
-                            mov rdi, rbx //restore rdi
-                            call {1} //call context switch
+                            mov rsi, 1 //atomic interrupt
+                        "
+                    } {
+                        "
+                            mov rsi, 0 //not atomic interrupt
                         "
                     }),
-                    "/* {1} */", //unused arg
 
-                    "cli", //disable interrupts
+                    "lea rdx, [rip + {0}]", //main handler
+                    //stack should be aligned
 
-                    "pop rax",
+                    "call {1}",
+
+                    "pop rax", //gs was swapped
                     "cmp rax, 0",
                     "je 5f",
 
@@ -125,7 +127,7 @@ macro_rules! handler {
 
                     "iretq",
                     sym $name,
-                    sym interrupt_context_switch
+                    sym general_interrupt_handler,
                 )
 
             }
@@ -178,6 +180,37 @@ macro_rules! handler {
     (@flag_check $target:ident $head:ident { $($true:tt)* } { $($false:tt)* }) => {
         $($false)*
     };
+}
+
+pub extern "C" fn general_interrupt_handler(
+    proc_data: &mut InterruptProcessorState,                   //rdi
+    atomic_int: u64,                                           //rsi
+    main_handler: extern "C" fn(&mut InterruptProcessorState), //rdx
+) {
+    let locals = crate::acpi::cpu_locals::CpuLocals::get();
+    let prev_atomic = locals.atomic_context;
+    locals.int_depth += 1;
+    locals.atomic_context |= atomic_int != 0;
+
+    if !locals.atomic_context {
+        enable_interrupts();
+    }
+
+    main_handler(proc_data);
+
+    //proc is depth 0, root int is depth 1
+    if locals.int_depth > 1 || locals.atomic_context {
+        disable_interrupts();
+        locals.int_depth -= 1;
+        locals.atomic_context = prev_atomic;
+        return;
+    }
+    interrupt_context_switch(proc_data);
+
+    //did not context switch -> PROC not initialized or some other "error"
+    disable_interrupts();
+    locals.int_depth -= 1;
+    locals.atomic_context = prev_atomic;
 }
 
 #[derive(Debug, Clone)]

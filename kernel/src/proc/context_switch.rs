@@ -1,22 +1,22 @@
 use crate::{acpi::cpu_locals::CpuLocals, interrupts::InterruptProcessorState};
 
-use super::{
-    PROC_INITIALIZED, ProcessData, SCHEDULER, StackCpuStateData,
-    dispatcher::{dispatch, is_root_interrupt},
-};
+use super::{PROC_INITIALIZED, ProcessData, SCHEDULER, StackCpuStateData, dispatcher::dispatch};
 
 pub extern "C" fn interrupt_context_switch(on_stack_data: &mut InterruptProcessorState) {
-    context_switch(StackCpuStateData::Interrupt(on_stack_data), false);
+    context_switch(StackCpuStateData::Interrupt(on_stack_data));
 }
 
-pub fn context_switch(on_stack_data: StackCpuStateData, force_switch: bool) {
-    if !unsafe { PROC_INITIALIZED } {
+pub fn context_switch(on_stack_data: StackCpuStateData) {
+    let locals = CpuLocals::get();
+    if !unsafe { PROC_INITIALIZED } || !locals.proc_initialized {
         return;
     }
 
-    if !force_switch && !is_root_interrupt(&on_stack_data) {
-        return;
+    #[cfg(debug_assertions)] //interrupts should already check this
+    if locals.int_depth != 1 || locals.atomic_context {
+        panic!("Invalid context switch state: int_depth = {}, atomic_context = {}", locals.int_depth, locals.atomic_context);
     }
+
     no_ret_context_switch(on_stack_data);
 }
 

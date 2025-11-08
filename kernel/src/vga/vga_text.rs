@@ -3,7 +3,7 @@ use std::{print, println, printlnc};
 
 use super::font::*;
 use super::vga_driver::VGA_BINDING;
-use std::sync::mutex::*;
+use std::sync::no_int_spinlock::*;
 
 #[derive(Debug)]
 pub struct VgaText {
@@ -116,7 +116,7 @@ impl std::Print for VgaText {
 }
 
 #[used]
-pub static mut VGA_TEXT: Mutex<VgaText> = Mutex::new(VgaText {
+pub static mut VGA_TEXT: NoIntSpinlock<VgaText> = NoIntSpinlock::new(VgaText {
     background: (0, 0, 0),
     foreground: (255, 255, 255),
     height_lines: 0,

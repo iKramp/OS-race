@@ -45,4 +45,9 @@ printer.add(rust_types.RustType.STD_NONZERO_NUMBER, gdb_lookup.StdNonZeroNumberP
 
 end
 
+source ./gdb_unwinder.py
+
+b _start
+
+
 c

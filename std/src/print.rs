@@ -1,12 +1,12 @@
 use core::fmt::{Arguments, Write};
 
-use crate::sync::mutex::{Mutex, MutexGuard};
+use crate::sync::no_int_spinlock::*;
 
-pub static mut PRINT: Option<&mut Mutex<dyn Print>> = None;
+pub static mut PRINT: Option<&mut NoIntSpinlock<dyn Print>> = None;
 
 ///# Safety
 ///printer must be a valid pointer
-pub unsafe fn set_print(printer: *mut Mutex<dyn Print>) {
+pub unsafe fn set_print(printer: *mut NoIntSpinlock<dyn Print>) {
     unsafe { PRINT = Some(&mut *printer) }
 }
 
@@ -67,7 +67,7 @@ pub fn _print(args: core::fmt::Arguments) {
 }
 
 #[doc(hidden)]
-pub fn _print_locked(lock: &mut MutexGuard<dyn Print>, args: core::fmt::Arguments) {
+pub fn _print_locked(lock: &mut NoIntSpinlockGuard<dyn Print>, args: core::fmt::Arguments) {
     lock.write_fmt(args).unwrap();
 }
 
@@ -80,7 +80,7 @@ pub fn _print_colored(fg: (u8, u8, u8), args: core::fmt::Arguments) {
 }
 
 #[doc(hidden)]
-pub fn _print_colored_locked(fg: (u8, u8, u8), lock: &mut MutexGuard<dyn Print>, args: core::fmt::Arguments) {
+pub fn _print_colored_locked(fg: (u8, u8, u8), lock: &mut NoIntSpinlockGuard<dyn Print>, args: core::fmt::Arguments) {
     lock.set_fg_color(fg);
     _print_locked(lock, args);
     lock.reset_color();

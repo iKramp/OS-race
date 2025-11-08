@@ -1,6 +1,6 @@
 use crate::handler;
 use crate::interrupts::macros::InterruptProcessorState;
-use crate::proc::interrupt_context_switch;
+use crate::interrupts::macros::general_interrupt_handler;
 
 use super::gdt::{DEBUG_IST, DOUBLE_FAULT_IST, MACHINE_CHECK_IST, NMI_IST};
 use super::handlers::*;

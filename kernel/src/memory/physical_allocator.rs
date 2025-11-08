@@ -1,4 +1,4 @@
-use std::sync::mutex::Mutex;
+use std::sync::no_int_spinlock::NoIntSpinlock;
 
 use crate::memory::{heap::log2_rounded_up, printlnc};
 
@@ -6,7 +6,7 @@ use crate::{limine, println};
 
 use super::mem_utils::*;
 
-static BUDDY_ALLOCATOR: Mutex<BuddyAllocator> = Mutex::new(BuddyAllocator {
+static BUDDY_ALLOCATOR: NoIntSpinlock<BuddyAllocator> = NoIntSpinlock::new(BuddyAllocator {
     n_pages: 0,
     binary_tree_size: 0,
     allocated_pages: 0,

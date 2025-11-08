@@ -1,5 +1,5 @@
 use super::context_switch::no_ret_context_switch;
-use crate::{msr, proc::syscall};
+use crate::{interrupts::enable_interrupts, msr, proc::syscall};
 use std::mem_utils::VirtAddr;
 
 mod handlers;
@@ -69,8 +69,6 @@ extern "C" fn handler_wrapper() -> ! {
 
             "mov rcx, gs:0", //kernel stack address
             "mov rsp, [rcx]",
-            "sti",
-
 
             "call {}",
             sym handler
@@ -82,6 +80,10 @@ extern "C" fn handler_wrapper() -> ! {
 extern "C" fn handler(arg1: u64, arg2: u64, arg3: u64, _return_rcx: u64, arg4: u64, old_rsp: VirtAddr) -> ! {
     //handle here
     // println!("Syscall called with args: {}, {}, {}, {}", arg1, arg2, arg3, arg4);
+
+    let locals = crate::acpi::cpu_locals::CpuLocals::get();
+    locals.int_depth += 1;
+    enable_interrupts();
 
     #[allow(clippy::single_match)]
     match arg1 {

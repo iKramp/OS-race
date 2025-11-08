@@ -3,7 +3,6 @@ use std::{
     format,
     mem_utils::PhysAddr,
     string::{String, ToString},
-    sync::mutex::MutexGuard,
     vec::Vec,
 };
 

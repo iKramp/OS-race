@@ -5,6 +5,7 @@ use std::{println, printlnc};
 pub mod handlers;
 pub mod idt;
 mod macros;
+pub use macros::general_interrupt_handler;
 use crate::utils::byte_to_port;
 pub use macros::InterruptProcessorState;
 
@@ -14,6 +15,14 @@ const PIC1_COMMAND: u16 = PIC1;
 const PIC1_DATA: u16 = PIC1 + 1;
 const PIC2_COMMAND: u16 = PIC2;
 const PIC2_DATA: u16 = PIC2 + 1;
+
+pub fn enable_interrupts() {
+    unsafe { std::arch::asm!("sti") };
+}
+
+pub fn disable_interrupts() {
+    unsafe { std::arch::asm!("cli") };
+}
 
 pub fn init_interrupts() {
     println!("initializing PIC");

@@ -58,9 +58,11 @@ extern "C" fn _start() -> ! {
     println!("starting RustOs...");
     println!("stack pointer: {:?}", stack_pointer);
 
-    interrupts::init_interrupts();
-
     memory::init_memory();
+
+    acpi::cpu_locals::init_dummy_cpu_locals();
+
+    interrupts::init_interrupts();
 
     let cmd_args = cmd_args::CmdArgs::new(str.to_str().unwrap());
     println!("cmd_args: {:?}", cmd_args);
@@ -85,7 +87,7 @@ extern "C" fn _start() -> ! {
 
     proc::init();
 
-    // file_operations::do_file_operations();
+    file_operations::do_file_operations();
 
     // vga_text::hello_message();
 
@@ -98,7 +100,7 @@ extern "C" fn _start() -> ! {
     }
 
     //start first proc
-    // unsafe { core::arch::asm!("int 254") };
+    unsafe { core::arch::asm!("int 254") };
 
     println!("looping infinitely now");
     let mut a = 0;

@@ -1,3 +1,4 @@
 pub mod arc;
-pub mod mutex;
+pub mod spinlock;
+pub mod no_int_spinlock;
 pub use core::sync::atomic;

@@ -245,8 +245,6 @@ pub fn set_cs() {
             "mov ax, 0x10", //data segment
             "mov ds, ax",
             "mov es, ax",
-            "mov fs, ax",
-            "mov gs, ax",
             "mov ss, ax",
             out("rax") _,
             options(nostack, preserves_flags, raw)

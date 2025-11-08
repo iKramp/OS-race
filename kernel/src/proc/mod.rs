@@ -9,7 +9,7 @@ use std::{
     mem_utils::VirtAddr,
     println,
     string::ToString,
-    sync::{arc::Arc, mutex::Mutex},
+    sync::{arc::Arc, no_int_spinlock::NoIntSpinlock},
     vec::Vec,
 };
 use syscall::SyscallCpuState;
@@ -24,7 +24,7 @@ mod scheduler;
 mod syscall;
 pub use context_switch::{context_switch, interrupt_context_switch};
 
-static SCHEDULER: Mutex<MaybeUninit<Scheduler>> = Mutex::new(MaybeUninit::uninit());
+static SCHEDULER: NoIntSpinlock<MaybeUninit<Scheduler>> = NoIntSpinlock::new(MaybeUninit::uninit());
 
 static PROCESS_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 
@@ -101,6 +101,8 @@ pub fn set_proc_initialized() {
     unsafe {
         PROC_INITIALIZED = true;
     }
+    let locals = crate::acpi::cpu_locals::CpuLocals::get();
+    locals.proc_initialized = true;
 }
 
 //for now this only marks the process as stopping. If it was in running state before, return,

@@ -1,8 +1,8 @@
-use std::{boxed::Box, collections::btree_map::BTreeMap, sync::mutex::Mutex, vec::Vec};
+use std::{boxed::Box, collections::btree_map::BTreeMap, sync::no_int_spinlock::NoIntSpinlock, vec::Vec};
 
 use super::{DeviceId, Inode, InodeIdentifier, ResolvedPathBorrowed, VFS};
 
-pub(super) static INODE_CACHE: Mutex<InodeCache> = Mutex::new(InodeCache::new());
+pub(super) static INODE_CACHE: NoIntSpinlock<InodeCache> = NoIntSpinlock::new(InodeCache::new());
 
 struct FsTreeNode {
     children: Vec<(Box<str>, InodeIdentifier)>,
@@ -137,7 +137,10 @@ pub fn unmount_inode(parent_cache_num: InodeIdentifier, name: &str) -> bool {
         return false;
     };
     let index = child.1;
-    let unmounted_device = cache.mount_points.remove(&index).map_or(DeviceId::new(u64::MAX), |v| v.device_id);
+    let unmounted_device = cache
+        .mount_points
+        .remove(&index)
+        .map_or(DeviceId::new(u64::MAX), |v| v.device_id);
     let count = cache
         .mount_points
         .values()

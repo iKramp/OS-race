@@ -7,8 +7,8 @@ use crate::{
         TIMER_DESIRED_FREQUENCY,
         handlers::apic_timer_tick,
         idt::{Entry, IDT},
+        general_interrupt_handler,
     },
-    proc::interrupt_context_switch,
 };
 
 use super::apic::LapicRegisters;

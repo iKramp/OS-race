@@ -1,6 +1,6 @@
 #![allow(clippy::unusual_byte_groupings, static_mut_refs)]
 
-use crate::{interrupts::disable_pic_completely, proc::interrupt_context_switch};
+use crate::interrupts::{disable_pic_completely, general_interrupt_handler};
 use core::mem::MaybeUninit;
 use std::mem_utils::PhysAddr;
 
