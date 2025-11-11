@@ -46,12 +46,12 @@ struct ProcessData {
 #[derive(Debug)]
 enum CpuStateType {
     Interrupt(InterruptProcessorState),
-    Syscall(SyscallCpuState),
+    Syscall((SyscallCpuState, u64)), //cpu state + userspace stack pointer
 }
 
 pub enum StackCpuStateData<'a> {
     Interrupt(&'a InterruptProcessorState),
-    Syscall(SyscallCpuState), //nothing on kernel stack
+    Syscall(&'a SyscallCpuState),
 }
 
 /// notes:
@@ -83,9 +83,15 @@ pub fn init() {
     create_fallback_process();
     loaders::init_process_loaders();
 
-    let context_info = loaders::load_process(crate::TEST_EXECUTABLE).expect("Failed to load test executable");
+    let prime_finder = loaders::load_process(crate::PRIME_FINDER).expect("Failed to load test executable prime finders");
     for _i in 0..10 {
-        let pid = create_process(&context_info);
+        let pid = create_process(&prime_finder);
+        println!("Created process with pid: {:?}", pid);
+    }
+
+    let time_printer = loaders::load_process(crate::TIME_PRINTER).expect("Failed to load test executable time printer");
+    for _i in 0..10 {
+        let pid = create_process(&time_printer);
         println!("Created process with pid: {:?}", pid);
     }
 

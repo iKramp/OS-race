@@ -28,7 +28,6 @@ pub fn create_process(context_info: &ContextInfo) -> Pid {
     let rsp = memory_context.stacks.last().unwrap().stack_base.0;
 
     let cpu_state = InterruptProcessorState::new(rip, rsp);
-    println!("rip was set to {:#X}", rip);
     let process_data = ProcessData {
         pid,
         is_32_bit,
@@ -46,13 +45,10 @@ pub fn create_process(context_info: &ContextInfo) -> Pid {
 pub fn build_generic_memory_context(context: &ContextInfo) -> MemoryContext {
     let mut memory_tree = build_generic_memory_tree();
 
-    let mut mem_init = context.mem_init().iter();
-    let mut curr_init_opt = mem_init.next();
-
     // map memory regions
     for region in context.mem_regions().iter() {
-        //we assume memory regions don't overlap or use same pages
-        let start = region.start().0 & !0xFFF;
+        let start = region.start().0;
+        debug_assert!(start % 0x1000 == 0, "region start not page aligned");
         let end = start + region.size_pages() as u64 * 0x1000;
         for page_addr in (start..end).step_by(0x1000) {
             let phys_addr_map = memory_tree.allocate_set_virtual(None, VirtAddr(page_addr));
@@ -62,40 +58,23 @@ pub fn build_generic_memory_context(context: &ContextInfo) -> MemoryContext {
 
             if region.flags().is_executable() {
                 memory_tree.set_execute(VirtAddr(page_addr));
-                println!("mapping executable page at {:#X}", page_addr);
             }
+        }
+    }
 
-            //copy data
-            loop {
-                let Some(curr_init) = curr_init_opt else {
-                    break;
-                };
-                if curr_init.0.0 >= page_addr + 0x1000 {
-                    //no more initializations for this region
-                    break;
-                }
-                if curr_init.0.0 + (curr_init.1.len() as u64) < page_addr {
-                    //initialization is before this region, so skip it
-                    curr_init_opt = mem_init.next();
-                    continue;
-                }
+    for mem_init in context.mem_init() {
+        let first_page = mem_init.0.0 & (!0xfff);
+        let last_page = (mem_init.0.0 + mem_init.1.len() as u64) & (!0xfff); //inclusive
+        for page_addr in (first_page..=last_page).step_by(0x1000) {
+            let page = memory_tree.get_page_table_entry_mut(VirtAddr(page_addr)).unwrap();
+            let start_mem_addr = page_addr.max(mem_init.0.0);
+            let start_data_index = (start_mem_addr - mem_init.0.0) as usize;
+            let mem_offset = start_mem_addr & 0xFFF;
+            let end_data_index = mem_init.1.len().min(start_data_index + 0x1000 - mem_offset as usize);
 
-                let src_start_index = (page_addr as i64 - curr_init.0.0 as i64).max(0) as u64;
-                let dest_start_addr = page_addr.max(curr_init.0.0);
-                let buf_copy_len = curr_init.1.len() - src_start_index as usize;
-                let dest_copy_len = page_addr + 0x1000 - dest_start_addr;
-                let copy_len = buf_copy_len.min(dest_copy_len as usize);
-                let copy_buffer = &curr_init.1[src_start_index as usize..src_start_index as usize + copy_len];
-                unsafe { mem_utils::memcopy_physical_buffer(phys_addr_map + (dest_start_addr & 0xfff), copy_buffer) };
+            let physical_addr = page.address();
 
-                if src_start_index + copy_len as u64 >= curr_init.1.len() as u64 {
-                    //we copied all data from this init, so go to next
-                    curr_init_opt = mem_init.next();
-                } else {
-                    //we still have data left in this init, so break and continue copying
-                    break;
-                }
-            }
+            unsafe { mem_utils::memcopy_physical_buffer(physical_addr + mem_offset, &mem_init.1[start_data_index..end_data_index]) }
         }
     }
 

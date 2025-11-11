@@ -41,7 +41,8 @@ mod task_runner;
 use limine::LIMINE_BOOTLOADER_REQUESTS;
 use vfs::ResolvedPath;
 
-const TEST_EXECUTABLE: &[u8] = include_bytes!("../../assets/libr");
+const PRIME_FINDER: &[u8] = include_bytes!("../../assets/prime_finder");
+const TIME_PRINTER: &[u8] = include_bytes!("../../assets/time_printer");
 
 #[unsafe(no_mangle)]
 extern "C" fn _start() -> ! {

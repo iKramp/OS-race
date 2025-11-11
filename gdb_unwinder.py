@@ -39,7 +39,7 @@ class InterruptUnwinder(Unwinder):
         print(f"Unwinding interrupt frame at RIP={saved_rip:#x}, RSP={saved_rsp:#x}")
 
         # Create the unwind info for the caller frame
-        fid = FrameId(saved_rip, saved_rsp)
+        fid = FrameId(saved_rsp, saved_rip)
         unwind_info = pending_frame.create_unwind_info()
         unwind_info.add_cfa_register("rsp", saved_rsp)
         unwind_info.add_saved_register("rip", saved_rip)

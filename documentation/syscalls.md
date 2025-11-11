@@ -17,7 +17,9 @@ For example, linux has many syscall() and syscallat() pairs. This creates unnece
 | Return Value | rax |
 | Errno Value | rdx |
 
-This table follows the linux x86_64 convention. If there is too much infomration for 6 registers, an in process memory structure should be used, and an address is passed in the first arg.
+This table follows the linux x86_64 convention. 
+If there are too many parameters for 6 registers, an in process memory structure should be used.
+If there are too many return values, an in process memory structure should be used.
 
 ## ERROR HANDLING
 Errno value is 0 on success, otherwise it is the error code. Return value may still be valid on error, depending on the syscall.

@@ -25,18 +25,20 @@ fn load_elf_process(data: &[u8]) -> Result<ContextInfo, super::ProcessLoadError>
         elf::parse_unaligned(data)
     };
 
-    if let Err(e) = parsed_elf {
-        return match e {
-            elf::ParseError::InvalidMagic => Err(ProcessLoadError::InvalidFile),
-            elf::ParseError::InvalidClass => Err(ProcessLoadError::UnsupportedProcessFormat),
-            elf::ParseError::InvalidDataEncoding => Err(ProcessLoadError::UnsupportedProcessFormat),
-            elf::ParseError::InvalidVersion => Err(ProcessLoadError::InvalidFile),
-            elf::ParseError::IncompleteData => Err(ProcessLoadError::UnparseableFile),
-            elf::ParseError::InvalidData => Err(ProcessLoadError::UnparseableFile),
-            elf::ParseError::Other => Err(ProcessLoadError::UnparseableFile),
-        };
-    }
-    let parsed_elf = unsafe { parsed_elf.unwrap_unchecked() };
+    let parsed_elf = match parsed_elf {
+        Ok(elf) => elf,
+        Err(e) => {
+            return match e {
+                elf::ParseError::InvalidMagic => Err(ProcessLoadError::InvalidFile),
+                elf::ParseError::InvalidClass => Err(ProcessLoadError::UnsupportedProcessFormat),
+                elf::ParseError::InvalidDataEncoding => Err(ProcessLoadError::UnsupportedProcessFormat),
+                elf::ParseError::InvalidVersion => Err(ProcessLoadError::InvalidFile),
+                elf::ParseError::IncompleteData => Err(ProcessLoadError::UnparseableFile),
+                elf::ParseError::InvalidData => Err(ProcessLoadError::UnparseableFile),
+                elf::ParseError::Other => Err(ProcessLoadError::UnparseableFile),
+            };
+        }
+    };
 
     let mut regions = Vec::new();
     let mut regions_init = Vec::new();

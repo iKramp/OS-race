@@ -126,6 +126,24 @@ impl<'a> ContextInfo<'a> {
             }
         }
 
+        //verify all init regions are mapped
+        for init_region in mem_init.iter() {
+            let mut init_mapped = false;
+            let init_start = init_region.0.0;
+            let init_end = init_region.0.0 + (init_region.1.len() as u64);
+            for region in fixed_regions.iter() {
+                let region_start = region.start().0;
+                let region_end = region.start().0 + (region.size_pages() as u64 * 0x1000);
+                if init_start >= region_start && init_end <= region_end {
+                    init_mapped = true;
+                    break;
+                }
+            }
+            if !init_mapped {
+                return Err(ContextInfoError::InitRegionNotMapped);
+            }
+        }
+
         Ok(Self {
             is_32_bit,
             mem_regions: fixed_regions.into_boxed_slice(),
@@ -167,6 +185,7 @@ pub enum ContextInfoError {
     MemoryRegionOverlap,
     StackSizeTooBig,
     EntryPointNotMapped,
+    InitRegionNotMapped,
 }
 
 impl Drop for MemoryContext {

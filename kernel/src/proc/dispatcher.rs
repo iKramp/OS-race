@@ -1,6 +1,6 @@
 use crate::{interrupts::{disable_interrupts, InterruptProcessorState}, memory::paging};
 
-use super::{CpuStateType, ProcessData, StackCpuStateData, syscall::SyscallCpuState};
+use super::{CpuStateType, ProcessData, syscall::SyscallCpuState};
 
 /*
  * Things that need to be done: (Intel SDM, Vol 3, chapter 8.1.2
@@ -37,7 +37,7 @@ pub(super) fn dispatch(new_proc: &ProcessData) -> ! {
 
     match &new_proc.cpu_state {
         CpuStateType::Interrupt(interrupt_frame) => return_interrupted(interrupt_frame),
-        CpuStateType::Syscall(state) => return_syscalled(state),
+        CpuStateType::Syscall((state, rsp)) => return_syscalled(state, *rsp),
     }
 }
 
@@ -74,26 +74,22 @@ fn return_interrupted(interrupt_frame: &InterruptProcessorState) -> ! {
     unreachable!();
 }
 
-fn return_syscalled(cpu_state: &SyscallCpuState) -> ! {
+#[naked]
+extern "C" fn return_syscalled(cpu_state: &SyscallCpuState, userspace_stack: u64) -> ! {
     //INFO: any kind of change here should be matched with the one in syscall.rs
-    unsafe {
-        core::arch::asm!(
-            "mov rsp, {0}",
-            //both segments are restored automatically by sysret
-            "mov r11, [rsp + 8*0]", //rflags
-            "mov r15, [rsp + 8*1]",
-            "mov r14, [rsp + 8*2]",
-            "mov r13, [rsp + 8*3]",
-            "mov r12, [rsp + 8*4]",
-            "mov rbp, [rsp + 8*5]",
-            "mov rbx, [rsp + 8*6]",
-            "mov rcx, [rsp + 8*7]",
-
-            "add rsp, 8*8",
-            "sysretq",
-
-            in(reg) cpu_state.rsp.0,
-        )
-    };
-    unreachable!()
+    unsafe { core::arch::naked_asm!(
+        //cpu_state in rdi
+        "mov rdx, [rdi + 8 * 0]",
+        "mov rax, [rdi + 8 * 1]",
+        "mov rcx, [rdi + 8 * 2]",
+        "mov r11, [rdi + 8 * 3]",
+        "mov r15, [rdi + 8 * 4]",
+        "mov r14, [rdi + 8 * 5]",
+        "mov r13, [rdi + 8 * 6]",
+        "mov r12, [rdi + 8 * 7]",
+        "mov rbp, [rdi + 8 * 8]",
+        "mov rbx, [rdi + 8 * 9]",
+        "mov rsp, rsi",
+        "sysretq",
+    )}
 }

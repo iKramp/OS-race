@@ -1,4 +1,4 @@
-use crate::{interrupts::InterruptProcessorState, proc::Pid};
+use crate::{acpi::cpu_locals::CpuLocals, interrupts::InterruptProcessorState, proc::Pid};
 use std::{
     boxed::Box,
     collections::{btree_map::BTreeMap, btree_set::BTreeSet},
@@ -109,7 +109,7 @@ impl Scheduler {
     }
 
     fn save_syscalled(old_proc: &mut ProcessData, syscall_data: &SyscallCpuState) {
-        old_proc.cpu_state = CpuStateType::Syscall(syscall_data.clone());
+        old_proc.cpu_state = CpuStateType::Syscall((syscall_data.clone(), CpuLocals::get().userspace_stack_base));
     }
 
     ///this function is preferred to avoid locking the mutex twice

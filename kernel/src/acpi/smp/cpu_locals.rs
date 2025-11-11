@@ -17,8 +17,12 @@ pub static mut CPU_LOCALS: MaybeUninit<Box<[VirtAddr]>> = MaybeUninit::uninit();
 
 #[repr(C)]
 pub struct CpuLocals {
-    //keep this as first argument for syscall reasons
+    //keep this here
+    pub self_addr: VirtAddr,
+    //keep this here for syscall reasons
     pub kernel_stack_base: VirtAddr,
+    //keep this here for syscall reasons
+    pub userspace_stack_base: u64,
     pub stack_size_pages: u64,
     /// Points to TablePointer with base and limit of GDT
     pub gdt_ptr: TablePointer,
@@ -48,7 +52,7 @@ pub fn init(platform_info: &PlatformInfo) {
         let bsp_local = get_at_virtual_addr::<CpuLocals>(old_bsp_local); //same addr
         bsp_local.apic_id = apic_id;
         bsp_local.processor_id = platform_info.boot_processor.processor_id;
-        let bsp_local_ptr_addr = VirtAddr(&cpu_locals[apic_id as usize] as *const _ as u64);
+        let bsp_local_ptr_addr = VirtAddr(cpu_locals[apic_id as usize].0);
         crate::msr::set_msr(0xC0000101, bsp_local_ptr_addr.0);
     }
 
@@ -75,9 +79,11 @@ pub fn add_cpu_locals(locals: super::cpu_locals::CpuLocals) -> VirtAddr {
     unsafe {
         let apic_id = locals.apic_id;
         let cpu_locals = CPU_LOCALS.assume_init_mut();
-        let ptr = std::Box::leak(std::Box::new(locals)) as *const _ as u64;
-        cpu_locals[apic_id as usize] = VirtAddr(ptr);
-        VirtAddr(&cpu_locals[apic_id as usize] as *const _ as u64)
+        let ptr = std::Box::leak(std::Box::new(locals)) as *mut _ as *mut u64;
+        ptr.write_volatile(ptr as u64); //write self pointer
+
+        cpu_locals[apic_id as usize] = VirtAddr(ptr as u64);
+        VirtAddr(cpu_locals[apic_id as usize].0)
     }
 }
 
@@ -95,6 +101,8 @@ impl CpuLocals {
             proc_initialized: false,
             int_depth: 0,
             atomic_context: false,
+            userspace_stack_base: 0,
+            self_addr: VirtAddr(0), //will be set later
         }
     }
 

@@ -45,7 +45,17 @@ printer.add(rust_types.RustType.STD_NONZERO_NUMBER, gdb_lookup.StdNonZeroNumberP
 
 end
 
+define p_locals
+  set $p = $gs_base as &kernel::acpi::smp::cpu_locals::CpuLocals
+  p/x *$p
+end
+document p_locals
+Interprets GS-based CPU locals as type CpuLocals and prints fields.
+end
+
+
 source ./gdb_unwinder.py
+source ./interrupt_macro_unwinder.py
 
 b _start
 
