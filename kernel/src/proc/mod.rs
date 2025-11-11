@@ -61,18 +61,15 @@ pub enum StackCpuStateData<'a> {
 struct MemoryContext {
     is_32_bit: bool,
     page_tree: PageTree,
-    stacks: Vec<Stack>,
+    memory_regions: Vec<MappedMemoryRegion>,
     //shared regions here?
 }
 
-/// Describes a stack. The stack is allocated at the top of the address space.
-/// stack_base is the highest address of the stack, as it grows down.
-/// Stack (in memory) also has mapped memory at the lower edge, non-writeable,
-/// non-user-acessible, just so a stack overflow can be detected.
 #[derive(Debug)]
-struct Stack {
-    stack_base: VirtAddr,
-    size_pages: u8,
+struct MappedMemoryRegion {
+    name: Box<str>,
+    base: VirtAddr,
+    size_pages: u64,
 }
 
 pub fn init() {
@@ -83,13 +80,13 @@ pub fn init() {
     create_fallback_process();
     loaders::init_process_loaders();
 
-    let prime_finder = loaders::load_process(crate::PRIME_FINDER).expect("Failed to load test executable prime finders");
+    let prime_finder = loaders::load_process(crate::PRIME_FINDER, "[prime_finder]".to_string().into_boxed_str()).expect("Failed to load test executable prime finders");
     for _i in 0..10 {
         let pid = create_process(&prime_finder);
         println!("Created process with pid: {:?}", pid);
     }
 
-    let time_printer = loaders::load_process(crate::TIME_PRINTER).expect("Failed to load test executable time printer");
+    let time_printer = loaders::load_process(crate::TIME_PRINTER, "[time_printer]".to_string().into_boxed_str()).expect("Failed to load test executable time printer");
     for _i in 0..10 {
         let pid = create_process(&time_printer);
         println!("Created process with pid: {:?}", pid);
@@ -157,6 +154,7 @@ pub fn create_fallback_process() {
         Box::new([(VirtAddr(0x1000), &code_init), (VirtAddr(0x2000), data_init)]),
         VirtAddr(0x1000),
         "fallback_process".to_string().into_boxed_str(),
+        "[fallback_process]".to_string().into_boxed_str(),
     )
     .unwrap();
     let pid = create_process(&fake_context);

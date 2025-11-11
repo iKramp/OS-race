@@ -1,5 +1,5 @@
 use core::mem::MaybeUninit;
-use std::vec::Vec;
+use std::{boxed::Box, vec::Vec};
 
 use super::context::info::ContextInfo;
 
@@ -14,12 +14,12 @@ pub fn init_process_loaders() {
     }
 }
 
-pub(super) fn load_process(data: &[u8]) -> Result<ContextInfo, ProcessLoadError> {
+pub(super) fn load_process(data: &[u8], path: Box<str>) -> Result<ContextInfo, ProcessLoadError> {
     unsafe {
         let loaders = PROCESS_LOADERS.assume_init_ref();
         for loader in loaders {
             if (loader.is_this_type)(data) {
-                return (loader.load_context)(data);
+                return (loader.load_context)(data, path);
             }
         }
     }
@@ -28,7 +28,7 @@ pub(super) fn load_process(data: &[u8]) -> Result<ContextInfo, ProcessLoadError>
 
 struct ProcessLoader {
     is_this_type: fn(&[u8]) -> bool,
-    load_context: fn(&[u8]) -> Result<ContextInfo, ProcessLoadError>,
+    load_context: fn(&[u8], path: Box<str>) -> Result<ContextInfo, ProcessLoadError>,
     //potentially a post load hook
 }
 

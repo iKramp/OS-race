@@ -12,7 +12,7 @@ use std::{
 
 use crate::{
     memory::{self, paging::PageTree},
-    proc::{MemoryContext, Pid, Stack},
+    proc::{MappedMemoryRegion, MemoryContext, Pid},
 };
 
 use super::info::ContextInfo;
@@ -25,7 +25,12 @@ pub fn create_process(context_info: &ContextInfo) -> Pid {
     let cmdline = context_info.cmdline().to_string().into_boxed_str();
     let rip = context_info.entry_point().0;
     let memory_context = build_mem_context_for_new_proc(context_info);
-    let rsp = memory_context.stacks.last().unwrap().stack_base.0;
+    let stack = memory_context
+        .memory_regions
+        .iter()
+        .find(|region| (*region.name).eq("[stack]"))
+        .unwrap();
+    let rsp = stack.base.0 + (stack.size_pages as u64 * 0x1000) - 16; //-16 just in case (ret val and other things are 0)
 
     let cpu_state = InterruptProcessorState::new(rip, rsp);
     let process_data = ProcessData {
@@ -51,7 +56,7 @@ pub fn build_generic_memory_context(context: &ContextInfo) -> MemoryContext {
         debug_assert!(start % 0x1000 == 0, "region start not page aligned");
         let end = start + region.size_pages() as u64 * 0x1000;
         for page_addr in (start..end).step_by(0x1000) {
-            let phys_addr_map = memory_tree.allocate_set_virtual(None, VirtAddr(page_addr));
+            let _phys_addr_map = memory_tree.allocate_set_virtual(None, VirtAddr(page_addr));
             let page = memory_tree.get_page_table_entry_mut(VirtAddr(page_addr)).unwrap();
             page.set_writeable(region.flags().is_writeable());
             page.set_user_accessible(true);
@@ -74,14 +79,20 @@ pub fn build_generic_memory_context(context: &ContextInfo) -> MemoryContext {
 
             let physical_addr = page.address();
 
-            unsafe { mem_utils::memcopy_physical_buffer(physical_addr + mem_offset, &mem_init.1[start_data_index..end_data_index]) }
+            unsafe {
+                mem_utils::memcopy_physical_buffer(physical_addr + mem_offset, &mem_init.1[start_data_index..end_data_index])
+            }
         }
     }
 
     MemoryContext {
         is_32_bit: context.is_32_bit(),
         page_tree: memory_tree,
-        stacks: vec![],
+        memory_regions: context.mem_regions().iter().map(|region| MappedMemoryRegion {
+            name: context.path().to_string().into_boxed_str(),
+            base: VirtAddr(region.start().0),
+            size_pages: region.size_pages() as u64,
+        }).collect(),
     }
 }
 
@@ -139,11 +150,12 @@ pub fn add_stack(context: &mut MemoryContext, stack_size_pages: u8) {
     entry.set_no_execute(true);
     entry.set_user_accessible(false);
 
-    let stack = Stack {
-        stack_base: VirtAddr((top_page << 12) + 0x1000 - 16),
-        size_pages: stack_size_pages,
+    let stack = MappedMemoryRegion {
+        name: "[stack]".to_string().into_boxed_str(),
+        base: VirtAddr(((top_page - stack_size_pages as u64) << 12) + 0x1000),
+        size_pages: stack_size_pages as u64,
     };
-    context.stacks.push(stack);
+    context.memory_regions.push(stack);
 }
 
 pub fn build_generic_memory_tree() -> PageTree {

@@ -74,6 +74,7 @@ pub struct ContextInfo<'a> {
     mem_init: Box<[(VirtAddr, &'a [u8])]>,
     entry_point: VirtAddr,
     cmdline: Box<str>,
+    path: Box<str>,
 }
 
 impl<'a> ContextInfo<'a> {
@@ -83,6 +84,7 @@ impl<'a> ContextInfo<'a> {
         mut mem_init: Box<[(VirtAddr, &'a [u8])]>,
         entry_point: VirtAddr,
         cmdline: Box<str>,
+        path: Box<str>,
     ) -> Result<Self, ContextInfoError> {
         //Note: This prevents cases where 2 non overlapping regions are in fixed_regions, and a new
         //region that ovrelaps both is added. When sorted, any region added may only extend an
@@ -150,6 +152,7 @@ impl<'a> ContextInfo<'a> {
             mem_init,
             entry_point,
             cmdline,
+            path,
         })
     }
 
@@ -177,6 +180,10 @@ impl<'a> ContextInfo<'a> {
 
     pub fn cmdline_as_bytes(&self) -> &[u8] {
         self.cmdline.as_bytes()
+    }
+
+    pub fn path(&self) -> &str {
+        &self.path
     }
 }
 

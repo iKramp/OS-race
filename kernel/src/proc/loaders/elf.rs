@@ -1,4 +1,4 @@
-use std::{mem_utils::VirtAddr, println, vec::Vec};
+use std::{boxed::Box, mem_utils::VirtAddr, println, vec::Vec};
 
 use crate::{
     parsers::elf,
@@ -18,7 +18,7 @@ fn is_elf(data: &[u8]) -> bool {
     data.len() >= 4 && &data[0..4] == b"\x7fELF"
 }
 
-fn load_elf_process(data: &[u8]) -> Result<ContextInfo, super::ProcessLoadError> {
+fn load_elf_process(data: &[u8], path: Box<str>) -> Result<ContextInfo, super::ProcessLoadError> {
     let parsed_elf = if data.as_ptr() as usize % 8 == 0 {
         elf::parse(data)
     } else {
@@ -78,6 +78,7 @@ fn load_elf_process(data: &[u8]) -> Result<ContextInfo, super::ProcessLoadError>
         regions_init.into_boxed_slice(),
         VirtAddr(parsed_elf.header.e_entry),
         "".into(),
+        path,
     );
 
     context_info.map_err(|_| ProcessLoadError::InvalidFile)
