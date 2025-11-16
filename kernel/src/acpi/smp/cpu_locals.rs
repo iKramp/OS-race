@@ -1,8 +1,6 @@
 use core::{mem::MaybeUninit, sync::atomic::AtomicPtr};
 use std::{
-    boxed::Box,
-    mem_utils::{VirtAddr, get_at_virtual_addr},
-    vec::Vec,
+    boxed::Box, mem_utils::{get_at_virtual_addr, VirtAddr}, sync::lock_info::{set_lock_info_func, LockInfo}, vec::Vec
 };
 
 use crate::{
@@ -34,6 +32,7 @@ pub struct CpuLocals {
     pub atomic_context: bool,
     pub async_task_list: AtomicPtr<AsyncTaskHolder>,
     pub wake_tasks_list: AtomicPtr<TaskToWake>,
+    pub lock_info: LockInfo,
 }
 
 pub fn init(platform_info: &PlatformInfo) {
@@ -73,6 +72,8 @@ pub fn init_dummy_cpu_locals() {
     let bsp_local = super::cpu_locals::CpuLocals::new(bsp_stack_ptr, KERNEL_STACK_SIZE_PAGES as u64, 0, 0, bsp_gdt);
     let bsp_local_ptr = add_cpu_locals(bsp_local);
     crate::msr::set_msr(0xC0000101, bsp_local_ptr.0);
+
+    set_lock_info_func(CpuLocals::get_lock_info);
 }
 
 pub fn add_cpu_locals(locals: super::cpu_locals::CpuLocals) -> VirtAddr {
@@ -103,6 +104,7 @@ impl CpuLocals {
             atomic_context: false,
             userspace_stack_base: 0,
             self_addr: VirtAddr(0), //will be set later
+            lock_info: LockInfo::new(),
         }
     }
 
@@ -115,6 +117,10 @@ impl CpuLocals {
             );
             &mut *cpu_locals
         }
+    }
+
+    pub fn get_lock_info() -> &'static LockInfo {
+        &Self::get().lock_info
     }
 }
 

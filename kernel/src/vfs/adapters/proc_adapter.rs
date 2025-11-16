@@ -1,22 +1,25 @@
 use super::VfsAdapterTrait;
+use std::boxed::Box;
 
 
+#[derive(Debug)]
 pub(super) struct ProcAdapter;
 
+#[async_trait::async_trait]
 impl VfsAdapterTrait for ProcAdapter {
-    fn read(&mut self, inode: crate::vfs::InodeIndex, offset_bytes: u64, size_bytes: u64, buffer: &[std::mem_utils::PhysAddr]) {
+    async fn read(&self, _inode: crate::vfs::InodeIndex, _offset_bytes: u64, _size_bytes: u64, _buffer: &[std::mem_utils::PhysAddr]) {
         todo!()
     }
 
-    fn read_dir(&mut self, inode: crate::vfs::InodeIndex) -> std::boxed::Box<[crate::drivers::disk::DirEntry]> {
+    async fn read_dir(&self, _inode: crate::vfs::InodeIndex) -> std::boxed::Box<[crate::drivers::disk::DirEntry]> {
         todo!()
     }
 
-    fn write(&mut self, inode: crate::vfs::InodeIndex, offset: u64, size: u64, buffer: &[std::mem_utils::PhysAddr]) -> crate::vfs::Inode {
+    async fn write(&self, _inode: crate::vfs::InodeIndex, _offset: u64, _size: u64, _buffer: &[std::mem_utils::PhysAddr]) -> crate::vfs::Inode {
         todo!()
     }
 
-    fn stat(&mut self, inode: crate::vfs::InodeIndex) -> crate::vfs::Inode {
+    async fn stat(&self, _inode: crate::vfs::InodeIndex) -> crate::vfs::Inode {
         todo!()
     }
 }

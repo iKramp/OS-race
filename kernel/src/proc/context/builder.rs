@@ -7,7 +7,7 @@ use std::string::ToString;
 use std::sync::arc::Arc;
 use std::{
     mem_utils::{self, VirtAddr, memset_physical_addr},
-    println, vec,
+    println,
 };
 
 use crate::{

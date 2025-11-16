@@ -4,7 +4,7 @@ use device_config::{MassStorageController, RegularPciDevice};
 
 use crate::{
     drivers::ahci::disk::AhciController,
-    interrupts::{InterruptProcessorState, handlers::apic_eoi},
+    interrupts::{handlers::apic_eoi, InterruptProcessorState}, task_runner::block_task,
 };
 
 pub mod device_config;
@@ -27,10 +27,10 @@ pub fn enumerate_devices() {
             class,
             device_config::PciClass::MassStorageController(MassStorageController::SerialATAController)
         ) {
-            let mut ahci_disk = AhciController::new(device);
+            let ahci_disk = AhciController::new(device);
             let ports = ahci_disk.init();
             for port in ports {
-                crate::vfs::add_disk(Box::new(port));
+                block_task(Box::pin(crate::vfs::add_disk(Box::new(port))));
             }
         }
         printlnc!((51, 153, 10), "Device configured");
@@ -43,4 +43,5 @@ pub static mut PCI_DEVICE_INTERRUPTS: [(u8, u8, u8); 256] = [(255, 255, 255); 25
 pub extern "C" fn pci_interrupt(_proc_data: &mut InterruptProcessorState) {
     println!("PCI interrupt. HOW THE HELL DO I KNOW WHAT DEVICE THIS IS FOR?");
     apic_eoi();
+    panic!("PCI interrupt received");
 }

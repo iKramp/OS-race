@@ -12,11 +12,12 @@
 #![feature(slice_index_methods)]
 #![feature(new_range_api)]
 #![feature(rustc_attrs)]
+#![allow(internal_features)]
 
 extern crate static_cond;
 
-use core::{ffi, time::Duration};
-use std::{println, printlnc};
+use core::ffi;
+use std::{boxed::Box, println, printlnc};
 
 mod acpi;
 mod clocks;
@@ -32,13 +33,14 @@ mod msr;
 mod parsers;
 mod pci;
 mod proc;
+mod task_runner;
 #[allow(unused_imports)]
 mod tests;
 mod utils;
 mod vfs;
 mod vga;
-mod task_runner;
 use limine::LIMINE_BOOTLOADER_REQUESTS;
+use task_runner::block_task;
 use vfs::ResolvedPath;
 
 const PRIME_FINDER: &[u8] = include_bytes!("../../assets/prime_finder");
@@ -78,18 +80,18 @@ extern "C" fn _start() -> ! {
     pci::enumerate_devices();
     vfs::init();
 
-    // let res = vfs::mount_blkdev_partition(cmd_args.root_partition, ResolvedPath::root());
-    // if let Err(e) = res {
-    //     println!("{}", e);
-    //     panic!("Failed to mount root partition");
-    // }
-    //
-    // let path = vfs::resolve_path("/", "/");
-    // println!("{:?}", vfs::get_dir_entries((&path).into()));
+    let res = block_task(Box::pin(vfs::mount_blkdev_partition(cmd_args.root_partition, ResolvedPath::root())));
+    if let Err(e) = res {
+        println!("{}", e);
+        panic!("Failed to mount root partition");
+    }
 
-    proc::init();
+    let path = vfs::resolve_path("/", "/");
+    println!("{:?}", block_task(Box::pin(vfs::get_dir_entries((&path).into()))));
 
-    // file_operations::do_file_operations();
+    // proc::init();
+
+    file_operations::do_file_operations();
 
     // vga_text::hello_message();
 
@@ -102,7 +104,7 @@ extern "C" fn _start() -> ! {
     }
 
     //start first proc
-    unsafe { core::arch::asm!("int 254") };
+    // unsafe { core::arch::asm!("int 254") };
 
     panic!("Returned to _start after first context switch");
 }

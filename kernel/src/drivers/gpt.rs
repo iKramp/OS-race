@@ -1,4 +1,5 @@
 use std::{
+    boxed::Box,
     mem_utils::{PhysAddr, get_at_virtual_addr, translate_virt_phys_addr},
     println,
     string::String,
@@ -20,8 +21,9 @@ use super::disk::{BlockDevice, Partition, PartitionSchemeDriver};
 
 pub struct GPTDriver {}
 
+#[async_trait::async_trait]
 impl PartitionSchemeDriver for GPTDriver {
-    fn partitions(&self, disk: &mut dyn BlockDevice) -> Vec<(Uuid, Partition)> {
+    async fn partitions(&self, disk: &mut dyn BlockDevice) -> Vec<(Uuid, Partition)> {
         println!("GPT partitions");
         let first_lba = physical_allocator::allocate_frame();
         let first_lba_binding = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(first_lba), false) };
@@ -31,8 +33,7 @@ impl PartitionSchemeDriver for GPTDriver {
                 .unwrap()
                 .set_pat(LiminePat::UC);
         }
-        let command_slot = disk.read(1, 1, &[first_lba]);
-        disk.clean_after_read(command_slot);
+        disk.read(1, 1, &[first_lba]).await;
         let header = unsafe { get_at_virtual_addr::<GptHeader>(first_lba_binding) };
 
         assert_eq!(header.signature, *b"EFI PART", "Not a GPT disk");
@@ -52,8 +53,7 @@ impl PartitionSchemeDriver for GPTDriver {
             })
             .map(|i| translate_virt_phys_addr(buffer + (i as u64 * 4096), page_tree_root).unwrap())
             .collect();
-        let command_slot = disk.read(start_entries, entry_num_lbas, &physical_addresses);
-        disk.clean_after_read(command_slot);
+        disk.read(start_entries, entry_num_lbas, &physical_addresses).await;
 
         let mut partitions = Vec::new();
 
@@ -97,7 +97,7 @@ impl PartitionSchemeDriver for GPTDriver {
         partitions
     }
 
-    fn guid(&self, disk: &mut dyn BlockDevice) -> Uuid {
+    async fn guid(&self, disk: &mut dyn BlockDevice) -> Uuid {
         let first_lba = physical_allocator::allocate_frame();
         let first_lba_binding = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(first_lba), false) };
         unsafe {
@@ -106,8 +106,7 @@ impl PartitionSchemeDriver for GPTDriver {
                 .unwrap()
                 .set_pat(LiminePat::UC);
         }
-        let command_slot = disk.read(1, 1, &[first_lba]);
-        disk.clean_after_read(command_slot);
+        disk.read(1, 1, &[first_lba]).await;
         let header = unsafe { get_at_virtual_addr::<GptHeader>(first_lba_binding) };
         let guid = header.disk_guid;
         unsafe { PAGE_TREE_ALLOCATOR.deallocate(first_lba_binding) };

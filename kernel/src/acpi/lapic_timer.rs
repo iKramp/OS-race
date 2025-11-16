@@ -4,10 +4,9 @@ use std::{println, time::Instant};
 use crate::{
     handler,
     interrupts::{
-        TIMER_DESIRED_FREQUENCY,
+        TIMER_DESIRED_FREQUENCY, general_interrupt_handler,
         handlers::apic_timer_tick,
         idt::{Entry, IDT},
-        general_interrupt_handler,
     },
 };
 
@@ -78,8 +77,25 @@ fn sleep_duration(duration: Duration) {
     if duration.as_micros() < 1 {
         return; //no need to sleep
     }
-    set_timeout(duration);
-    unsafe { core::arch::asm!("hlt") };
+
+    let rflags: u64;
+    unsafe {
+        core::arch::asm!(
+            "pushfq",
+            "pop {}",
+            out(reg) rflags
+        );
+    }
+
+    let interrupts_enabled = (rflags & (1 << 9)) != 0;
+    if interrupts_enabled {
+        set_timeout(duration);
+        unsafe { core::arch::asm!("hlt") };
+    } else {
+        let start = Instant::now();
+        while Instant::now() - start < duration {}
+    }
+
 }
 
 pub fn set_timeout(duration: Duration) {

@@ -1,4 +1,7 @@
 pub mod arc;
-pub mod spinlock;
 pub mod no_int_spinlock;
+pub mod async_lock;
+pub mod rw_lock;
+pub mod async_rw_lock;
+pub mod lock_info;
 pub use core::sync::atomic;

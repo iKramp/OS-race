@@ -34,7 +34,7 @@ pub fn init(root: Inode) {
 
     let inode_index = InodeIdentifier {
         device_id: root.device,
-        index: root.index as u64,
+        index: root.index,
     };
     cache.inodes.clear();
     cache.inodes.insert(inode_index, (root, FsTreeNode { children: Vec::new() }));
@@ -46,7 +46,7 @@ pub fn get_inode(inode_index: InodeIdentifier) -> Option<Inode> {
     cache.inodes.get(&inode_index).map(|(inode, _)| inode).cloned()
 }
 
-pub fn get_inode_index(path: ResolvedPathBorrowed) -> Option<InodeIdentifier> {
+pub async fn get_inode_index(path: ResolvedPathBorrowed<'_>) -> Option<InodeIdentifier> {
     let cache = &mut *INODE_CACHE.lock();
     let mut current = cache.root;
     for component in path.iter() {
@@ -60,7 +60,7 @@ pub fn get_inode_index(path: ResolvedPathBorrowed) -> Option<InodeIdentifier> {
             continue;
         }
         // If the child is not found, we need to load the directory
-        load_dir(current, &mut cache.inodes);
+        load_dir(current, &mut cache.inodes).await;
         // After loading, we check again
         let current_node = cache.inodes.get(&current)?;
         let child = current_node.1.children.iter().find(|(name, _)| name == component);
@@ -76,22 +76,22 @@ pub fn get_inode_index(path: ResolvedPathBorrowed) -> Option<InodeIdentifier> {
     Some(current)
 }
 
-fn load_dir(current: InodeIdentifier, cache_inodes: &mut BTreeMap<InodeIdentifier, (Inode, FsTreeNode)>) {
+async fn load_dir(current: InodeIdentifier, cache_inodes: &mut BTreeMap<InodeIdentifier, (Inode, FsTreeNode)>) {
     let inode = cache_inodes.get(&current).unwrap();
     let mut vfs = VFS.lock();
     let device_details = vfs.devices.get(&inode.0.device).unwrap();
     let partition_id = device_details.partition;
     let fs = vfs.mounted_partitions.get_mut(&partition_id).unwrap();
-    let dir = fs.read_dir(current.index);
+    let dir = fs.read_dir(current.index).await;
     let mut children = Vec::new();
     if dir.is_empty() {
         return;
     }
     for dir_entry in dir.iter() {
-        let inode = fs.stat(dir_entry.inode);
+        let inode = fs.stat(dir_entry.inode).await;
         let inode_index = InodeIdentifier {
             device_id: inode.device,
-            index: inode.index as u64,
+            index: inode.index,
         };
         cache_inodes.insert(inode_index, (inode, FsTreeNode { children: Vec::new() }));
         children.push((dir_entry.name.clone(), inode_index));
@@ -108,7 +108,7 @@ pub fn insert_inode(parent_cache_num: InodeIdentifier, name: Box<str>, inode: In
     let mut cache = INODE_CACHE.lock();
     let inode_index = InodeIdentifier {
         device_id: inode.device,
-        index: inode.index as u64,
+        index: inode.index,
     };
     cache.inodes.insert(inode_index, (inode, FsTreeNode { children: Vec::new() }));
     let parent = cache.inodes.get_mut(&parent_cache_num).unwrap();
@@ -120,7 +120,7 @@ pub fn mount_inode(parent_cache_num: InodeIdentifier, inode: Inode) {
     let mut cache = INODE_CACHE.lock();
     let inode_index = InodeIdentifier {
         device_id: inode.device,
-        index: inode.index as u64,
+        index: inode.index,
     };
     cache.inodes.insert(inode_index, (inode, FsTreeNode { children: Vec::new() }));
     cache.mount_points.insert(parent_cache_num, inode_index);

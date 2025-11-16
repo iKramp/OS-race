@@ -1,6 +1,5 @@
 use super::context_switch::no_ret_context_switch;
 use crate::{interrupts::enable_interrupts, msr, proc::syscall};
-use std::mem_utils::VirtAddr;
 
 mod handlers;
 

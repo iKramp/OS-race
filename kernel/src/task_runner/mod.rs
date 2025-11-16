@@ -3,14 +3,29 @@ use core::{
     sync::atomic::AtomicPtr,
     task::{Context, Poll, RawWaker, RawWakerVTable, Waker},
 };
-use std::boxed::Box;
+use std::{boxed::Box, println};
 
 use crate::acpi::cpu_locals::CpuLocals;
+
+pub fn block_task<'a, T>(mut task: Pin<Box<dyn Future<Output = T> + 'a>>) -> T {
+    let locals = CpuLocals::get();
+    let before_blocking = locals.lock_info.is_blocking_task();
+    locals.lock_info.blocking_task();
+    let data = loop {
+        match task.as_mut().poll(&mut Context::from_waker(&dummy_waker())) {
+            Poll::Ready(data) => break data,
+            Poll::Pending => {}
+        }
+    };
+    if !before_blocking {
+        locals.lock_info.unblocking_task();
+    }
+    data
+}
 
 pub struct AsyncTaskStore {
     task_list: AtomicPtr<AsyncTaskHolder>,
     id_counter: u64,
-
 }
 
 //probably won't change return type, tasks should modify process state or other things themselves (through
@@ -49,6 +64,10 @@ fn add_task_holder(task: Box<AsyncTaskHolder>) {
 
 pub fn process_tasks() {
     let locals = CpuLocals::get();
+    if !locals.lock_info.no_locks() {
+        println!("WARNING: processing async tasks requested with locks held!");
+        return;
+    }
     loop {
         let mut list = locals
             .async_task_list
@@ -62,6 +81,10 @@ pub fn process_tasks() {
             let task = unsafe { Box::from_raw(list) };
             list = task.next_task.load(core::sync::atomic::Ordering::Acquire);
             process_single_task(task);
+
+            if !locals.lock_info.no_locks() {
+                panic!("Async task processing yielded with locks held!");
+            }
 
             if list.is_null() {
                 break;
@@ -94,7 +117,6 @@ fn process_single_task(mut task: Box<AsyncTaskHolder>) {
         Poll::Pending => {
             add_task_holder(task);
         }
-        Poll::Ready(_) => {
-        }
+        Poll::Ready(_) => {}
     }
 }

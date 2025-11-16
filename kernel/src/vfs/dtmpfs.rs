@@ -3,10 +3,7 @@
 //!provides a directory structure for mounpoints
 
 use std::{
-    boxed::Box,
-    collections::btree_map::BTreeMap,
-    string::{String, ToString},
-    vec::Vec,
+    boxed::Box, collections::btree_map::BTreeMap, string::{String, ToString}, sync::no_int_spinlock::NoIntSpinlock, vec::Vec
 };
 
 use uuid::Uuid;
@@ -16,12 +13,15 @@ use super::{
     filesystem_trait::{FileSystem, FileSystemFactory},
 };
 
+#[derive(Debug)]
 pub(super) struct Dtmpfs {
+    global_lock: NoIntSpinlock<()>,
     root: u64,
     inodes: BTreeMap<u64, DtmpfsNode>,
     inode_index: u64,
 }
 
+#[derive(Debug)]
 struct DtmpfsNode {
     children: Vec<(String, u64)>, // (name, inode)
 }
@@ -32,9 +32,11 @@ impl DtmpfsFactory {
     pub const UUID: Uuid = uuid::uuid!("00000000-0000-0000-0000-000000000000");
 }
 
+#[async_trait::async_trait]
 impl FileSystemFactory for DtmpfsFactory {
-    fn mount(&self, _partition: crate::drivers::disk::MountedPartition) -> std::boxed::Box<dyn FileSystem + Send> {
+    async fn mount(&self, _partition: crate::drivers::disk::MountedPartition) -> std::boxed::Box<dyn FileSystem + Send> {
         let mut fs = Dtmpfs {
+            global_lock: NoIntSpinlock::new(()),
             root: 2, // Root inode index
             inodes: BTreeMap::new(),
             inode_index: 3,
@@ -44,14 +46,16 @@ impl FileSystemFactory for DtmpfsFactory {
     }
 }
 
+#[async_trait::async_trait]
 impl FileSystem for Dtmpfs {
-    fn unmount(&mut self) {}
+    async fn unmount(&self) {}
 
-    fn read(&mut self, _inode: InodeIndex, _offset_bytes: u64, _size_bytes: u64, _buffer: &[std::mem_utils::PhysAddr]) {
+    async fn read(&self, _inode: InodeIndex, _offset_bytes: u64, _size_bytes: u64, _buffer: &[std::mem_utils::PhysAddr]) {
         panic!("Reading is not supported in dtmpfs");
     }
 
-    fn read_dir(&mut self, inode: InodeIndex) -> std::boxed::Box<[crate::drivers::disk::DirEntry]> {
+    async fn read_dir(&self, inode: InodeIndex) -> std::boxed::Box<[crate::drivers::disk::DirEntry]> {
+        let lock = self.global_lock.lock();
         let mut entries = Vec::new();
         if let Some(node) = self.inodes.get(&inode) {
             for (name, child_inode) in &node.children {
@@ -61,14 +65,15 @@ impl FileSystem for Dtmpfs {
                 });
             }
         }
+        drop(lock);
         entries.into_boxed_slice()
     }
 
-    fn write(&mut self, _inode: InodeIndex, _offset: u64, _size: u64, _buffer: &[std::mem_utils::PhysAddr]) -> super::Inode {
+    async fn write(&self, _inode: InodeIndex, _offset: u64, _size: u64, _buffer: &[std::mem_utils::PhysAddr]) -> super::Inode {
         panic!("Writing is not supported in dtmpfs");
     }
 
-    fn stat(&mut self, inode: InodeIndex) -> super::Inode {
+    async fn stat(&self, inode: InodeIndex) -> super::Inode {
         unsafe {
             super::Inode {
                 index: inode,
@@ -88,46 +93,57 @@ impl FileSystem for Dtmpfs {
         }
     }
 
-    fn set_stat(&mut self, _inode_index: InodeIndex, _inode_data: super::Inode) {
+    async fn set_stat(&self, _inode_index: InodeIndex, _inode_data: super::Inode) {
         panic!("Setting stat is not supported in dtmpfs");
     }
 
-    fn create(
-        &mut self,
+    async fn create(
+        &self,
         name: &str,
         parent_dir: InodeIndex,
         _type_mode: super::InodeType,
         _uid: u16,
         _gid: u16,
     ) -> (super::Inode, super::Inode) {
+        let lock = self.global_lock.lock();
+        #[allow(invalid_reference_casting)]
+        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
         let inode_index = self.inode_index;
-        self.inode_index += 1;
-        self.inodes.insert(inode_index, DtmpfsNode { children: Vec::new() });
+        self_mut.inode_index += 1;
+        self_mut.inodes.insert(inode_index, DtmpfsNode { children: Vec::new() });
 
-        let Some(parent_inode) = self.inodes.get_mut(&parent_dir) else {
+        let Some(parent_inode) = self_mut.inodes.get_mut(&parent_dir) else {
             panic!("Parent directory inode {} not found", parent_dir);
         };
 
         parent_inode.children.push((name.to_string(), inode_index));
-        (self.stat(parent_dir), self.stat(inode_index))
+        drop(lock);
+        (self.stat(parent_dir).await, self.stat(inode_index).await)
     }
 
-    fn unlink(&mut self, parent_inode: InodeIndex, name: &str) {
-        if let Some(parent_node) = self.inodes.get_mut(&parent_inode) {
+    async fn unlink(&self, parent_inode: InodeIndex, name: &str) {
+        let lock = self.global_lock.lock();
+        #[allow(invalid_reference_casting)]
+        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
+        if let Some(parent_node) = self_mut.inodes.get_mut(&parent_inode) {
             parent_node.children.retain(|(n, _)| n != name);
         }
+        drop(lock);
     }
 
-    fn link(&mut self, _inode: InodeIndex, _parent_dir: InodeIndex, _name: &str) -> super::Inode {
+    async fn link(&self, _inode: InodeIndex, _parent_dir: InodeIndex, _name: &str) -> super::Inode {
         panic!("Linking is not supported in dtmpfs");
     }
 
-    fn truncate(&mut self, _inode: InodeIndex, _size: u64) {
+    async fn truncate(&self, _inode: InodeIndex, _size: u64) {
         panic!("Truncating is not supported in dtmpfs");
     }
 
-    fn rename(&mut self, inode: InodeIndex, parent_inode: InodeIndex, name: &str) {
-        let Some(parent_node) = self.inodes.get_mut(&parent_inode) else {
+    async fn rename(&self, inode: InodeIndex, parent_inode: InodeIndex, name: &str) {
+        let lock = self.global_lock.lock();
+        #[allow(invalid_reference_casting)]
+        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
+        let Some(parent_node) = self_mut.inodes.get_mut(&parent_inode) else {
             return;
         };
         if let Some((_, child_inode)) = parent_node.children.iter_mut().find(|(n, _)| n == name) {
@@ -135,5 +151,6 @@ impl FileSystem for Dtmpfs {
         } else {
             parent_node.children.push((name.to_string(), inode));
         }
+        drop(lock);
     }
 }

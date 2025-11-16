@@ -19,7 +19,6 @@ use std::{
 pub use apic::LAPIC_REGISTERS;
 use fadt::Fadt;
 pub use hpet::HpetTable;
-pub use lapic_timer::set_timeout;
 use madt::Madt;
 use platform_info::PlatformInfo;
 pub use smp::cpu_locals;

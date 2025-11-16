@@ -24,7 +24,7 @@ fn main() {
     }
     cmd.arg("-cpu").arg("host,invtsc");
     cmd.arg("-enable-kvm");
-    cmd.arg("-smp").arg("8");
+    cmd.arg("-smp").arg("1");
 
     #[cfg(test)]
     {

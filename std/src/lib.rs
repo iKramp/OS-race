@@ -22,6 +22,7 @@ pub use print::Print;
 pub use print::set_print;
 
 pub mod mem_utils;
+pub mod arc;
 
 pub use core::any;
 pub use core::arch;

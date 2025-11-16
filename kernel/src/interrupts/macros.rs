@@ -208,6 +208,9 @@ pub extern "C" fn general_interrupt_handler(
     disable_interrupts();
     locals.int_depth -= 1;
     locals.atomic_context = prev_atomic;
+    if !locals.lock_info.no_locks() {
+        panic!("Interrupt return with held locks detected: {:?}", locals.lock_info);
+    }
 }
 
 #[derive(Debug, Clone)]

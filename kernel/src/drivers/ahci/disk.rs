@@ -1,10 +1,12 @@
 #![allow(non_snake_case)]
 #![allow(clippy::identity_op)]
 
-use core::{fmt::Debug, time::Duration};
+use core::{fmt::Debug, sync::atomic::AtomicU32, time::Duration};
 use std::{
+    boxed::Box,
     mem_utils::{PhysAddr, VirtAddr, get_at_physical_addr, get_at_virtual_addr, memset_virtual_addr},
     println,
+    sync::no_int_spinlock::NoIntSpinlock,
     vec::Vec,
 };
 
@@ -25,6 +27,8 @@ use super::fis::{FisType, H2DRegFisPmport, H2DRegisterFis};
 const READ_DMA: u8 = 0x25;
 const WRITE_DMA: u8 = 0x35;
 
+static OPERATIONS: AtomicU32 = AtomicU32::new(0);
+
 #[derive(Debug, Clone)]
 pub struct AhciDriver {}
 
@@ -38,7 +42,7 @@ pub struct AhciController {
 
 impl AhciController {
     //https://forum.osdev.org/viewtopic.php?t=40969
-    pub fn init(&mut self) -> Vec<VirtualPort> {
+    pub fn init(mut self) -> Vec<VirtualPort> {
         self.device.enable_bus_mastering();
         let ghc = unsafe { (&raw const self.abar).read_volatile() };
 
@@ -82,7 +86,7 @@ impl AhciController {
 
         self.ports.retain(|port| active_ports.contains(&port.index));
 
-        self.ports.clone()
+        self.ports
     }
 }
 
@@ -108,9 +112,10 @@ impl AhciController {
                     fis: VirtAddr(0),
                     is_64_bit,
                     sectors: 0,
-                    command_depth: 0,
+                    command_depth: 1,
                     device: 0,
-                    command_metadata: [CommandMetadata { issued: false }; 32],
+                    commands_issued: AtomicU32::new(0),
+                    address_lock: NoIntSpinlock::new(()),
                 });
             }
         }
@@ -154,7 +159,6 @@ impl AhciController {
 
     fn wait_for_idle_ports(&self) {
         for port in &self.ports {
-            //let mut port_command = self.get_port(port_index).PxCMD;
             let mut port_command = PortCommand(port.get_property(0x18));
             if port_command.ST() {
                 port_command.SetST(false);
@@ -182,22 +186,27 @@ impl AhciController {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct VirtualPort {
-    index: u8,
-    address: *mut u32,
-    command_list: VirtAddr,
-    fis: VirtAddr,
+    // commands_issued_addr_lock: Arc<(AtomicU32, NoIntSpinlock<()>)>,
+    commands_issued: AtomicU32,
     is_64_bit: bool,
+    index: u8,
+    //use lock
+    address_lock: NoIntSpinlock<()>,
+    address: *mut u32,
     sectors: u64,
+    //thread safe (only written during init)
+    fis: VirtAddr,
+    //thread safe (as long as commands_issued works)
+    command_list: VirtAddr,
     command_depth: u16,
     device: u8,
-    command_metadata: [CommandMetadata; 32],
 }
 
-//Safe because address doesn't point to actual data that can be freed, but only to mmio (still
-//shouldn't be unmapped)
+// Safe because we set all the data once, then only modify data in Arc<AtomicU32> and using the lock
 unsafe impl Send for VirtualPort {}
+unsafe impl Sync for VirtualPort {}
 
 #[derive(Debug, Clone, Copy)]
 struct CommandMetadata {
@@ -205,6 +214,31 @@ struct CommandMetadata {
 }
 
 impl VirtualPort {
+    pub fn get_command_index(&self) -> Option<u8> {
+        loop {
+            let pos = self
+                .commands_issued
+                .load(core::sync::atomic::Ordering::Acquire)
+                .trailing_ones() as u8;
+            if pos >= self.command_depth as u8 {
+                return None;
+            }
+
+            let old = self.commands_issued.fetch_or(1 << pos, core::sync::atomic::Ordering::AcqRel);
+            if old & (1 << pos) == 0 {
+                if pos != 0 {
+                    panic!("there shouldn't be more than 1 operation in a synchronous system");
+                }
+                return Some(pos);
+            }
+        }
+    }
+
+    pub fn release_command_index(&self, index: u8) {
+        self.commands_issued
+            .fetch_and(!(1 << index), core::sync::atomic::Ordering::AcqRel);
+    }
+
     pub fn init_cmd_list_fis(&mut self, is_64_bit: bool) {
         const FIS_SWITCHING: bool = false;
 
@@ -222,10 +256,12 @@ impl VirtualPort {
             physical_allocator::allocate_frame_low()
         };
 
+        let lock = self.address_lock.lock();
         self.set_property(0, cmd_list_base.0 as u32);
         self.set_property(4, (cmd_list_base.0 >> 32) as u32);
         self.set_property(8, fis_base.0 as u32);
         self.set_property(12, (fis_base.0 >> 32) as u32);
+        drop(lock);
 
         let clb_virt = unsafe { PAGE_TREE_ALLOCATOR.allocate(Some(cmd_list_base), false) };
         unsafe { memset_virtual_addr(clb_virt, 0, 0x1000) };
@@ -363,6 +399,7 @@ impl VirtualPort {
         std::thread::sleep(std::time::Duration::from_secs(1));
 
         self.clean_command(identify_cmd_index);
+        self.release_command_index(identify_cmd_index);
 
         unsafe {
             let data = &raw const *get_at_physical_addr::<IdentifyStructure>(fis_recv_area);
@@ -375,13 +412,9 @@ impl VirtualPort {
     }
 
     ///PRDT cannot be more than a bit over 900MB. Just use multiple commands
-    fn build_command(&mut self, write: bool, cfis: &[u8], prdt: &[PrdtDescriptor]) -> Option<u8> {
+    fn build_command(&self, write: bool, cfis: &[u8], prdt: &[PrdtDescriptor]) -> Option<u8> {
         assert!(prdt.len() <= 248); //i don't want to deal with contiguous allocation
-        let cmd_issue = self.get_property(0x38);
-        if cmd_issue == !0 {
-            return None;
-        }
-        let index = cmd_issue.trailing_ones() as u8;
+        let index = self.get_command_index()?;
 
         let cmd_table_page = if self.is_64_bit {
             physical_allocator::allocate_frame()
@@ -425,15 +458,8 @@ impl VirtualPort {
 
         let cmd_issue = 1 << index;
 
-        //spin on busy
-        let mut port_cmd = TaskFileData(self.get_property(0x20));
-        while port_cmd.STS_BSY() {
-            std::thread::sleep(Duration::from_micros(10));
-            port_cmd = TaskFileData(self.get_property(0x20));
-        }
-
+        //no need for lock, is write-1 register
         self.set_property(0x38, cmd_issue);
-        self.command_metadata[index as usize].issued = true;
 
         Some(index)
     }
@@ -449,11 +475,19 @@ impl VirtualPort {
         }
         //potentially anything else
     }
+
+    pub fn is_command_ready(&self, command_slot: u8) -> bool {
+        let lock = self.address_lock.lock();
+        let ci = self.get_property(0x38);
+        drop(lock);
+        ci & (1 << command_slot) == 0
+    }
 }
 
+#[async_trait::async_trait]
 impl BlockDevice for VirtualPort {
-    ///Returns the virtual address of the read data and the command index used
-    fn read(&mut self, start_sec_index: usize, sec_count: usize, buffer: &[PhysAddr]) -> u64 {
+    async fn read(&self, start_sec_index: usize, sec_count: usize, buffer: &[PhysAddr]) {
+        OPERATIONS.fetch_add(1, core::sync::atomic::Ordering::AcqRel);
         assert!(sec_count <= self.sectors as usize);
         let prdt_entries = sec_count.div_ceil(8); //8 sectors in one physical frame
 
@@ -493,18 +527,18 @@ impl BlockDevice for VirtualPort {
 
         let read_cmd_index = self.build_command(false, (&cfis).into(), &prdt).unwrap();
 
-        //for now synchronous
-        let mut ci = self.get_property(0x38);
-        while ci & (1 << read_cmd_index) != 0 {
-            std::thread::sleep(Duration::from_micros(10));
-            ci = self.get_property(0x38);
-        }
+        CommandWaiter {
+            port: self,
+            command_index: read_cmd_index,
+        }.await;
 
-        read_cmd_index as u64
+        self.clean_command(read_cmd_index);
+        self.release_command_index(read_cmd_index);
     }
 
     ///Returns the virtual address of the read data and the command index used
-    fn write(&mut self, start_sec_index: usize, sec_count: usize, buffer: &[PhysAddr]) -> u64 {
+    async fn write(&self, start_sec_index: usize, sec_count: usize, buffer: &[PhysAddr]) {
+        OPERATIONS.fetch_add(1, core::sync::atomic::Ordering::AcqRel);
         assert!(sec_count <= self.sectors as usize);
         let prdt_entries = sec_count.div_ceil(8); //8 sectors in one physical frame
 
@@ -544,24 +578,39 @@ impl BlockDevice for VirtualPort {
 
         let write_cmd_index = self.build_command(true, (&cfis).into(), &prdt).unwrap();
 
-        //for now synchronous
-        let mut ci = self.get_property(0x38);
-        while ci & (1 << write_cmd_index) != 0 {
-            std::thread::sleep(Duration::from_micros(10));
-            ci = self.get_property(0x38);
+        CommandWaiter {
+            port: self,
+            command_index: write_cmd_index,
+        }.await;
+
+        self.clean_command(write_cmd_index);
+        self.release_command_index(write_cmd_index);
+    }
+}
+
+pub fn clear_operations_count() {
+    OPERATIONS.store(0, core::sync::atomic::Ordering::Release);
+}
+
+pub fn get_operations_count() -> u32 {
+    OPERATIONS.load(core::sync::atomic::Ordering::Acquire)
+}
+
+struct CommandWaiter<'a> {
+    port: &'a VirtualPort,
+    command_index: u8,
+}
+
+impl Future for CommandWaiter<'_> {
+    type Output = ();
+
+    fn poll(self: core::pin::Pin<&mut Self>, cx: &mut core::task::Context<'_>) -> core::task::Poll<Self::Output> {
+        if self.port.is_command_ready(self.command_index) {
+            core::task::Poll::Ready(())
+        } else {
+            cx.waker().wake_by_ref();
+            core::task::Poll::Pending
         }
-
-        write_cmd_index as u64
-    }
-
-    fn clean_after_read(&mut self, metadata: u64) {
-        self.clean_command(metadata as u8);
-        self.command_metadata[metadata as usize].issued = false;
-    }
-
-    fn clean_after_write(&mut self, metadata: u64) {
-        self.clean_command(metadata as u8);
-        self.command_metadata[metadata as usize].issued = false;
     }
 }
 

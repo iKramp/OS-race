@@ -5,22 +5,23 @@ use uuid::Uuid;
 
 use crate::vfs::{DeviceId, InodeIndex};
 
-pub trait BlockDevice: Debug {
-    fn read(&mut self, sector: usize, sec_count: usize, buffer: &[PhysAddr]) -> u64;
-    fn write(&mut self, sector: usize, sec_count: usize, buffer: &[PhysAddr]) -> u64;
-    fn clean_after_read(&mut self, metadata: u64);
-    fn clean_after_write(&mut self, metadata: u64);
+#[async_trait::async_trait]
+pub trait BlockDevice: Debug + Send + Sync {
+    async fn read(&self, sector: usize, sec_count: usize, buffer: &[PhysAddr]);
+    async fn write(&self, sector: usize, sec_count: usize, buffer: &[PhysAddr]);
 }
 
+#[async_trait::async_trait]
 pub trait PartitionSchemeDriver {
-    fn guid(&self, disk: &mut dyn BlockDevice) -> Uuid;
+    async fn guid(&self, disk: &mut dyn BlockDevice) -> Uuid;
     ///returns a vector of partition guids (not filesystem ids) and partition objects
-    fn partitions(&self, disk: &mut dyn BlockDevice) -> Vec<(Uuid, Partition)>;
+    async fn partitions(&self, disk: &mut dyn BlockDevice) -> Vec<(Uuid, Partition)>;
 }
 
+//Make sure this is ALWAYS send + sync
 #[derive(Debug)]
 pub struct MountedPartition {
-    pub disk: &'static mut dyn BlockDevice,
+    pub disk: &'static dyn BlockDevice,
     pub partition: Partition,
 }
 
@@ -34,20 +35,18 @@ pub struct Partition {
 }
 
 impl MountedPartition {
-    pub fn new(disk: &'static mut dyn BlockDevice, partition: Partition) -> Self {
+    pub fn new(disk: &'static dyn BlockDevice, partition: Partition) -> Self {
         Self { disk, partition }
     }
 
-    pub fn read(&mut self, sector: usize, sec_count: usize, buffer: &[PhysAddr]) {
+    pub async fn read(&self, sector: usize, sec_count: usize, buffer: &[PhysAddr]) {
         assert!(sector + sec_count <= self.partition.size_sectors);
-        let metadata = self.disk.read(self.partition.start_sector + sector, sec_count, buffer);
-        self.disk.clean_after_read(metadata);
+        self.disk.read(self.partition.start_sector + sector, sec_count, buffer).await;
     }
 
-    pub fn write(&mut self, sector: usize, sec_count: usize, buffer: &[PhysAddr]) {
+    pub async fn write(&self, sector: usize, sec_count: usize, buffer: &[PhysAddr]) {
         assert!(sector + sec_count <= self.partition.size_sectors);
-        let metadata = self.disk.write(self.partition.start_sector + sector, sec_count, buffer);
-        self.disk.clean_after_write(metadata);
+        self.disk.write(self.partition.start_sector + sector, sec_count, buffer).await;
     }
 }
 

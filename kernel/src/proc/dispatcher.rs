@@ -35,6 +35,10 @@ pub(super) fn dispatch(new_proc: &ProcessData) -> ! {
 
     locals.int_depth -= 1;
 
+    if !locals.lock_info.no_locks() {
+        panic!("Context switch with held locks detected: {:?}", locals.lock_info);
+    }
+
     match &new_proc.cpu_state {
         CpuStateType::Interrupt(interrupt_frame) => return_interrupted(interrupt_frame),
         CpuStateType::Syscall((state, rsp)) => return_syscalled(state, *rsp),

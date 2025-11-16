@@ -2,7 +2,7 @@ use crate::{
     acpi::{LAPIC_REGISTERS, cpu_locals::CpuLocals},
     interrupts::gdt::GlobalDescriptorTable,
     memory::paging::PageTree,
-    proc::{StackCpuStateData, context_switch, set_proc_initialized},
+    proc::{StackCpuStateData, context_switch},
     utils::{byte_from_port, byte_to_port},
 };
 #[allow(unused_imports)] //they are used in macros
