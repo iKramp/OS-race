@@ -3,7 +3,7 @@
 //!provides a directory structure for mounpoints
 
 use std::{
-    boxed::Box, collections::btree_map::BTreeMap, string::{String, ToString}, sync::no_int_spinlock::NoIntSpinlock, vec::Vec
+    arc::Arc, boxed::Box, collections::btree_map::BTreeMap, string::{String, ToString}, sync::no_int_spinlock::NoIntSpinlock, vec::Vec
 };
 
 use uuid::Uuid;
@@ -34,7 +34,7 @@ impl DtmpfsFactory {
 
 #[async_trait::async_trait]
 impl FileSystemFactory for DtmpfsFactory {
-    async fn mount(&self, _partition: crate::drivers::disk::MountedPartition) -> std::boxed::Box<dyn FileSystem + Send> {
+    async fn mount(&self, _partition: crate::drivers::disk::MountedPartition) -> Arc<dyn FileSystem + Send> {
         let mut fs = Dtmpfs {
             global_lock: NoIntSpinlock::new(()),
             root: 2, // Root inode index
@@ -42,7 +42,7 @@ impl FileSystemFactory for DtmpfsFactory {
             inode_index: 3,
         };
         fs.inodes.insert(fs.root, DtmpfsNode { children: Vec::new() });
-        Box::new(fs)
+        Arc::new(fs)
     }
 }
 

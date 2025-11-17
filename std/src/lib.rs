@@ -3,6 +3,8 @@
 #![feature(ptr_metadata)]
 #![feature(specialization)]
 #![feature(negative_impls)]
+#![feature(coerce_unsized)]
+#![feature(unsize)]
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {

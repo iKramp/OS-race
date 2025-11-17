@@ -1,13 +1,17 @@
 use core::{mem::MaybeUninit, sync::atomic::AtomicPtr};
 use std::{
-    boxed::Box, mem_utils::{get_at_virtual_addr, VirtAddr}, sync::lock_info::{set_lock_info_func, LockInfo}, vec::Vec
+    boxed::Box,
+    mem_utils::{VirtAddr, get_at_virtual_addr},
+    sync::arc::Arc,
+    sync::lock_info::{LockInfo, set_lock_info_func},
+    vec::Vec,
 };
 
 use crate::{
     acpi::platform_info::PlatformInfo,
     interrupts::{self, idt::TablePointer},
     memory::stack::{KERNEL_STACK_SIZE_PAGES, prepare_kernel_stack},
-    proc::Pid,
+    proc::ProcessData,
     task_runner::{AsyncTaskHolder, TaskToWake},
 };
 
@@ -24,7 +28,7 @@ pub struct CpuLocals {
     pub stack_size_pages: u64,
     /// Points to TablePointer with base and limit of GDT
     pub gdt_ptr: TablePointer,
-    pub current_process: Pid,
+    pub current_process: Option<Arc<ProcessData>>,
     pub apic_id: u8,
     pub processor_id: u8,
     pub int_depth: u32,
@@ -96,7 +100,7 @@ impl CpuLocals {
             apic_id,
             processor_id,
             gdt_ptr,
-            current_process: Pid(0),
+            current_process: None,
             async_task_list: AtomicPtr::new(core::ptr::null_mut()),
             wake_tasks_list: AtomicPtr::new(core::ptr::null_mut()),
             proc_initialized: false,

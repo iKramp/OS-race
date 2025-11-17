@@ -1,5 +1,5 @@
 use crate::interrupts::InterruptProcessorState;
-use crate::proc::CpuStateType;
+use crate::proc::process_data::CpuStateType;
 use crate::proc::PROCESS_ID_COUNTER;
 use crate::proc::ProcessData;
 use crate::proc::SCHEDULER;
@@ -33,13 +33,13 @@ pub fn create_process(context_info: &ContextInfo) -> Pid {
     let rsp = stack.base.0 + (stack.size_pages as u64 * 0x1000) - 16; //-16 just in case (ret val and other things are 0)
 
     let cpu_state = InterruptProcessorState::new(rip, rsp);
-    let process_data = ProcessData {
+    let process_data = ProcessData::new(
         pid,
         is_32_bit,
         cmdline,
-        memory_context: Arc::new(memory_context),
-        cpu_state: CpuStateType::Interrupt(cpu_state),
-    };
+        Arc::new(memory_context),
+        CpuStateType::Interrupt(cpu_state),
+    );
 
     let mut scheduler_lock = SCHEDULER.lock();
     let scheduler = unsafe { scheduler_lock.assume_init_mut() };

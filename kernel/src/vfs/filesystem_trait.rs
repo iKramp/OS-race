@@ -1,5 +1,5 @@
 use core::fmt::Debug;
-use std::{boxed::Box, mem_utils::PhysAddr};
+use std::{arc::Arc, boxed::Box, mem_utils::PhysAddr};
 
 use crate::drivers::disk::{DirEntry, MountedPartition};
 
@@ -8,7 +8,7 @@ use super::{Inode, InodeIndex, InodeType};
 
 #[async_trait::async_trait]
 pub trait FileSystemFactory {
-    async fn mount(&self, partition: MountedPartition) -> Box<dyn FileSystem + Send>;
+    async fn mount(&self, partition: MountedPartition) -> Arc<dyn FileSystem + Send>;
 }
 
 #[async_trait::async_trait]

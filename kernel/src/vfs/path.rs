@@ -78,15 +78,7 @@ impl ResolvedPathBorrowed<'_> {
     }
 }
 
-pub fn resolve_path(path: &str, working_dir: &str) -> ResolvedPath {
-    if path.starts_with('/') {
-        resolve_single_path(path)
-    } else {
-        resolve_single_path(format!("{}/{}", working_dir, path).as_str())
-    }
-}
-
-fn resolve_single_path(path: &str) -> ResolvedPath {
+pub fn resolve_path(path: &str) -> ResolvedPath {
     let chunks = path.split('/');
     let mut path = Vec::new();
     for chunk in chunks {

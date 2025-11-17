@@ -41,7 +41,7 @@ mod vfs;
 mod vga;
 use limine::LIMINE_BOOTLOADER_REQUESTS;
 use task_runner::block_task;
-use vfs::ResolvedPath;
+use vfs::{file::FileFlags, ResolvedPath};
 
 const PRIME_FINDER: &[u8] = include_bytes!("../../assets/prime_finder");
 const TIME_PRINTER: &[u8] = include_bytes!("../../assets/time_printer");
@@ -80,31 +80,21 @@ extern "C" fn _start() -> ! {
     pci::enumerate_devices();
     vfs::init();
 
-    let res = block_task(Box::pin(vfs::mount_blkdev_partition(cmd_args.root_partition, ResolvedPath::root())));
-    if let Err(e) = res {
-        println!("{}", e);
-        panic!("Failed to mount root partition");
-    }
+    // let res = block_task(Box::pin(vfs::mount_blkdev_partition(cmd_args.root_partition, ResolvedPath::root())));
+    // if let Err(e) = res {
+    //     println!("{}", e);
+    //     panic!("Failed to mount root partition");
+    // }
+    //
+    // let path = vfs::resolve_path("/");
+    // let file_open_flags = FileFlags::new_with_flags(true, false, false, false);
+    // let file = block_task(Box::pin(vfs::open_file((&path).into(), None, file_open_flags))).unwrap();
+    // println!("{:?}", block_task(Box::pin(vfs::get_dir_entries(&file))));
+    // file_operations::do_file_operations();
 
-    let path = vfs::resolve_path("/", "/");
-    println!("{:?}", block_task(Box::pin(vfs::get_dir_entries((&path).into()))));
-
-    // proc::init();
-
-    file_operations::do_file_operations();
-
-    // vga_text::hello_message();
-
-    #[cfg(feature = "run_tests")]
-    {
-        println!("Running tests");
-        use tests::test_runner;
-        test_runner();
-        println!("Finished running tests");
-    }
-
+    proc::init();
     //start first proc
-    // unsafe { core::arch::asm!("int 254") };
+    unsafe { core::arch::asm!("int 254") };
 
     panic!("Returned to _start after first context switch");
 }

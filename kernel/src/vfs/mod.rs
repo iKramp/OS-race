@@ -1,5 +1,5 @@
 use dtmpfs::DtmpfsFactory;
-use std::{boxed::Box, collections::btree_map::BTreeMap, sync::no_int_spinlock::NoIntSpinlock, vec::Vec};
+use std::{arc::Arc, boxed::Box, collections::btree_map::BTreeMap, sync::no_int_spinlock::NoIntSpinlock, vec::Vec};
 use uuid::Uuid;
 
 use crate::drivers::{
@@ -14,6 +14,7 @@ mod fs_tree;
 mod inode;
 mod operations;
 mod path;
+pub mod file;
 pub use filesystem_trait::{FileSystem, FileSystemFactory};
 pub use inode::*;
 pub use operations::*;
@@ -53,7 +54,7 @@ pub struct Vfs {
     ///maps from filesystem type guid to filesystem driver factory
     filesystem_driver_factories: BTreeMap<Uuid, Box<dyn FileSystemFactory + Send>>,
     ///maps from partition guid to filesystem driver
-    mounted_partitions: BTreeMap<Uuid, Box<dyn FileSystem + Send>>,
+    mounted_filesystems: BTreeMap<Uuid, Arc<dyn FileSystem + Send>>,
     ///maps from partition guid to partition object
     available_partitions: BTreeMap<Uuid, Partition>,
     ///maps from device id to partition and drive uuid
@@ -67,10 +68,10 @@ impl Vfs {
         Vfs {
             disks: BTreeMap::new(),
             filesystem_driver_factories: BTreeMap::new(),
-            mounted_partitions: BTreeMap::new(),
+            mounted_filesystems: BTreeMap::new(),
             available_partitions: BTreeMap::new(),
             devices: BTreeMap::new(),
-            device_counter: 0,
+            device_counter: 1,
         }
     }
 

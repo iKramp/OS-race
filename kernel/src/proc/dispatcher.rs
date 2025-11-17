@@ -1,6 +1,6 @@
 use crate::{interrupts::{disable_interrupts, InterruptProcessorState}, memory::paging};
 
-use super::{CpuStateType, ProcessData, syscall::SyscallCpuState};
+use super::{process_data::CpuStateType, syscall::SyscallCpuState, ProcessData};
 
 /*
  * Things that need to be done: (Intel SDM, Vol 3, chapter 8.1.2
@@ -20,10 +20,11 @@ pub(super) fn dispatch(new_proc: &ProcessData) -> ! {
     //INFO: any kind of change here should be matched with the one in interrupts/macros.rs and
     //syscall.rs
 
-    let new_page_tree = &new_proc.memory_context.get().page_tree;
+    let new_page_tree = new_proc.page_tree();
     paging::PageTree::set_level4_addr(new_page_tree.root());
     let locals = crate::acpi::cpu_locals::CpuLocals::get();
     disable_interrupts();
+    let cpu_state = new_proc.take_cpu_state();
     unsafe {
         core::arch::asm!(
             //this is a bit tricky. We can do this because context switch is only called on
@@ -39,9 +40,10 @@ pub(super) fn dispatch(new_proc: &ProcessData) -> ! {
         panic!("Context switch with held locks detected: {:?}", locals.lock_info);
     }
 
-    match &new_proc.cpu_state {
-        CpuStateType::Interrupt(interrupt_frame) => return_interrupted(interrupt_frame),
-        CpuStateType::Syscall((state, rsp)) => return_syscalled(state, *rsp),
+    match cpu_state {
+        CpuStateType::Interrupt(interrupt_frame) => return_interrupted(&interrupt_frame),
+        CpuStateType::Syscall((state, rsp)) => return_syscalled(&state, rsp),
+        CpuStateType::None => panic!("Process with no CPU state dispatched (currently running)"),
     }
 }
 

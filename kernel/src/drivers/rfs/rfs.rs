@@ -29,8 +29,8 @@ impl RfsFactory {
 
 #[async_trait::async_trait]
 impl FileSystemFactory for RfsFactory {
-    async fn mount(&self, partition: MountedPartition) -> Box<dyn FileSystem + Send> {
-        Box::new(Rfs::new(partition).await)
+    async fn mount(&self, partition: MountedPartition) -> Arc<dyn FileSystem + Send> {
+        Arc::new(Rfs::new(partition).await)
     }
 }
 

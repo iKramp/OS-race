@@ -1,11 +1,9 @@
 use crate::{acpi::cpu_locals::CpuLocals, interrupts::InterruptProcessorState, proc::Pid};
 use std::{
-    boxed::Box,
-    collections::{btree_map::BTreeMap, btree_set::BTreeSet},
-    vec::Vec,
+    sync::arc::Arc, collections::{btree_map::BTreeMap, btree_set::BTreeSet}, vec::Vec
 };
 
-use super::{CpuStateType, ProcessData, StackCpuStateData, syscall::SyscallCpuState};
+use super::{process_data::{self, CpuStateType, StackCpuStateData}, syscall::SyscallCpuState, ProcessData};
 
 pub enum SleepCondition {
     Time(u64),
@@ -14,7 +12,7 @@ pub enum SleepCondition {
 }
 
 pub struct Scheduler {
-    tasks: BTreeMap<Pid, Box<ProcessData>>,
+    tasks: BTreeMap<Pid, Arc<ProcessData>>,
     sleeping_tasks: Vec<(Pid, SleepCondition)>,
     ///tasks currently running on the CPU, along with cpu number
     active_tasks: Vec<(Pid, u32)>,
@@ -36,20 +34,22 @@ impl Scheduler {
 
 impl Scheduler {
     pub fn accept_new_process(&mut self, pid: Pid, proc_data: ProcessData) {
-        self.tasks.insert(pid, Box::new(proc_data));
+        self.tasks.insert(pid, Arc::new(proc_data));
         self.ready_to_run.push(pid);
     }
 
-    pub fn schedule(&mut self) -> Option<&ProcessData> {
+    pub fn schedule(&mut self) -> Option<Arc<ProcessData>> {
         if self.ready_to_run.is_empty() {
             Self::set_generic_mem_tree();
             return None;
         }
         let pid = self.ready_to_run.remove(0);
         if let Some(proc_data) = self.tasks.get_mut(&pid) {
+            let locals = CpuLocals::get();
             // Move the process to active tasks
-            self.active_tasks.push((pid, 0)); // Assuming CPU 0 for simplicity
-            Some(proc_data)
+            self.active_tasks.push((pid, locals.apic_id.into()));
+            locals.current_process = Some(proc_data.clone());
+            Some(proc_data.clone())
         } else {
             Self::set_generic_mem_tree();
             None
@@ -92,37 +92,41 @@ impl Scheduler {
                 self.ready_to_run.push(pid);
             }
         }
+        let locals = CpuLocals::get();
+        locals.current_process = None;
     }
 
-    fn save_current_proc(&mut self, old_proc: Pid, on_stack_data: &StackCpuStateData) {
-        let old_proc = self.tasks.get_mut(&old_proc);
-        if let Some(old_proc) = old_proc {
-            match on_stack_data {
-                StackCpuStateData::Interrupt(interrupt_frame) => Self::save_interrupted(old_proc, interrupt_frame),
-                StackCpuStateData::Syscall(syscall_data) => Self::save_syscalled(old_proc, syscall_data),
-            }
+    fn save_current_proc(&mut self, old_proc: &Arc<ProcessData>, on_stack_data: &StackCpuStateData) {
+        let old_proc = &mut old_proc.get();
+        match on_stack_data {
+            StackCpuStateData::Interrupt(interrupt_frame) => Self::save_interrupted(old_proc, interrupt_frame),
+            StackCpuStateData::Syscall(syscall_data) => Self::save_syscalled(old_proc, syscall_data),
         }
     }
 
-    fn save_interrupted(old_proc: &mut ProcessData, interrupt_frame: &InterruptProcessorState) {
-        old_proc.cpu_state = CpuStateType::Interrupt(interrupt_frame.clone());
+    fn save_interrupted(old_proc: &ProcessData, interrupt_frame: &InterruptProcessorState) {
+        old_proc.set_cpu_data(CpuStateType::Interrupt(interrupt_frame.clone()));
     }
 
-    fn save_syscalled(old_proc: &mut ProcessData, syscall_data: &SyscallCpuState) {
-        old_proc.cpu_state = CpuStateType::Syscall((syscall_data.clone(), CpuLocals::get().userspace_stack_base));
+    fn save_syscalled(old_proc: &ProcessData, syscall_data: &SyscallCpuState) {
+        old_proc.set_cpu_data(CpuStateType::Syscall((syscall_data.clone(), CpuLocals::get().userspace_stack_base)));
     }
 
     ///this function is preferred to avoid locking the mutex twice
     pub fn release_and_schedule(
         &mut self,
-        pid: Pid,
+        curr_proc: &Option<Arc<ProcessData>>,
         sleep: Option<SleepCondition>,
         on_stack_data: &StackCpuStateData,
-    ) -> Option<&ProcessData> {
-        if pid.0 != 0 {
-            self.save_current_proc(pid, on_stack_data);
-            self.release_process(pid, sleep);
+    ) -> Option<Arc<ProcessData>> {
+        if let Some(proc_data) = curr_proc {
+            self.save_current_proc(&proc_data, on_stack_data);
+            self.release_process(proc_data.get().pid(), sleep);
         }
         self.schedule()
+    }
+
+    pub fn get_proc(&mut self, pid: Pid) -> Option<Arc<ProcessData>> {
+        self.tasks.get_mut(&pid).cloned()
     }
 }

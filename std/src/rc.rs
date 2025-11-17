@@ -1,64 +1,72 @@
-use core::fmt::Debug;
+use core::{cell::Cell, fmt::Debug, marker::Unsize, ops::CoerceUnsized, ptr::NonNull};
 
 use alloc::boxed::Box;
 
-#[derive(Debug)]
-struct RcInner<T> {
+#[repr(C)]
+struct RcInner<T: ?Sized> {
+    count: Cell<u64>,
     data: T,
-    count: u64,
 }
 
 pub struct Rc<T>
 where
-    T: 'static,
+    T: 'static + ?Sized,
 {
-    inner: &'static mut RcInner<T>,
+    inner: NonNull<RcInner<T>>,
 }
 
 impl<T> Rc<T> {
     pub fn new(data: T) -> Self {
+        let address = Box::into_raw(Box::new(RcInner {
+            data,
+            count: Cell::new(1),
+        })) as usize;
+        Self {
+            inner: NonNull::new(address as *mut RcInner<T>).unwrap(),
+        }
+    }
+}
+
+impl<T: ?Sized> Rc<T> {
+    pub fn get(&self) -> &T {
+        unsafe { &self.inner.as_ref().data }
+    }
+}
+
+impl<T: ?Sized> Drop for Rc<T> {
+    #[inline]
+    fn drop(&mut self) {
         unsafe {
-            let address = Box::into_raw(Box::new(RcInner { data, count: 1 })) as usize;
-            Self {
-                inner: &mut *(address as *mut RcInner<T>),
+            let cnt = self.inner.as_ref().count.get();
+            self.inner.as_ref().count.set(cnt - 1);
+            if cnt == 1 {
+                let address = self.inner.as_ptr();
+                let _ = Box::from_raw(address);
             }
         }
     }
-
-    pub fn get(&self) -> &T {
-        &self.inner.data
-    }
 }
 
-impl<T> Drop for Rc<T> {
-    #[inline]
-    fn drop(&mut self) {
-        self.inner.count -= 1;
-        if self.inner.count == 0 {
-            let address = self.inner as *mut RcInner<T>;
-            let _ = unsafe { Box::from_raw(address) };
+impl<T: Debug + ?Sized> Debug for Rc<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        unsafe {
+            f.debug_struct("Rc")
+                .field("data", &&self.inner.as_ref().data)
+                .field("ref_count", &self.inner.as_ref().count)
+                .finish()
         }
     }
 }
 
-impl<T: Debug> Debug for Rc<T> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("Rc")
-            .field("data", &self.inner.data)
-            .field("ref_count", &self.inner.count)
-            .finish()
-    }
-}
-
-impl<T> Clone for Rc<T> {
+impl<T: ?Sized> Clone for Rc<T> {
     #[inline]
     fn clone(&self) -> Self {
         unsafe {
-            let new_rc = Self {
-                inner: crate::mem_utils::get_at_virtual_addr(crate::mem_utils::VirtAddr(self.inner as *const _ as u64)),
-            };
-            new_rc.inner.count += 1;
-            new_rc
+            self.inner.as_ref().count.set(self.inner.as_ref().count.get() + 1);
         }
+
+        Self { inner: self.inner }
     }
 }
+
+impl<T: ?Sized, U: ?Sized> CoerceUnsized<Rc<U>> for Rc<T> where T: Unsize<U> {}

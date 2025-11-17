@@ -1,4 +1,4 @@
-use super::context_switch::no_ret_context_switch;
+use super::{context_switch::no_ret_context_switch, process_data::StackCpuStateData};
 use crate::{interrupts::enable_interrupts, msr, proc::syscall};
 
 mod handlers;
@@ -129,7 +129,7 @@ extern "C" fn handler(args_rsp: u64) -> ! {
         _ => {}
     }
 
-    no_ret_context_switch(super::StackCpuStateData::Syscall(state));
+    no_ret_context_switch(StackCpuStateData::Syscall(state));
 }
 
 #[derive(Debug, Clone)]

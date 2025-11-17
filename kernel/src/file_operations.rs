@@ -1,7 +1,7 @@
 use std::{boxed::Box, mem_utils::get_at_physical_addr, println, printlnc, string::String, vec::Vec};
 
 use crate::{
-    drivers::ahci, memory::PAGE_TREE_ALLOCATOR, task_runner::block_task, vfs::{self, InodeType}
+    memory::PAGE_TREE_ALLOCATOR, task_runner::block_task, vfs::{self, file::FileFlags, InodeType}
 };
 
 const BEE_MOVIE_SCRIPT_START: &str = include_str!("./bee_movie_script.txt");
@@ -68,10 +68,10 @@ impl ReadDirOperation {
     }
 
     fn execute(&self) {
-        let path = vfs::resolve_path(self.folder_name, "/");
-        let entries = block_task(Box::pin(vfs::get_dir_entries((&path).into())));
-        println!("Read dir: {}", self.folder_name);
-        println!("Dir entries: {:?}", entries);
+        // let path = vfs::resolve_path(self.folder_name);
+        // let entries = block_task(Box::pin(vfs::get_dir_entries((&path).into())));
+        // println!("Read dir: {}", self.folder_name);
+        // println!("Dir entries: {:?}", entries);
     }
 }
 
@@ -81,12 +81,12 @@ impl CreateFileOperation {
     }
 
     fn execute(&self) {
-        let split_index = self.file_name.rfind('/').unwrap();
-        let (parent_path, file_name) = self.file_name.split_at(split_index + 1); //slash is in the
-        println!("Creating file: {}", self.file_name);
-        let path = vfs::resolve_path(parent_path, "/");
-        block_task(Box::pin(vfs::create_file((&path).into(), file_name, InodeType::new_file(0))));
-        println!("Created file: {:?}", self.file_name);
+        // let split_index = self.file_name.rfind('/').unwrap();
+        // let (parent_path, file_name) = self.file_name.split_at(split_index + 1); //slash is in the
+        // println!("Creating file: {}", self.file_name);
+        // let path = vfs::resolve_path(parent_path);
+        // block_task(Box::pin(vfs::create_file((&path).into(), file_name, InodeType::new_file(0))));
+        // println!("Created file: {:?}", self.file_name);
     }
 }
 
@@ -107,7 +107,7 @@ impl WriteFileOperation {
     }
 
     fn execute(&self) {
-        let path = vfs::resolve_path(self.file_name, "/");
+        let path = vfs::resolve_path(self.file_name);
 
         let content = self.content.as_bytes();
         let mut frames = Vec::new();
@@ -135,8 +135,11 @@ impl WriteFileOperation {
             }
         }
 
+        let open_file_flags = FileFlags::new().with_write(true);
+        let mut file = block_task(Box::pin(vfs::open_file((&path).into(), None, open_file_flags))).unwrap();
+
         println!("Writing file: {} of size: {}", self.file_name, content.len());
-        block_task(Box::pin(vfs::write_file((&path).into(), &frames, self.offset, self.content.len() as u64)));
+        block_task(Box::pin(vfs::write_file(&mut file, &frames, self.offset, self.content.len() as u64))).unwrap();
 
         for frame in frames {
             unsafe { crate::memory::physical_allocator::deallocate_frame(frame) };
@@ -155,11 +158,12 @@ impl CreateFolderOperation {
     }
 
     fn execute(&self) {
-        let split_index = self.folder_name.rfind('/').unwrap();
-        let (parent_path, file_name) = self.folder_name.split_at(split_index + 1); //slash is in the
-        println!("Creating folder: {}", self.folder_name);
-        let path = vfs::resolve_path(parent_path, "/");
-        block_task(Box::pin(vfs::create_file((&path).into(), file_name, InodeType::new_file(0))));
+        todo!();
+        // let split_index = self.folder_name.rfind('/').unwrap();
+        // let (parent_path, file_name) = self.folder_name.split_at(split_index + 1); //slash is in the
+        // println!("Creating folder: {}", self.folder_name);
+        // let path = vfs::resolve_path(parent_path, "/");
+        // block_task(Box::pin(vfs::create_file((&path).into(), file_name, InodeType::new_file(0))));
     }
 }
 
@@ -195,8 +199,7 @@ impl ReadFileOperation {
     }
 
     fn execute(&self) {
-        let time_start = std::time::Instant::now();
-        let path = vfs::resolve_path(self.file_name, "/");
+        let path = vfs::resolve_path(self.file_name);
         let real_offset = self.offset & !4095;
         let real_length = self.length - real_offset + self.offset;
         let mut buffer = Vec::with_capacity(real_length.div_ceil(4096) as usize);
@@ -204,7 +207,11 @@ impl ReadFileOperation {
             let frame = crate::memory::physical_allocator::allocate_frame();
             buffer.push(frame);
         }
-        block_task(Box::pin(vfs::read_file((&path).into(), &buffer, real_offset, real_length)));
+
+        let open_file_flags = FileFlags::new().with_read(true);
+        let mut file = block_task(Box::pin(vfs::open_file((&path).into(), None, open_file_flags))).unwrap();
+
+        block_task(Box::pin(vfs::read_file(&mut file, &buffer, real_offset, real_length))).unwrap();
         let mut final_data = Vec::with_capacity(self.length as usize);
         let mut frame_ptr = (self.offset as usize) & 0xFFF;
         for (index, frame) in buffer.iter().enumerate() {
@@ -222,11 +229,6 @@ impl ReadFileOperation {
             unsafe { crate::memory::physical_allocator::deallocate_frame(*frame) };
         }
     
-        let time_end = std::time::Instant::now();
-        println!(
-            "Time taken to read file: {} us",
-            (time_end - time_start).as_micros()
-        );
 
         println!(
             "Read file: {} at offset {} and size of read {}",

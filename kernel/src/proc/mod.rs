@@ -12,17 +12,18 @@ use std::{
     sync::{arc::Arc, no_int_spinlock::NoIntSpinlock},
     vec::Vec,
 };
-use syscall::SyscallCpuState;
 
-use crate::{interrupts::InterruptProcessorState, memory::paging::PageTree};
+use crate::memory::paging::PageTree;
 
 mod context;
 mod context_switch;
 mod dispatcher;
 mod loaders;
+mod process_data;
 mod scheduler;
 mod syscall;
 pub use context_switch::{context_switch, interrupt_context_switch};
+pub use process_data::{ProcessData, StackCpuStateData};
 
 static SCHEDULER: NoIntSpinlock<MaybeUninit<Scheduler>> = NoIntSpinlock::new(MaybeUninit::uninit());
 
@@ -32,27 +33,6 @@ pub static mut PROC_INITIALIZED: bool = false;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Pid(pub u32);
-
-///Describes the process metadata like memory mapping, open files, etc.
-#[derive(Debug)]
-struct ProcessData {
-    pid: Pid,
-    is_32_bit: bool,
-    cmdline: Box<str>,
-    memory_context: Arc<MemoryContext>,
-    cpu_state: CpuStateType,
-}
-
-#[derive(Debug)]
-enum CpuStateType {
-    Interrupt(InterruptProcessorState),
-    Syscall((SyscallCpuState, u64)), //cpu state + userspace stack pointer
-}
-
-pub enum StackCpuStateData<'a> {
-    Interrupt(&'a InterruptProcessorState),
-    Syscall(&'a SyscallCpuState),
-}
 
 /// notes:
 /// page tree root should always be unique
@@ -80,13 +60,15 @@ pub fn init() {
     create_fallback_process();
     loaders::init_process_loaders();
 
-    let prime_finder = loaders::load_process(crate::PRIME_FINDER, "[prime_finder]".to_string().into_boxed_str()).expect("Failed to load test executable prime finders");
+    let prime_finder = loaders::load_process(crate::PRIME_FINDER, "[prime_finder]".to_string().into_boxed_str())
+        .expect("Failed to load test executable prime finders");
     for _i in 0..10 {
         let pid = create_process(&prime_finder);
         println!("Created process with pid: {:?}", pid);
     }
 
-    let time_printer = loaders::load_process(crate::TIME_PRINTER, "[time_printer]".to_string().into_boxed_str()).expect("Failed to load test executable time printer");
+    let time_printer = loaders::load_process(crate::TIME_PRINTER, "[time_printer]".to_string().into_boxed_str())
+        .expect("Failed to load test executable time printer");
     for _i in 0..10 {
         let pid = create_process(&time_printer);
         println!("Created process with pid: {:?}", pid);
@@ -107,6 +89,12 @@ pub fn set_proc_initialized() {
     }
     let locals = crate::acpi::cpu_locals::CpuLocals::get();
     locals.proc_initialized = true;
+}
+
+pub fn get_proc(pid: Pid) -> Option<Arc<ProcessData>> {
+    let mut scheduler_lock = SCHEDULER.lock();
+    let scheduler = unsafe { scheduler_lock.assume_init_mut() };
+    scheduler.get_proc(pid)
 }
 
 //for now this only marks the process as stopping. If it was in running state before, return,
