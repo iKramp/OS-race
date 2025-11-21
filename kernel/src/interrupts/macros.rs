@@ -16,35 +16,36 @@ macro_rules! handler {
                 //
                 //pre-pushed values
                 //
-                //ss (64 bit)
-                //rsp
-                //rflags
-                //cs (64 bit)
-                //rip
+                //ss (64 bit) //rsp + 21 * 8
+                //rsp //rsp + 20 * 8
+                //rflags //rsp + 19 * 8
+                //cs (64 bit) //rsp + 18 * 8
+                //rip //rsp + 17 * 8
                 //
                 //possibly error code
 
+                "sub rsp, 17 * 8",
                 handler!(@if_not_flag has_code, $($flag)* {
-                    "push 0"
+                    "mov qword ptr [rsp + 16 * 8], 0"
                 }),
 
                 //save all general purpose registers
-                "push rax",
-                "push rbx",
-                "push rcx",
-                "push rdx",
-                "push rsi",
-                "push rdi",
-                "push rbp",
+                "mov qword ptr [rsp + 15 * 8], rax",
+                "mov qword ptr [rsp + 14 * 8], rbx",
+                "mov qword ptr [rsp + 13 * 8], rcx",
+                "mov qword ptr [rsp + 12 * 8], rdx",
+                "mov qword ptr [rsp + 11 * 8], rsi",
+                "mov qword ptr [rsp + 10 * 8], rdi",
+                "mov qword ptr [rsp + 9 * 8], rbp",
                 //not pushing stack pointer, that's already changed
-                "push r8",
-                "push r9",
-                "push r10",
-                "push r11",
-                "push r12",
-                "push r13",
-                "push r14",
-                "push r15",
+                "mov qword ptr [rsp + 8 * 8], r8",
+                "mov qword ptr [rsp + 7 * 8], r9",
+                "mov qword ptr [rsp + 6 * 8], r10",
+                "mov qword ptr [rsp + 5 * 8], r11",
+                "mov qword ptr [rsp + 4 * 8], r12",
+                "mov qword ptr [rsp + 3 * 8], r13",
+                "mov qword ptr [rsp + 2 * 8], r14",
+                "mov qword ptr [rsp + 1 * 8], r15",
 
 
                 handler!(@if_else_flag slow_swap, $($flag)*, {
@@ -56,26 +57,26 @@ macro_rules! handler {
                         js 3f
 
                         swapgs
-                        push 0x1 //swapped
+                        mov qword ptr [rsp], 0x1 //swapped
                         jmp 4f
                         3:
-                        push 0x0 //not swapped
+                        mov qword ptr [rsp], 0x0 //not swapped
                         4:
                     "
                 } {
                     //mov pushed cs to register by offsetting from rsp
                     "
                         xor rax, rax
-                        mov rax, [rsp + 8 * 17] //cs
-                                                //skip swap if rax == 8
+                        mov rax, qword ptr [rsp + 8 * 18] //cs
+                                                          //skip swap if rax == 8
                         cmp rax, 8
                         je 3f
 
                         swapgs
-                        push 0x1 //swapped
+                        mov qword ptr [rsp], 0x1 //swapped
                         jmp 4f
                         3:
-                        push 0x0 //not swapped
+                        mov qword ptr [rsp], 0x0 //not swapped
                         4:
                     "
                 }),
@@ -84,13 +85,9 @@ macro_rules! handler {
                 "add rdi, 8", //start of proc data
 
                 handler!(@if_else_flag slow_swap, $($flag)*, {
-                    "
-                        mov rsi, 1 //atomic interrupt
-                    "
+                    "mov rsi, 1 //atomic interrupt"
                 } {
-                    "
-                        mov rsi, 0 //not atomic interrupt
-                    "
+                    "mov rsi, 0 //not atomic interrupt"
                 }),
 
                 "lea rdx, [rip + {0}]", //main handler
@@ -98,31 +95,31 @@ macro_rules! handler {
 
                 "call {1}",
 
-                "pop rax", //gs was swapped
+                "mov rax, qword ptr [rsp]", //check if we swapped
                 "cmp rax, 0",
                 "je 5f",
 
                 "swapgs",
                 "5:",
 
-                "pop r15",
-                "pop r14",
-                "pop r13",
-                "pop r12",
-                "pop r11",
-                "pop r10",
-                "pop r9",
-                "pop r8",
-                "pop rbp",
-                "pop rdi",
-                "pop rsi",
-                "pop rdx",
-                "pop rcx",
-                "pop rbx",
-                "pop rax",
+                "mov r15, qword ptr [rsp + 1 * 8]",
+                "mov r14, qword ptr [rsp + 2 * 8]",
+                "mov r13, qword ptr [rsp + 3 * 8]",
+                "mov r12, qword ptr [rsp + 4 * 8]",
+                "mov r11, qword ptr [rsp + 5 * 8]",
+                "mov r10, qword ptr [rsp + 6 * 8]",
+                "mov r9,  qword ptr [rsp + 7 * 8]",
+                "mov r8,  qword ptr [rsp + 8 * 8]",
+                "mov rbp, qword ptr [rsp + 9 * 8]",
+                "mov rdi, qword ptr [rsp + 10 * 8]",
+                "mov rsi, qword ptr [rsp + 11 * 8]",
+                "mov rdx, qword ptr [rsp + 12 * 8]",
+                "mov rcx, qword ptr [rsp + 13 * 8]",
+                "mov rbx, qword ptr [rsp + 14 * 8]",
+                "mov rax, qword ptr [rsp + 15 * 8]",
 
-                //remove err code from stack
-                "add rsp, 8",
+                //restore stack
+                "add rsp, 17 * 8",
 
                 "iretq",
                 sym $name,

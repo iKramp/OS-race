@@ -3,7 +3,7 @@ use std::{format, println, string::ToString};
 
 use crate::{acpi::cpu_locals, proc::syscall::SyscallArgs};
 
-pub extern "C" fn console_write(args: &SyscallArgs) -> bool {
+pub fn console_write(args: &SyscallArgs) -> bool {
     let str_ptr = unsafe { core::ffi::c_str::CStr::from_ptr(args.arg1 as *const c_char) };
     let rust_str = str_ptr.to_str();
     let cpu_locals = cpu_locals::CpuLocals::get();

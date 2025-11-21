@@ -28,7 +28,7 @@ impl VfsAdpater {
 
 #[async_trait::async_trait]
 impl VfsAdapterTrait for VfsAdpater {
-    async fn read(&self, inode: super::InodeIndex, offset_bytes: u64, size_bytes: u64, buffer: &[std::mem_utils::PhysAddr]) {
+    async fn read(&self, inode: super::InodeIndex, offset_bytes: u64, size_bytes: u64, buffer: &[std::mem_utils::PhysAddr]) -> u64 {
         match inode & MASK {
             PROC_NAMESPACE => FileSystem::read(&self.proc, inode, offset_bytes, size_bytes, buffer).await,
             _ => unreachable!(),
@@ -71,7 +71,7 @@ impl VfsAdapterTrait for VfsAdpater {
 
 #[async_trait::async_trait]
 pub trait VfsAdapterTrait: Debug + Send + Sync {
-    async fn read(&self, inode: InodeIndex, offset_bytes: u64, size_bytes: u64, buffer: &[PhysAddr]);
+    async fn read(&self, inode: InodeIndex, offset_bytes: u64, size_bytes: u64, buffer: &[PhysAddr]) -> u64;
     async fn read_dir(&self, inode: InodeIndex) -> Box<[DirEntry]>;
     async fn write(&self, inode: InodeIndex, offset: u64, size: u64, buffer: &[PhysAddr]) -> Inode;
     async fn stat(&self, inode: InodeIndex) -> Inode;
@@ -79,8 +79,8 @@ pub trait VfsAdapterTrait: Debug + Send + Sync {
 
 #[async_trait::async_trait]
 impl<T: VfsAdapterTrait> FileSystem for T {
-    async fn read(&self, inode: InodeIndex, offset_bytes: u64, size_bytes: u64, buffer: &[PhysAddr]) {
-        VfsAdapterTrait::read(self, inode, offset_bytes, size_bytes, buffer).await;
+    async fn read(&self, inode: InodeIndex, offset_bytes: u64, size_bytes: u64, buffer: &[PhysAddr]) -> u64 {
+        VfsAdapterTrait::read(self, inode, offset_bytes, size_bytes, buffer).await
     }
 
     async fn read_dir(&self, inode: InodeIndex) -> Box<[DirEntry]> {

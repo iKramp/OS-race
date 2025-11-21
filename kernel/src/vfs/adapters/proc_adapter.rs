@@ -7,7 +7,7 @@ pub(super) struct ProcAdapter;
 
 #[async_trait::async_trait]
 impl VfsAdapterTrait for ProcAdapter {
-    async fn read(&self, _inode: crate::vfs::InodeIndex, _offset_bytes: u64, _size_bytes: u64, _buffer: &[std::mem_utils::PhysAddr]) {
+    async fn read(&self, _inode: crate::vfs::InodeIndex, _offset_bytes: u64, _size_bytes: u64, _buffer: &[std::mem_utils::PhysAddr]) -> u64 {
         todo!()
     }
 

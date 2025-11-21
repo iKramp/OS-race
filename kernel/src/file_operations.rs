@@ -3,7 +3,7 @@ use std::{boxed::Box, mem_utils::get_at_physical_addr, println, printlnc, string
 use crate::{
     memory::PAGE_TREE_ALLOCATOR,
     task_runner::{add_task, block_task},
-    vfs::{self, file::FileFlags, InodeType},
+    vfs::{self, file::FileFlags},
 };
 
 const BEE_MOVIE_SCRIPT_START: &str = include_str!("./bee_movie_script.txt");
@@ -223,7 +223,7 @@ impl ReadFileOperation {
             let open_file_flags = FileFlags::new().with_read(true);
             let mut file = vfs::open_file((&path).into(), None, open_file_flags).await.unwrap();
 
-            vfs::read_file(&mut file, &buffer, real_offset, real_length).await.unwrap();
+            vfs::read_file(&mut file, &buffer, real_length).await.unwrap();
             let mut final_data = Vec::with_capacity(length as usize);
             let mut frame_ptr = (offset as usize) & 0xFFF;
             for (index, frame) in buffer.iter().enumerate() {
@@ -251,6 +251,6 @@ impl ReadFileOperation {
             println!("File content as string:");
             printlnc!((255, 200, 100), "{}", string);
         };
-        add_task(Box::pin(task));
+        add_task(Box::pin(task), None);
     }
 }

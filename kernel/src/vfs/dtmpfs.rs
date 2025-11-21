@@ -50,7 +50,7 @@ impl FileSystemFactory for DtmpfsFactory {
 impl FileSystem for Dtmpfs {
     async fn unmount(&self) {}
 
-    async fn read(&self, _inode: InodeIndex, _offset_bytes: u64, _size_bytes: u64, _buffer: &[std::mem_utils::PhysAddr]) {
+    async fn read(&self, _inode: InodeIndex, _offset_bytes: u64, _size_bytes: u64, _buffer: &[std::mem_utils::PhysAddr]) -> u64 {
         panic!("Reading is not supported in dtmpfs");
     }
 

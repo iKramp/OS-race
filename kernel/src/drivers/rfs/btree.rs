@@ -49,6 +49,7 @@ impl BtreeNode {
         partition.write(sector, BLOCK_SIZE_SECTORS, &[phys_addr]).await;
     }
 
+    #[allow(clippy::new_ret_no_self)]
     pub fn new() -> VirtAddr {
         let virt_ptr = unsafe { PAGE_TREE_ALLOCATOR.allocate(None, false) };
         unsafe {
@@ -867,7 +868,7 @@ impl BtreeNode {
         if unsafe { *(*(parent.0 as *const BtreeNode) ).children.get_unchecked(self_index + 1) } == 0 {
             return false;
         }
-        let right_sibling = unsafe { fs_data.get_node((&*(parent.0 as *const BtreeNode)).children[self_index + 1]).await };
+        let right_sibling = unsafe { fs_data.get_node((*(parent.0 as *const BtreeNode)).children[self_index + 1]).await };
         let right_key = BtreeNode::get_key(parent, self_index);
 
         let sibling_has_elements = BtreeNode::get_key(right_sibling.1, 170).index != 0;

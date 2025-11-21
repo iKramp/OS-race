@@ -19,7 +19,7 @@ use crate::{
 
 use super::info::ContextInfo;
 
-const DEFAULT_PROC_STACK_SIZE: usize = 0x1000; // 4KB
+const DEFAULT_PROC_STACK_SIZE: usize = 0x4000; // 8KB
 
 pub fn create_process(context_info: &ContextInfo) -> Pid {
     let pid = Pid(PROCESS_ID_COUNTER.fetch_add(1, core::sync::atomic::Ordering::Relaxed));

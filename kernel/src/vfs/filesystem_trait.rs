@@ -15,7 +15,7 @@ pub trait FileSystemFactory {
 pub trait FileSystem: Debug + Send + Sync {
     async fn unmount(&self);
     ///Offset must be page aligned
-    async fn read(&self, inode: InodeIndex, offset_bytes: u64, size_bytes: u64, buffer: &[PhysAddr]);
+    async fn read(&self, inode: InodeIndex, offset_bytes: u64, size_bytes: u64, buffer: &[PhysAddr]) -> u64;
     async fn read_dir(&self, inode: InodeIndex) -> Box<[DirEntry]>;
     ///Offset must be page aligned. Returns the new inode
     async fn write(&self, inode: InodeIndex, offset: u64, size: u64, buffer: &[PhysAddr]) -> Inode;

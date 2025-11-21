@@ -1,4 +1,3 @@
-use core::borrow::BorrowMut;
 use std::{boxed::Box, collections::btree_map::BTreeMap, lock_w_info, printlnc, sync::{lock_info::LockLocationInfo, no_int_spinlock::{NoIntSpinlock, NoIntSpinlockGuard}}, vec::Vec};
 
 use super::{DeviceId, Inode, InodeIdentifier, InodeIdentifierChain, ResolvedPathBorrowed, VFS};

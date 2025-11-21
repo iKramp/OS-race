@@ -1,4 +1,4 @@
-use super::{context_switch::no_ret_context_switch, process_data::StackCpuStateData, scheduler::save_and_release_current};
+use super::{context_switch::no_ret_context_switch, process_data::StackCpuStateData, scheduler::{save_and_release_current, SleepCondition}};
 use crate::{interrupts::enable_interrupts, msr, proc::syscall};
 
 mod handlers;
@@ -80,10 +80,10 @@ extern "C" fn handler_wrapper() -> ! {
         //push args too
         "sub rsp, 8*7",
         "mov [rsp + 8*6], rax", //syscall number
-        "mov [rsp + 8*5], rdx",
-        "mov [rsp + 8*4], r9",
-        "mov [rsp + 8*3], r8",
-        "mov [rsp + 8*2], r10",
+        "mov [rsp + 8*5], r9",
+        "mov [rsp + 8*4], r8",
+        "mov [rsp + 8*3], r10",
+        "mov [rsp + 8*2], rdx",
         "mov [rsp + 8*1], rsi",
         "mov [rsp + 8*0], rdi",
 
@@ -104,7 +104,7 @@ extern "C" fn handler(args_rsp: u64) -> ! {
     let args_ptr = args_rsp as *mut u64;
     let state_ptr = unsafe { args_ptr.byte_add(core::mem::size_of::<SyscallArgs>()).sub(2) }; //2 regs overlap
 
-    let mut args = unsafe { &mut *(args_ptr as *mut SyscallArgs) };
+    let args = unsafe { &mut *(args_ptr as *mut SyscallArgs) };
     let state = unsafe { &*(state_ptr as *const SyscallCpuState) };
 
     let locals = crate::acpi::cpu_locals::CpuLocals::get();
@@ -130,8 +130,13 @@ extern "C" fn handler(args_rsp: u64) -> ! {
         _ => {false}
     };
 
+    let sleep_cond = if task_sleep {
+        Some(SleepCondition::Event)
+    } else {
+        None
+    };
 
-    save_and_release_current(curr_proc, &StackCpuStateData::Syscall(state), None);
+    save_and_release_current(curr_proc, &StackCpuStateData::Syscall(state), sleep_cond);
     no_ret_context_switch();
 }
 

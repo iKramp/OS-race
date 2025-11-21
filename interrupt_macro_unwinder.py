@@ -20,11 +20,13 @@ class InterruptUnwinder(Unwinder):
 
         # load the saved return rip and stack pointer from interrupt_frame
         try:
-            saved_rsp = (rsp + (20 * 8)).cast(u64_ptr).dereference()
-            saved_rip = (rsp + (17 * 8)).cast(u64_ptr).dereference()
+            saved_rsp = (rsp + (21 * 8)).cast(u64_ptr).dereference()
+            saved_rip = (rsp + (18 * 8)).cast(u64_ptr).dereference()
         except:
             print("Could not extract saved RIP and RSP from current rsp.")
             return None
+
+        print(f"Unwinding interrupt frame at RIP={int(saved_rip):#x}, RSP={int(saved_rsp):#x}")
 
         # Create the unwind info for the caller frame
         fid = FrameId(saved_rsp, saved_rip)

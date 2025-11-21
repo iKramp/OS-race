@@ -1,8 +1,8 @@
 use crate::{
-    acpi::{cpu_locals::CpuLocals, LAPIC_REGISTERS},
+    acpi::{LAPIC_REGISTERS, cpu_locals::CpuLocals},
     interrupts::gdt::GlobalDescriptorTable,
     memory::paging::PageTree,
-    proc::{context_switch, StackCpuStateData},
+    proc::context_switch,
     utils::{byte_from_port, byte_to_port},
 };
 #[allow(unused_imports)] //they are used in macros

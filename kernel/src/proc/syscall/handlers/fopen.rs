@@ -1,4 +1,4 @@
-use std::{sync::arc::Arc, boxed::Box, string::ToString, vec::Vec};
+use std::{boxed::Box, string::ToString, sync::arc::Arc, vec::Vec};
 
 use crate::{proc::{self, syscall::SyscallArgs, ProcessData}, task_runner, vfs::{self, file::FileFlags, InodeIdentifierChain}};
 
@@ -30,26 +30,19 @@ pub fn fopen(args: &mut SyscallArgs, proc: &Arc<ProcessData>) -> bool {
     };
 
     let task = async move {
-        let ret_val = 0;
         let resolved_path = vfs::resolve_path(&path);
         let file_flags = FileFlags(ftags as u8);
         let handle = vfs::open_file((&resolved_path).into(), file_source, file_flags).await;
+        let Some(proc) = crate::proc::get_proc(pid) else {
+            return; //proc was killed
+        };
         match handle {
             Ok(handle) => {
-                let Some(proc) = crate::proc::get_proc(pid) else {
-                    return; //proc was killed
-                };
-                
                 let proc_lock = proc.get();
-                proc_lock.open_file_handle(handle);
-                proc_lock.set_syscall_return(ret_val, 0).unwrap();
-
+                let f_descriptor = proc_lock.open_file_handle(handle);
+                proc_lock.set_syscall_return(f_descriptor, 0).unwrap();
             },
             Err(_) => {
-                let Some(proc) = crate::proc::get_proc(pid) else {
-                    return; //proc was killed
-                };
-                
                 let proc_lock = proc.get();
                 proc_lock.set_syscall_return(u64::MAX, 1).unwrap();
             }

@@ -1,4 +1,4 @@
-use std::{boxed::Box, format, vec::Vec};
+use std::{boxed::Box, vec::Vec};
 
 ///A wrapper type for path, that have been resolved to a list of path components
 ///That is, the path starts from root and does not contain any "." or ".." components

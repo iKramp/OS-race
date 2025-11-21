@@ -40,11 +40,12 @@ mod utils;
 mod vfs;
 mod vga;
 use limine::LIMINE_BOOTLOADER_REQUESTS;
-use task_runner::{block_task, process_tasks};
-use vfs::{file::FileFlags, ResolvedPath};
+use task_runner::block_task;
+use vfs::ResolvedPath;
 
 const PRIME_FINDER: &[u8] = include_bytes!("../../assets/prime_finder");
 const TIME_PRINTER: &[u8] = include_bytes!("../../assets/time_printer");
+const FILE_READER: &[u8] = include_bytes!("../../assets/file_reader");
 
 #[unsafe(no_mangle)]
 extern "C" fn _start() -> ! {
@@ -80,11 +81,14 @@ extern "C" fn _start() -> ! {
     pci::enumerate_devices();
     vfs::init();
 
-    // let res = block_task(Box::pin(vfs::mount_blkdev_partition(cmd_args.root_partition, ResolvedPath::root())));
-    // if let Err(e) = res {
-    //     println!("{}", e);
-    //     panic!("Failed to mount root partition");
-    // }
+    let res = block_task(Box::pin(vfs::mount_blkdev_partition(
+        cmd_args.root_partition,
+        ResolvedPath::root(),
+    )));
+    if let Err(e) = res {
+        println!("{}", e);
+        panic!("Failed to mount root partition");
+    }
     //
     // let path = vfs::resolve_path("/");
     // let file_open_flags = FileFlags::new_with_flags(true, false, false, false);

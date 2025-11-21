@@ -570,13 +570,12 @@ impl Rfs {
         }
     }
 
-    async unsafe fn read_locked(&self, inode: InodeIndex, offset_bytes: u64, size_bytes: u64, buffer: &[PhysAddr]) {
+    async unsafe fn read_locked(&self, inode: InodeIndex, offset_bytes: u64, size_bytes: u64, buffer: &[PhysAddr]) -> u64 {
         if size_bytes == 0 {
-            return;
+            return 0;
         }
-        assert!(buffer.len() == (offset_bytes + size_bytes).div_ceil(4096) as usize);
+        assert!(buffer.len() == (size_bytes).div_ceil(4096) as usize);
         assert!(offset_bytes % 4096 == 0);
-        let aligned_size = size_bytes.div_ceil(4096) * 4096;
     
         let inode_tree_lock = self.inode_lock.lock().await;
 
@@ -586,12 +585,26 @@ impl Rfs {
         let (inode_block, inode_block_binding) = get_working_block();
         self.partition.read(inode_block_index as usize * 8, 1, &[inode_block]).await;
         let inode_data: &mut Inode = unsafe { get_at_virtual_addr(inode_block_binding) };
-        assert!(size_bytes + offset_bytes <= inode_data.size.size());
+
+        if offset_bytes >= inode_data.size.size() {
+            unsafe { PAGE_TREE_ALLOCATOR.deallocate(inode_block_binding) };
+            return 0;
+        }
+        let max_size = inode_data.size.size() - offset_bytes;
+        let size_bytes = u64::min(size_bytes, max_size);
+        let aligned_size = size_bytes.div_ceil(4096) * 4096;
+        let ret_size = u64::min(max_size, aligned_size);
+
+        if aligned_size == 0 {
+            unsafe { PAGE_TREE_ALLOCATOR.deallocate(inode_block_binding) };
+            return 0;
+        }
+
         let mut levels = inode_data.size.ptr_levels();
         if levels == 0 {
             self.partition.read(inode_block_index as usize * 8 + 1, 7, buffer).await;
             unsafe { PAGE_TREE_ALLOCATOR.deallocate(inode_block_binding) };
-            return;
+            return ret_size;
         }
         //read first level pointers
         self.partition.read(inode_block_index as usize * 8 + 1, 7, &[inode_block]).await;
@@ -632,6 +645,7 @@ impl Rfs {
             ).await;
         }
         unsafe { PAGE_TREE_ALLOCATOR.deallocate(inode_block_binding) };
+        ret_size
     }
 
     pub async fn write_locked(&self, inode: InodeIndex, offset: u64, size: u64, buffer: &[PhysAddr]) -> vfs::Inode {
@@ -803,11 +817,12 @@ impl FileSystem for Rfs {
         self.clean_inode_tree_cache().await;
     }
 
-    async fn read(&self, inode: InodeIndex, offset_bytes: u64, size_bytes: u64, buffer: &[PhysAddr]) {
+    async fn read(&self, inode: InodeIndex, offset_bytes: u64, size_bytes: u64, buffer: &[PhysAddr]) -> u64 {
         let file_lock = self.get_file_lock(inode as u32);
         let _read_guard = file_lock.lock_read().await;
-        unsafe { self.read_locked(inode, offset_bytes, size_bytes, buffer).await };
+        let bytes_read = unsafe { self.read_locked(inode, offset_bytes, size_bytes, buffer).await };
         drop(_read_guard);
+        bytes_read
     }
 
     async fn write(&self, inode: InodeIndex, offset: u64, size: u64, buffer: &[PhysAddr]) -> vfs::Inode {

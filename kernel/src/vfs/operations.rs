@@ -215,7 +215,7 @@ pub async fn write_file(file_handle: &mut FileHandle, content: &[PhysAddr], offs
     Ok(())
 }
 
-pub async fn read_file(file_handle: &mut FileHandle, buffer: &[PhysAddr], size: u64) -> Result<(), String> {
+pub async fn read_file(file_handle: &mut FileHandle, buffer: &[PhysAddr], size: u64) -> Result<u64, String> {
     if !file_handle.file_flags.read() {
         return Err("File opened in write-only mode".to_string());
     }
@@ -230,8 +230,8 @@ pub async fn read_file(file_handle: &mut FileHandle, buffer: &[PhysAddr], size: 
 
     let offset = file_handle.position;
 
-    fs.read(inode.index, offset, size, buffer).await;
+    let bytes_read = fs.read(inode.index, offset, size, buffer).await;
 
-    file_handle.position += size;
-    Ok(())
+    file_handle.position += bytes_read;
+    Ok(bytes_read)
 }
