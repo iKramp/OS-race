@@ -1,5 +1,6 @@
 static mut PHYSICAL_OFFSET: PhysOffset = PhysOffset(0);
 static mut MEM_INITIALIZED: bool = false;
+static mut HEAP_INITIALIZED: bool = false;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct PhysOffset(pub u64);
@@ -159,6 +160,14 @@ pub unsafe fn set_physical_offset(addr: PhysOffset) {
         MEM_INITIALIZED = true;
         PHYSICAL_OFFSET = addr;
     }
+}
+
+pub fn set_heap_initialized() {
+    unsafe { HEAP_INITIALIZED = true };
+}
+
+pub fn get_heap_initialized() -> bool {
+    unsafe { HEAP_INITIALIZED }
 }
 
 ///# Safety

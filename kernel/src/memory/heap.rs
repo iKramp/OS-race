@@ -1,4 +1,5 @@
-use std::mem_utils::*;
+use std::sync::lock_info::LockLocationInfo;
+use std::{lock_w_info, mem_utils::*};
 use std::sync::no_int_spinlock::NoIntSpinlock;
 
 use super::PAGE_TREE_ALLOCATOR;
@@ -282,12 +283,12 @@ unsafe impl core::alloc::GlobalAlloc for HeapWrapper {
             panic!("alignment is greater than size, not yet supported");
         }
         let size = layout.size() as u64;
-        let addr = self.heap.lock().allocate(size);
+        let addr = lock_w_info!(self.heap).allocate(size);
         addr.0 as *mut u8
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: core::alloc::Layout) {
-        self.heap.lock().deallocate(VirtAddr(ptr as u64), layout.size() as u64);
+        lock_w_info!(self.heap).deallocate(VirtAddr(ptr as u64), layout.size() as u64);
     }
 }
 

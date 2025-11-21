@@ -1,11 +1,13 @@
 use bitfield::bitfield;
 
-use super::InodeIdentifier;
+use super::{InodeIdentifier, InodeIdentifierChain};
 
+pub type FileDescriptor = u64;
 
 #[derive(Debug)]
 pub struct FileHandle {
     pub inode: InodeIdentifier,
+    pub parent_chain: InodeIdentifierChain,
     pub position: u64,
     pub file_flags: FileFlags,
 }

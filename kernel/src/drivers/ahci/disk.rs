@@ -3,11 +3,7 @@
 
 use core::{fmt::Debug, sync::atomic::AtomicU32, time::Duration};
 use std::{
-    boxed::Box,
-    mem_utils::{PhysAddr, VirtAddr, get_at_physical_addr, get_at_virtual_addr, memset_virtual_addr},
-    println,
-    sync::no_int_spinlock::NoIntSpinlock,
-    vec::Vec,
+    boxed::Box, lock_w_info, mem_utils::{get_at_physical_addr, get_at_virtual_addr, memset_virtual_addr, PhysAddr, VirtAddr}, println, sync::{lock_info::LockLocationInfo, no_int_spinlock::NoIntSpinlock}, vec::Vec
 };
 
 use bitfield::bitfield;
@@ -256,7 +252,7 @@ impl VirtualPort {
             physical_allocator::allocate_frame_low()
         };
 
-        let lock = self.address_lock.lock();
+        let lock = lock_w_info!(self.address_lock);
         self.set_property(0, cmd_list_base.0 as u32);
         self.set_property(4, (cmd_list_base.0 >> 32) as u32);
         self.set_property(8, fis_base.0 as u32);
@@ -477,7 +473,7 @@ impl VirtualPort {
     }
 
     pub fn is_command_ready(&self, command_slot: u8) -> bool {
-        let lock = self.address_lock.lock();
+        let lock = lock_w_info!(self.address_lock);
         let ci = self.get_property(0x38);
         drop(lock);
         ci & (1 << command_slot) == 0

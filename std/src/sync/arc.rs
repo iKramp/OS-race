@@ -1,66 +1,85 @@
-use core::{fmt::Debug, sync::atomic::AtomicUsize};
+use core::{fmt::Debug, marker::Unsize, ops::CoerceUnsized, ptr::NonNull};
 
 use alloc::boxed::Box;
 
-struct ArcInner<T> {
+#[repr(C)]
+pub struct ArcInner<T: ?Sized> {
+    ref_count: core::sync::atomic::AtomicUsize,
     data: T,
-    ref_count: AtomicUsize,
 }
 
-impl<T> ArcInner<T> {
-    pub fn new(data: T) -> Self {
-        Self {
-            data,
-            ref_count: AtomicUsize::new(1),
-        }
-    }
+pub struct Arc<T: ?Sized + 'static> {
+    inner: NonNull<ArcInner<T>>,
 }
 
-pub struct Arc<T> {
-    inner: *mut ArcInner<T>,
-}
-
-unsafe impl<T: Send + Sync> Send for Arc<T> {}
-unsafe impl<T: Sync + Send> Sync for Arc<T> {}
+unsafe impl<T: ?Sized + Send + Sync> Send for Arc<T> {}
+unsafe impl<T: ?Sized + Send + Sync> Sync for Arc<T> {}
 
 impl<T> Arc<T> {
     pub fn new(data: T) -> Self {
-        let inner = Box::into_raw(Box::new(ArcInner::new(data)));
+        let address = Box::into_raw(Box::new(ArcInner {
+            ref_count: core::sync::atomic::AtomicUsize::new(1),
+            data,
+        })) as usize;
         Self {
-            inner: unsafe { &mut *inner },
+            inner: NonNull::new(address as *mut ArcInner<T>).unwrap(),
         }
     }
+}
 
+impl<T: ?Sized> Arc<T> {
     pub fn get(&self) -> &T {
-        unsafe { &(*self.inner).data }
+        unsafe { &(self.inner.as_ref().data) }
     }
 }
 
-impl<T> Clone for Arc<T> {
+impl<T: ?Sized + 'static> Clone for Arc<T> {
     fn clone(&self) -> Self {
-        (unsafe { &mut *self.inner })
-            .ref_count
-            .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
-        Self {
-            inner: unsafe { &mut *(self.inner as *const ArcInner<T> as *mut ArcInner<T>) },
+        unsafe {
+            self.inner
+                .as_ref()
+                .ref_count
+                .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+
+            Self { inner: self.inner }
         }
     }
 }
 
-impl<T> Drop for Arc<T> {
-    fn drop(&mut self) {
-        if unsafe { &*self.inner }
-            .ref_count
-            .fetch_sub(1, core::sync::atomic::Ordering::Relaxed)
-            == 1
-        {
-            let _ = unsafe { Box::from_raw(self.inner) };
-        }
-    }
-}
-
-impl<T: Debug> Debug for Arc<T> {
+impl<T> Debug for Arc<T>
+where
+    T: Debug + ?Sized,
+{
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        unsafe { &(*self.inner).data }.fmt(f)
+        unsafe {
+            f.debug_struct("Arc")
+                .field("data", &&self.inner.as_ref().data)
+                .field(
+                    "ref_count",
+                    &self.inner.as_ref().ref_count.load(core::sync::atomic::Ordering::Relaxed),
+                )
+                .finish()
+        }
     }
 }
+
+impl<T: ?Sized> core::ops::Deref for Arc<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &self.inner.as_ref().data }
+    }
+}
+
+impl<T: ?Sized> Drop for Arc<T> {
+    fn drop(&mut self) {
+        unsafe {
+            if self.inner.as_ref().ref_count.fetch_sub(1, core::sync::atomic::Ordering::Relaxed) == 1 {
+                let address = self.inner.as_ptr();
+                let _ = Box::from_raw(address);
+            }
+        }
+    }
+}
+
+impl<T: ?Sized, U: ?Sized> CoerceUnsized<Arc<U>> for Arc<T> where T: Unsize<U> {}

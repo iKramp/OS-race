@@ -1,7 +1,9 @@
 use std::{boxed::Box, mem_utils::get_at_physical_addr, println, printlnc, string::String, vec::Vec};
 
 use crate::{
-    memory::PAGE_TREE_ALLOCATOR, task_runner::block_task, vfs::{self, file::FileFlags, InodeType}
+    memory::PAGE_TREE_ALLOCATOR,
+    task_runner::{add_task, block_task},
+    vfs::{self, file::FileFlags, InodeType},
 };
 
 const BEE_MOVIE_SCRIPT_START: &str = include_str!("./bee_movie_script.txt");
@@ -139,7 +141,13 @@ impl WriteFileOperation {
         let mut file = block_task(Box::pin(vfs::open_file((&path).into(), None, open_file_flags))).unwrap();
 
         println!("Writing file: {} of size: {}", self.file_name, content.len());
-        block_task(Box::pin(vfs::write_file(&mut file, &frames, self.offset, self.content.len() as u64))).unwrap();
+        block_task(Box::pin(vfs::write_file(
+            &mut file,
+            &frames,
+            self.offset,
+            self.content.len() as u64,
+        )))
+        .unwrap();
 
         for frame in frames {
             unsafe { crate::memory::physical_allocator::deallocate_frame(frame) };
@@ -199,45 +207,50 @@ impl ReadFileOperation {
     }
 
     fn execute(&self) {
-        let path = vfs::resolve_path(self.file_name);
-        let real_offset = self.offset & !4095;
-        let real_length = self.length - real_offset + self.offset;
-        let mut buffer = Vec::with_capacity(real_length.div_ceil(4096) as usize);
-        for _ in 0..(real_length.div_ceil(4096)) {
-            let frame = crate::memory::physical_allocator::allocate_frame();
-            buffer.push(frame);
-        }
-
-        let open_file_flags = FileFlags::new().with_read(true);
-        let mut file = block_task(Box::pin(vfs::open_file((&path).into(), None, open_file_flags))).unwrap();
-
-        block_task(Box::pin(vfs::read_file(&mut file, &buffer, real_offset, real_length))).unwrap();
-        let mut final_data = Vec::with_capacity(self.length as usize);
-        let mut frame_ptr = (self.offset as usize) & 0xFFF;
-        for (index, frame) in buffer.iter().enumerate() {
-            let frame_ptr_start = frame_ptr;
-            let limit = if index == buffer.len() - 1 {
-                (self.length as usize) & 0xFFF
-            } else {
-                4096
-            };
-            let data = unsafe { get_at_physical_addr::<[u8; 4096]>(*frame) };
-            while frame_ptr < limit + frame_ptr_start {
-                final_data.push(data[frame_ptr & 0xFFF]);
-                frame_ptr += 1;
+        let offset = self.offset;
+        let length = self.length;
+        let file_name = self.file_name;
+        let task = async move {
+            let path = vfs::resolve_path(file_name);
+            let real_offset = offset & !4095;
+            let real_length = length - real_offset + offset;
+            let mut buffer = Vec::with_capacity(real_length.div_ceil(4096) as usize);
+            for _ in 0..(real_length.div_ceil(4096)) {
+                let frame = crate::memory::physical_allocator::allocate_frame();
+                buffer.push(frame);
             }
-            unsafe { crate::memory::physical_allocator::deallocate_frame(*frame) };
-        }
-    
 
-        println!(
-            "Read file: {} at offset {} and size of read {}",
-            self.file_name, self.offset, self.length
-        );
-        // println!("File content: {:?}", final_data);
-        //transofm into string
-        let string = String::from_utf8(final_data).unwrap();
-        println!("File content as string:");
-        printlnc!((255, 200, 100), "{}", string);
+            let open_file_flags = FileFlags::new().with_read(true);
+            let mut file = vfs::open_file((&path).into(), None, open_file_flags).await.unwrap();
+
+            vfs::read_file(&mut file, &buffer, real_offset, real_length).await.unwrap();
+            let mut final_data = Vec::with_capacity(length as usize);
+            let mut frame_ptr = (offset as usize) & 0xFFF;
+            for (index, frame) in buffer.iter().enumerate() {
+                let frame_ptr_start = frame_ptr;
+                let limit = if index == buffer.len() - 1 {
+                    (length as usize) & 0xFFF
+                } else {
+                    4096
+                };
+                let data = unsafe { get_at_physical_addr::<[u8; 4096]>(*frame) };
+                while frame_ptr < limit + frame_ptr_start {
+                    final_data.push(data[frame_ptr & 0xFFF]);
+                    frame_ptr += 1;
+                }
+                unsafe { crate::memory::physical_allocator::deallocate_frame(*frame) };
+            }
+
+            println!(
+                "Read file: {} at offset {} and size of read {}",
+                file_name, offset, length
+            );
+            // println!("File content: {:?}", final_data);
+            //transofm into string
+            let string = String::from_utf8(final_data).unwrap();
+            println!("File content as string:");
+            printlnc!((255, 200, 100), "{}", string);
+        };
+        add_task(Box::pin(task));
     }
 }

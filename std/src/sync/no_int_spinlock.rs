@@ -5,6 +5,8 @@ use core::{
     sync::atomic::{AtomicU8, Ordering::*},
 };
 
+use super::lock_info::LockLocationInfo;
+
 
 pub struct NoIntSpinlock<T: ?Sized> {
     state: AtomicU8,
@@ -15,6 +17,7 @@ unsafe impl<T: ?Sized + Send> Send for NoIntSpinlock<T> {}
 unsafe impl<T: ?Sized + Send> Sync for NoIntSpinlock<T> {}
 
 pub struct NoIntSpinlockGuard<'a, T: ?Sized + 'a> {
+    location: LockLocationInfo,
     lock: &'a NoIntSpinlock<T>,
 }
 unsafe impl<T: ?Sized> Send for NoIntSpinlockGuard<'_, T> {}
@@ -29,8 +32,16 @@ impl<T> NoIntSpinlock<T> {
     }
 }
 
+#[macro_export]
+macro_rules! lock_w_info {
+    ($l:expr) => {
+        $l.lock(LockLocationInfo(file!(), line!(), column!()))
+    };
+}
+
+
 impl<T: ?Sized> NoIntSpinlock<T> {
-    pub fn lock(&self) -> NoIntSpinlockGuard<'_, T> {
+    pub fn lock(&self, location: LockLocationInfo) -> NoIntSpinlockGuard<'_, T> {
         let info = unsafe { super::lock_info::GET_LOCK_INFO() };
         let prev_rflags: u64;
         unsafe {
@@ -38,15 +49,18 @@ impl<T: ?Sized> NoIntSpinlock<T> {
                 "pushfq",
                 "pop {}",
                 "cli",
-                out(reg) prev_rflags
+                out(reg) prev_rflags,
             );
         }
         let prev_int_state = (prev_rflags & (1 << 9)) != 0;
         while self.state.compare_exchange(0, 1, Acquire, Relaxed).is_err() {
             core::hint::spin_loop();
         }
-        info.inc_spinlocks(prev_int_state);
+        // Safety:
+        // interrupts are disabled, and it is from CPU local
+        info.inc_spinlocks(prev_int_state, location.clone());
         NoIntSpinlockGuard {
+            location,
             lock: self,
         }
     }
@@ -60,37 +74,18 @@ impl<T: ?Sized> NoIntSpinlock<T> {
                 "pushfq",
                 "pop {}",
                 "cli",
-                out(reg) prev_rflags
+                out(reg) prev_rflags,
             );
         }
-        info.inc_spinlocks((prev_rflags & (1 << 9)) != 0);
-        NoIntSpinlockGuard {
-            lock: self,
-        }
-    }
 
-    pub fn try_lock(&self) -> Option<NoIntSpinlockGuard<'_, T>> {
-        let info = unsafe { super::lock_info::GET_LOCK_INFO() };
-        let prev_rflags: u64;
-        unsafe {
-            core::arch::asm!(
-                "pushfq",
-                "pop {}",
-                "cli",
-                out(reg) prev_rflags
-            );
-        }
-        let prev_int_state = (prev_rflags & (1 << 9)) != 0;
-        if self.state.compare_exchange(0, 1, Acquire, Relaxed).is_ok() {
-            info.inc_spinlocks(prev_int_state);
-            Some(NoIntSpinlockGuard {
-                lock: self,
-            })
-        } else {
-            if prev_int_state {
-                unsafe { core::arch::asm!("sti") };
-            }
-            None
+        let location = LockLocationInfo("", 0, 0);
+
+        // Safety:
+        // interrupts are disabled, and it is from CPU local
+        info.inc_spinlocks((prev_rflags & (1 << 9)) != 0, location.clone());
+        NoIntSpinlockGuard {
+            location,
+            lock: self,
         }
     }
 }
@@ -98,7 +93,7 @@ impl<T: ?Sized> NoIntSpinlock<T> {
 impl<T: ?Sized> Drop for NoIntSpinlockGuard<'_, T> {
     fn drop(&mut self) {
         let info = unsafe { super::lock_info::GET_LOCK_INFO() };
-        let should_enable_ints = info.dec_spinlocks();
+        let should_enable_ints = info.dec_spinlocks(&self.location);
         self.lock.state.store(0, Release);
         if should_enable_ints {
             unsafe { core::arch::asm!("sti") };

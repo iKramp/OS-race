@@ -40,7 +40,7 @@ mod utils;
 mod vfs;
 mod vga;
 use limine::LIMINE_BOOTLOADER_REQUESTS;
-use task_runner::block_task;
+use task_runner::{block_task, process_tasks};
 use vfs::{file::FileFlags, ResolvedPath};
 
 const PRIME_FINDER: &[u8] = include_bytes!("../../assets/prime_finder");
@@ -91,6 +91,10 @@ extern "C" fn _start() -> ! {
     // let file = block_task(Box::pin(vfs::open_file((&path).into(), None, file_open_flags))).unwrap();
     // println!("{:?}", block_task(Box::pin(vfs::get_dir_entries(&file))));
     // file_operations::do_file_operations();
+    //
+    // loop {
+    //     process_tasks();
+    // }
 
     proc::init();
     //start first proc

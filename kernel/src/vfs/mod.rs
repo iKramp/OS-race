@@ -1,5 +1,5 @@
 use dtmpfs::DtmpfsFactory;
-use std::{arc::Arc, boxed::Box, collections::btree_map::BTreeMap, sync::no_int_spinlock::NoIntSpinlock, vec::Vec};
+use std::{sync::arc::Arc, boxed::Box, collections::btree_map::BTreeMap, lock_w_info, sync::{lock_info::LockLocationInfo, no_int_spinlock::NoIntSpinlock}, vec::Vec};
 use uuid::Uuid;
 
 use crate::drivers::{
@@ -48,6 +48,9 @@ pub struct InodeIdentifier {
     pub index: InodeIndex,
 }
 
+///Always at least 1 element - root
+pub type InodeIdentifierChain = Box<[InodeIdentifier]>;
+
 pub struct Vfs {
     ///Map from disk guid to disk object (driver) and a list of partition guids
     disks: BTreeMap<Uuid, (Box<dyn BlockDevice + Send>, Vec<Uuid>)>,
@@ -83,7 +86,7 @@ impl Vfs {
 }
 
 pub fn init() {
-    let mut vfs = VFS.lock();
+    let mut vfs = lock_w_info!(VFS);
     vfs.filesystem_driver_factories
         .insert(RfsFactory::UUID, Box::new(RfsFactory {}));
     vfs.filesystem_driver_factories

@@ -6,14 +6,15 @@ use core::{mem::MaybeUninit, sync::atomic::AtomicU32};
 use scheduler::Scheduler;
 use std::{
     boxed::Box,
-    mem_utils::VirtAddr,
+    lock_w_info,
+    mem_utils::{PhysAddr, VirtAddr},
     println,
     string::ToString,
-    sync::{arc::Arc, no_int_spinlock::NoIntSpinlock},
+    sync::{arc::Arc, lock_info::LockLocationInfo, no_int_spinlock::NoIntSpinlock},
     vec::Vec,
 };
 
-use crate::memory::paging::PageTree;
+use crate::memory::paging::{self, PageTree};
 
 mod context;
 mod context_switch;
@@ -24,12 +25,14 @@ mod scheduler;
 mod syscall;
 pub use context_switch::{context_switch, interrupt_context_switch};
 pub use process_data::{ProcessData, StackCpuStateData};
+pub use scheduler::save_and_release_current;
 
 static SCHEDULER: NoIntSpinlock<MaybeUninit<Scheduler>> = NoIntSpinlock::new(MaybeUninit::uninit());
 
 static PROCESS_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 pub static mut PROC_INITIALIZED: bool = false;
+static mut GENERIC_PAGE_TREE: PhysAddr = PhysAddr(0);
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Pid(pub u32);
@@ -54,7 +57,7 @@ struct MappedMemoryRegion {
 
 pub fn init() {
     // Initialize the scheduler
-    let mut scheduler = SCHEDULER.lock();
+    let mut scheduler = lock_w_info!(SCHEDULER);
     *scheduler = MaybeUninit::new(Scheduler::new());
     drop(scheduler);
     create_fallback_process();
@@ -82,9 +85,14 @@ pub fn init_ap() {
     syscall::init();
 }
 
+pub fn switch_to_generic_mem_tree() {
+    paging::PageTree::set_level4_addr(unsafe { GENERIC_PAGE_TREE });
+}
+
 //set this AFTER the process with pid 1 is loaded (pid 0 is fallback, might be removed)
 pub fn set_proc_initialized() {
     unsafe {
+        GENERIC_PAGE_TREE = paging::PageTree::get_level4_addr();
         PROC_INITIALIZED = true;
     }
     let locals = crate::acpi::cpu_locals::CpuLocals::get();
@@ -92,7 +100,7 @@ pub fn set_proc_initialized() {
 }
 
 pub fn get_proc(pid: Pid) -> Option<Arc<ProcessData>> {
-    let mut scheduler_lock = SCHEDULER.lock();
+    let mut scheduler_lock = lock_w_info!(SCHEDULER);
     let scheduler = unsafe { scheduler_lock.assume_init_mut() };
     scheduler.get_proc(pid)
 }
@@ -102,7 +110,13 @@ pub fn get_proc(pid: Pid) -> Option<Arc<ProcessData>> {
 //Also return if it was in stopping state. Reason: stopping means it's either running and has been
 //scheduled for stopping (case above), or its resources are actively being freed
 pub fn kill_process(pid: Pid) {
-    unsafe { SCHEDULER.lock().assume_init_mut().remove_process(pid) };
+    unsafe { lock_w_info!(SCHEDULER).assume_init_mut().remove_process(pid) };
+}
+
+pub fn wake_process(pid: Pid) {
+    let mut scheduler_lock = lock_w_info!(SCHEDULER);
+    let scheduler = unsafe { scheduler_lock.assume_init_mut() };
+    scheduler.wake_proc(pid);
 }
 
 //context switch to this process when no other processes exist
@@ -147,7 +161,7 @@ pub fn create_fallback_process() {
     .unwrap();
     let pid = create_process(&fake_context);
     assert_eq!(pid.0, 0);
-    let mut scheduler_lock = SCHEDULER.lock();
+    let mut scheduler_lock = lock_w_info!(SCHEDULER);
     let scheduler = unsafe { scheduler_lock.assume_init_mut() };
     scheduler.remove_process(pid);
 }

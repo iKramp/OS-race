@@ -4,7 +4,9 @@ use core::{
 
 use alloc::boxed::Box;
 
-use super::no_int_spinlock::NoIntSpinlock;
+use crate::lock_w_info;
+
+use super::{lock_info::LockLocationInfo, no_int_spinlock::NoIntSpinlock};
 
 #[derive(Debug)]
 pub struct AsyncSpinlock<T: ?Sized> {
@@ -58,7 +60,7 @@ impl<'a, T: 'a> Future for AsyncSpinLockFuture<'a, T> {
             let info = unsafe { super::lock_info::GET_LOCK_INFO() };
             if !info.is_blocking_task() {
                 //waking executor
-                let mut wakers = self.lock.wakers.lock();
+                let mut wakers = lock_w_info!(self.lock.wakers);
                 let new_node = Box::new(WakerNode {
                     waker: cx.waker().clone(),
                     next: wakers.take(),
@@ -74,7 +76,7 @@ impl<T: ?Sized> Drop for AsyncSpinlockGuard<'_, T> {
     fn drop(&mut self) {
         self.lock.state.store(0, Release);
         //wake 1 waiting task
-        let mut wakers = self.lock.wakers.lock();
+        let mut wakers = lock_w_info!(self.lock.wakers);
         if let Some(node) = wakers.take() {
             if let Some(next_node) = node.next {
                 *wakers = Some(next_node);

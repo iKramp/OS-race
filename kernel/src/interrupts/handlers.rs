@@ -172,11 +172,11 @@ pub extern "C" fn primary_ata_hard_disk(_proc_data: &mut InterruptProcessorState
     apic_eoi();
 }
 
-pub extern "C" fn first_context_switch(proc_data: &mut InterruptProcessorState) {
+pub extern "C" fn first_context_switch(_proc_data: &mut InterruptProcessorState) {
     let locals = CpuLocals::get();
     locals.int_depth = 1; //this one context switches back into 0
     locals.proc_initialized = true;
-    context_switch(StackCpuStateData::Interrupt(proc_data));
+    context_switch();
 }
 
 pub extern "C" fn inter_processor_interrupt(proc_data: &mut InterruptProcessorState) {

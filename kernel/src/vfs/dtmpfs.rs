@@ -3,7 +3,7 @@
 //!provides a directory structure for mounpoints
 
 use std::{
-    arc::Arc, boxed::Box, collections::btree_map::BTreeMap, string::{String, ToString}, sync::no_int_spinlock::NoIntSpinlock, vec::Vec
+    sync::arc::Arc, boxed::Box, collections::btree_map::BTreeMap, lock_w_info, string::{String, ToString}, sync::{lock_info::LockLocationInfo, no_int_spinlock::NoIntSpinlock}, vec::Vec
 };
 
 use uuid::Uuid;
@@ -55,7 +55,7 @@ impl FileSystem for Dtmpfs {
     }
 
     async fn read_dir(&self, inode: InodeIndex) -> std::boxed::Box<[crate::drivers::disk::DirEntry]> {
-        let lock = self.global_lock.lock();
+        let lock = lock_w_info!(self.global_lock);
         let mut entries = Vec::new();
         if let Some(node) = self.inodes.get(&inode) {
             for (name, child_inode) in &node.children {
@@ -105,7 +105,7 @@ impl FileSystem for Dtmpfs {
         _uid: u16,
         _gid: u16,
     ) -> (super::Inode, super::Inode) {
-        let lock = self.global_lock.lock();
+        let lock = lock_w_info!(self.global_lock);
         #[allow(invalid_reference_casting)]
         let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
         let inode_index = self.inode_index;
@@ -122,7 +122,7 @@ impl FileSystem for Dtmpfs {
     }
 
     async fn unlink(&self, parent_inode: InodeIndex, name: &str) {
-        let lock = self.global_lock.lock();
+        let lock = lock_w_info!(self.global_lock);
         #[allow(invalid_reference_casting)]
         let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
         if let Some(parent_node) = self_mut.inodes.get_mut(&parent_inode) {
@@ -140,7 +140,7 @@ impl FileSystem for Dtmpfs {
     }
 
     async fn rename(&self, inode: InodeIndex, parent_inode: InodeIndex, name: &str) {
-        let lock = self.global_lock.lock();
+        let lock = lock_w_info!(self.global_lock);
         #[allow(invalid_reference_casting)]
         let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
         let Some(parent_node) = self_mut.inodes.get_mut(&parent_inode) else {

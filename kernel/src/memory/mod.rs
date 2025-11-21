@@ -30,6 +30,7 @@ pub fn init_memory() {
         PAGE_TREE_ALLOCATOR.init();
         printlnc!((0, 255, 0), "memory initialized");
     }
+    std::mem_utils::set_heap_initialized();
 }
 
 pub fn print_limine_phys_map() {

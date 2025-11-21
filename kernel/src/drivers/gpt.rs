@@ -1,9 +1,5 @@
 use std::{
-    boxed::Box,
-    mem_utils::{PhysAddr, get_at_virtual_addr, translate_virt_phys_addr},
-    println,
-    string::String,
-    vec::Vec,
+    boxed::Box, lock_w_info, mem_utils::{get_at_virtual_addr, translate_virt_phys_addr, PhysAddr}, println, string::String, sync::lock_info::LockLocationInfo, vec::Vec
 };
 
 use uuid::Uuid;
@@ -57,7 +53,7 @@ impl PartitionSchemeDriver for GPTDriver {
 
         let mut partitions = Vec::new();
 
-        let mut vfs = VFS.lock();
+        let mut vfs = lock_w_info!(VFS);
 
         for i in 0..num_entries {
             unsafe {

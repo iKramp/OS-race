@@ -3,8 +3,10 @@ use crate::proc::process_data::CpuStateType;
 use crate::proc::PROCESS_ID_COUNTER;
 use crate::proc::ProcessData;
 use crate::proc::SCHEDULER;
+use std::lock_w_info;
 use std::string::ToString;
 use std::sync::arc::Arc;
+use std::sync::lock_info::LockLocationInfo;
 use std::{
     mem_utils::{self, VirtAddr, memset_physical_addr},
     println,
@@ -41,7 +43,7 @@ pub fn create_process(context_info: &ContextInfo) -> Pid {
         CpuStateType::Interrupt(cpu_state),
     );
 
-    let mut scheduler_lock = SCHEDULER.lock();
+    let mut scheduler_lock = lock_w_info!(SCHEDULER);
     let scheduler = unsafe { scheduler_lock.assume_init_mut() };
     scheduler.accept_new_process(pid, process_data);
     pid

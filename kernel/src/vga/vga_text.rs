@@ -1,5 +1,6 @@
 use std::arch::asm;
-use std::{print, println, printlnc};
+use std::sync::lock_info::LockLocationInfo;
+use std::{lock_w_info, print, println, printlnc};
 
 use super::font::*;
 use super::vga_driver::VGA_BINDING;
@@ -127,7 +128,7 @@ pub static mut VGA_TEXT: NoIntSpinlock<VgaText> = NoIntSpinlock::new(VgaText {
 
 pub fn init_vga_text(width: usize, height: usize) {
     unsafe {
-        let mut display = VGA_TEXT.lock();
+        let mut display = lock_w_info!(VGA_TEXT);
         display.height_lines = height / (CHAR_HEIGHT);
         display.width_chars = width / (CHAR_WIDTH);
         std::set_print(core::ptr::addr_of_mut!(VGA_TEXT));
@@ -137,7 +138,7 @@ pub fn init_vga_text(width: usize, height: usize) {
 pub fn clear_screen() {
     super::vga_driver::clear_screen();
     unsafe {
-        let mut display = VGA_TEXT.lock();
+        let mut display = lock_w_info!(VGA_TEXT);
         display.line = 0;
         display.char = 0;
     }

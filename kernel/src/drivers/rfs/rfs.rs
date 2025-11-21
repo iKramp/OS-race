@@ -11,12 +11,7 @@ use crate::{
 };
 use core::str;
 use std::{
-    arc::Arc,
-    boxed::Box,
-    collections::btree_map::BTreeMap,
-    mem_utils::{get_at_virtual_addr, memset_virtual_addr, set_at_virtual_addr, PhysAddr, VirtAddr},
-    sync::{async_lock::AsyncSpinlock, async_rw_lock::AsyncRWlock, no_int_spinlock::NoIntSpinlock},
-    vec::Vec,
+    sync::arc::Arc, boxed::Box, collections::btree_map::BTreeMap, lock_w_info, mem_utils::{get_at_virtual_addr, memset_virtual_addr, set_at_virtual_addr, PhysAddr, VirtAddr}, sync::{async_lock::AsyncSpinlock, async_rw_lock::AsyncRWlock, lock_info::LockLocationInfo, no_int_spinlock::NoIntSpinlock}, vec::Vec
 };
 
 const GROUP_BLOCK_SIZE: u64 = 4096 * 8;
@@ -113,7 +108,7 @@ impl Rfs {
     }
 
     fn get_file_lock(&self, inode_index: u32) -> Arc<AsyncRWlock<()>> {
-        let mut inode_locks = self.file_locks.lock();
+        let mut inode_locks = lock_w_info!(self.file_locks);
         let file_lock = inode_locks
             .entry(inode_index)
             .or_insert_with(|| Arc::new(AsyncRWlock::new(())))

@@ -1,4 +1,4 @@
-use core::{mem::MaybeUninit, sync::atomic::AtomicPtr};
+use core::mem::MaybeUninit;
 use std::{
     boxed::Box,
     mem_utils::{VirtAddr, get_at_virtual_addr},
@@ -12,7 +12,7 @@ use crate::{
     interrupts::{self, idt::TablePointer},
     memory::stack::{KERNEL_STACK_SIZE_PAGES, prepare_kernel_stack},
     proc::ProcessData,
-    task_runner::{AsyncTaskHolder, TaskToWake},
+    task_runner::AsyncTaskData,
 };
 
 pub static mut CPU_LOCALS: MaybeUninit<Box<[VirtAddr]>> = MaybeUninit::uninit();
@@ -34,8 +34,7 @@ pub struct CpuLocals {
     pub int_depth: u32,
     pub proc_initialized: bool,
     pub atomic_context: bool,
-    pub async_task_list: AtomicPtr<AsyncTaskHolder>,
-    pub wake_tasks_list: AtomicPtr<TaskToWake>,
+    pub async_task_data: AsyncTaskData,
     pub lock_info: LockInfo,
 }
 
@@ -101,8 +100,7 @@ impl CpuLocals {
             processor_id,
             gdt_ptr,
             current_process: None,
-            async_task_list: AtomicPtr::new(core::ptr::null_mut()),
-            wake_tasks_list: AtomicPtr::new(core::ptr::null_mut()),
+            async_task_data: AsyncTaskData::new(),
             proc_initialized: false,
             int_depth: 0,
             atomic_context: false,
@@ -123,8 +121,8 @@ impl CpuLocals {
         }
     }
 
-    pub fn get_lock_info() -> &'static LockInfo {
-        &Self::get().lock_info
+    pub fn get_lock_info() -> &'static mut LockInfo {
+        &mut Self::get().lock_info
     }
 }
 

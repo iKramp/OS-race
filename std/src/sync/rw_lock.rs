@@ -4,6 +4,8 @@ use core::{
     sync::atomic::{AtomicU16, Ordering::*},
 };
 
+use super::lock_info::LockLocationInfo;
+
 
 #[derive(Debug)]
 pub struct RWSpinlock<T: ?Sized> {
@@ -21,6 +23,7 @@ pub struct RWLockModeWrite;
 pub struct RWSpinlockGuard<'a, T: ?Sized + 'a, M> {
     lock: &'a RWSpinlock<T>,
     marker: core::marker::PhantomData<M>,
+    location: LockLocationInfo,
 }
 unsafe impl<T: ?Sized, M> Send for RWSpinlockGuard<'_, T, M> {}
 unsafe impl<T: ?Sized + Sync, M> Sync for RWSpinlockGuard<'_, T, M> {}
@@ -34,8 +37,21 @@ impl<T> RWSpinlock<T> {
     }
 }
 
+#[macro_export]
+macro_rules! r_lock_w_info {
+    ($l:expr) => {
+        $l.lock_read(LockLocationInfo(file!(), line!(), column!()))
+    };
+}
+#[macro_export]
+macro_rules! w_lock_w_info {
+    ($l:expr) => {
+        $l.lock_write(LockLocationInfo(file!(), line!(), column!()))
+    };
+}
+
 impl<T: ?Sized> RWSpinlock<T> {
-    pub fn lock_read(&self) -> RWSpinlockGuard<'_, T, RWLockModeRead> {
+    pub fn lock_read(&self, location: LockLocationInfo) -> RWSpinlockGuard<'_, T, RWLockModeRead> {
         let info = unsafe { super::lock_info::GET_LOCK_INFO() };
         let prev_rflags: u64;
         unsafe {
@@ -43,7 +59,7 @@ impl<T: ?Sized> RWSpinlock<T> {
                 "pushfq",
                 "pop {}",
                 "cli",
-                out(reg) prev_rflags
+                out(reg) prev_rflags,
             );
         }
         let prev_int_state = (prev_rflags & (1 << 9)) != 0;
@@ -54,15 +70,18 @@ impl<T: ?Sized> RWSpinlock<T> {
                 state = self.lock.load(Relaxed);
             }
             if self.lock.compare_exchange(state, state + 1, Acquire, Relaxed).is_ok() {
-                info.inc_spinlocks(prev_int_state);
+                // Safety:
+                // interrupts are disabled, and it is from CPU local
+                info.inc_spinlocks(prev_int_state, location.clone());
                 return RWSpinlockGuard {
                     lock: self,
                     marker: core::marker::PhantomData,
+                    location
                 };
             }
         }
     }
-    pub fn lock_write(&self) -> RWSpinlockGuard<'_, T, RWLockModeWrite> {
+    pub fn lock_write(&self, location: LockLocationInfo) -> RWSpinlockGuard<'_, T, RWLockModeWrite> {
         let info = unsafe { super::lock_info::GET_LOCK_INFO() };
         let prev_rflags: u64;
         unsafe {
@@ -70,7 +89,7 @@ impl<T: ?Sized> RWSpinlock<T> {
                 "pushfq",
                 "pop {}",
                 "cli",
-                out(reg) prev_rflags
+                out(reg) prev_rflags,
             );
         }
         let prev_int_state = (prev_rflags & (1 << 9)) != 0;
@@ -81,10 +100,13 @@ impl<T: ?Sized> RWSpinlock<T> {
                 state = self.lock.load(Relaxed);
             }
             if self.lock.compare_exchange(0, 0x8000, Acquire, Relaxed).is_ok() {
-                info.inc_spinlocks(prev_int_state);
+                // Safety:
+                // interrupts are disabled, and it is from CPU local
+                info.inc_spinlocks(prev_int_state, location.clone());
                 return RWSpinlockGuard {
                     lock: self,
                     marker: core::marker::PhantomData,
+                    location
                 };
             }
         }
@@ -113,9 +135,12 @@ impl<'a, T: ?Sized> RWSpinlockGuard<'a, T, RWLockModeRead> {
             core::hint::spin_loop();
         }
 
+        let location = self.location.clone();
+
         let new_lock = RWSpinlockGuard {
             lock: self.lock,
             marker: core::marker::PhantomData,
+            location,
         };
         core::mem::forget(self); //don't run drop
         new_lock
@@ -129,9 +154,12 @@ impl<'a, T: ?Sized> RWSpinlockGuard<'a, T, RWLockModeWrite> {
 
         self.lock.lock.store(1, Release); //release write lock, acquire read lock
 
+        let location = self.location.clone();
+
         let new_lock = RWSpinlockGuard {
             lock: self.lock,
             marker: core::marker::PhantomData,
+            location
         };
         core::mem::forget(self); //don't run drop
         new_lock
@@ -142,7 +170,7 @@ impl<T: ?Sized, M> Drop for RWSpinlockGuard<'_, T, M> {
     fn drop(&mut self) {
         let info = unsafe { super::lock_info::GET_LOCK_INFO() };
         let state = self.lock.lock.load(Relaxed);
-        let should_enable_ints = info.dec_spinlocks();
+        let should_enable_ints = info.dec_spinlocks(&self.location);
         if state & 0x8000 != 0 {
             //write lock
             self.lock.lock.store(0, Release);

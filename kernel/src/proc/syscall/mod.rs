@@ -1,4 +1,4 @@
-use super::{context_switch::no_ret_context_switch, process_data::StackCpuStateData};
+use super::{context_switch::no_ret_context_switch, process_data::StackCpuStateData, scheduler::save_and_release_current};
 use crate::{interrupts::enable_interrupts, msr, proc::syscall};
 
 mod handlers;
@@ -101,35 +101,38 @@ extern "C" fn handler(args_rsp: u64) -> ! {
     //handle here
     // println!("Syscall called with args: {}, {}, {}, {}", arg1, arg2, arg3, arg4);
 
-    let args_ptr = args_rsp as *const u64;
+    let args_ptr = args_rsp as *mut u64;
     let state_ptr = unsafe { args_ptr.byte_add(core::mem::size_of::<SyscallArgs>()).sub(2) }; //2 regs overlap
 
-    let args = unsafe { &*(args_ptr as *const SyscallArgs) };
+    let mut args = unsafe { &mut *(args_ptr as *mut SyscallArgs) };
     let state = unsafe { &*(state_ptr as *const SyscallCpuState) };
 
     let locals = crate::acpi::cpu_locals::CpuLocals::get();
     locals.int_depth += 1;
+    let curr_proc = locals.current_process.as_mut().expect("syscalled while no current process in locals");
     enable_interrupts();
 
     #[allow(clippy::single_match)]
-    match args.syscall_number {
+    let task_sleep = match args.syscall_number {
         0 => todo!("implement illegal syscall"),
         1 => syscall::handlers::console_write(args), //implement exit
         2 => todo!("implement exec"),
         3 => todo!("implement clone"),
-        4 => todo!("implement fopen"),
+        4 => syscall::handlers::fopen(args, curr_proc),
         5 => todo!("implement fclose"),
-        6 => todo!("implement fread"),
+        6 => syscall::handlers::fread(args, curr_proc),
         7 => todo!("implement fwrite"),
         8 => todo!("implement fseek"),
         9 => todo!("implement mmap"),
         10 => todo!("implement munmap"),
         11 => todo!("implement sleep"),
         12 => syscall::handlers::time(args),
-        _ => {}
-    }
+        _ => {false}
+    };
 
-    no_ret_context_switch(StackCpuStateData::Syscall(state));
+
+    save_and_release_current(curr_proc, &StackCpuStateData::Syscall(state), None);
+    no_ret_context_switch();
 }
 
 #[derive(Debug, Clone)]

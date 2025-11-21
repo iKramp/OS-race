@@ -16,12 +16,23 @@ const PIC1_DATA: u16 = PIC1 + 1;
 const PIC2_COMMAND: u16 = PIC2;
 const PIC2_DATA: u16 = PIC2 + 1;
 
+#[inline(always)]
 pub fn enable_interrupts() {
     unsafe { std::arch::asm!("sti") };
 }
 
-pub fn disable_interrupts() {
-    unsafe { std::arch::asm!("cli") };
+#[inline(always)]
+pub fn disable_interrupts() -> bool {
+    let prev_rflags: u64;
+    unsafe {
+        core::arch::asm!(
+            "pushfq",
+            "pop {}",
+            "cli",
+            out(reg) prev_rflags
+        );
+    }
+    (prev_rflags & (1 << 9)) != 0
 }
 
 pub fn init_interrupts() {

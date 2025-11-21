@@ -88,10 +88,6 @@ pub fn resolve_path(path: &str) -> ResolvedPath {
         if chunk == "." {
             continue;
         }
-        if chunk == ".." {
-            path.pop();
-            continue;
-        }
         path.push(chunk.into());
     }
 

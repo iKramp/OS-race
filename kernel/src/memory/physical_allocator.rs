@@ -1,3 +1,5 @@
+use std::lock_w_info;
+use std::sync::lock_info::LockLocationInfo;
 use std::sync::no_int_spinlock::NoIntSpinlock;
 
 use crate::memory::{heap::log2_rounded_up, printlnc};
@@ -78,15 +80,15 @@ pub fn init() {
         }
     }
     allocator.update_all();
-    *BUDDY_ALLOCATOR.lock() = allocator;
+    *lock_w_info!(BUDDY_ALLOCATOR) = allocator;
 }
 
 pub fn is_frame_allocated(addr: PhysAddr) -> bool {
-    BUDDY_ALLOCATOR.lock().is_frame_allocated(addr)
+    lock_w_info!(BUDDY_ALLOCATOR).is_frame_allocated(addr)
 }
 
 pub fn print_state() {
-    let allocator = BUDDY_ALLOCATOR.lock();
+    let allocator = lock_w_info!(BUDDY_ALLOCATOR);
     printlnc!((255, 200, 100), "Buddy Allocator state:");
     println!("all_frames: {}", allocator.n_pages);
     println!("allocated_frames: {}", allocator.allocated_pages);
@@ -95,29 +97,29 @@ pub fn print_state() {
 ///# Safety
 ///addr must be a page aligned, currently allocated physical frame address
 pub unsafe fn deallocate_frame(addr: PhysAddr) {
-    BUDDY_ALLOCATOR.lock().deallocate_frame(addr)
+    lock_w_info!(BUDDY_ALLOCATOR).deallocate_frame(addr)
 }
 
 pub fn allocate_frame() -> PhysAddr {
-    BUDDY_ALLOCATOR.lock().allocate_frame()
+    lock_w_info!(BUDDY_ALLOCATOR).allocate_frame()
 }
 
 pub fn allocate_frame_low() -> PhysAddr {
-    BUDDY_ALLOCATOR.lock().allocate_frame_low()
+    lock_w_info!(BUDDY_ALLOCATOR).allocate_frame_low()
 }
 
 pub fn allocate_contiguius_high(n_pages: u64) -> PhysAddr {
-    BUDDY_ALLOCATOR.lock().allocate_contiguius_high(n_pages)
+    lock_w_info!(BUDDY_ALLOCATOR).allocate_contiguius_high(n_pages)
 }
 
 pub fn allocate_contiguius_low(n_pages: u64) -> PhysAddr {
-    BUDDY_ALLOCATOR.lock().allocate_contiguius_low(n_pages)
+    lock_w_info!(BUDDY_ALLOCATOR).allocate_contiguius_low(n_pages)
 }
 
 ///# Safety
 ///addr must be a page aligned physical frame address
 pub unsafe fn mark_addr(addr: PhysAddr, allocated: bool) {
-    let allocator = BUDDY_ALLOCATOR.lock();
+    let allocator = lock_w_info!(BUDDY_ALLOCATOR);
     if (addr.0 >> 12) >= allocator.n_pages {
         //we're dealing with mmio
         return;

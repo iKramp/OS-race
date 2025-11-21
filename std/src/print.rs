@@ -1,6 +1,6 @@
 use core::fmt::{Arguments, Write};
 
-use crate::sync::no_int_spinlock::*;
+use crate::{lock_w_info, sync::{lock_info::LockLocationInfo, no_int_spinlock::*}};
 
 pub static mut PRINT: Option<&mut NoIntSpinlock<dyn Print>> = None;
 
@@ -62,7 +62,7 @@ macro_rules! printlncl {
 
 #[doc(hidden)]
 pub fn _print(args: core::fmt::Arguments) {
-    let mut lock = unsafe { PRINT.as_mut().unwrap().lock() };
+    let mut lock = unsafe { lock_w_info!(PRINT.as_mut().unwrap()) };
     _print_locked(&mut lock, args);
 }
 
@@ -73,7 +73,7 @@ pub fn _print_locked(lock: &mut NoIntSpinlockGuard<dyn Print>, args: core::fmt::
 
 #[doc(hidden)]
 pub fn _print_colored(fg: (u8, u8, u8), args: core::fmt::Arguments) {
-    let mut lock = unsafe { PRINT.as_mut().unwrap().lock() };
+    let mut lock = unsafe { lock_w_info!(PRINT.as_mut().unwrap()) };
     lock.set_fg_color(fg);
     _print_locked(&mut lock, args);
     lock.reset_color();

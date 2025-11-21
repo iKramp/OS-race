@@ -1,4 +1,4 @@
-use crate::proc::interrupt_context_switch;
+use crate::proc::{interrupt_context_switch, save_and_release_current, StackCpuStateData};
 
 use super::{disable_interrupts, enable_interrupts};
 
@@ -202,15 +202,17 @@ pub extern "C" fn general_interrupt_handler(
         locals.atomic_context = prev_atomic;
         return;
     }
-    interrupt_context_switch(proc_data);
+    if let Some(curr_proc) = locals.current_process.as_mut() {
+        //save current process state
+        save_and_release_current(curr_proc, &StackCpuStateData::Interrupt(proc_data), None);
+    }
+    interrupt_context_switch();
 
     //did not context switch -> PROC not initialized or some other "error"
     disable_interrupts();
     locals.int_depth -= 1;
     locals.atomic_context = prev_atomic;
-    if !locals.lock_info.no_locks() {
-        panic!("Interrupt return with held locks detected: {:?}", locals.lock_info);
-    }
+    locals.lock_info.assert_no_locks();
 }
 
 #[derive(Debug, Clone)]

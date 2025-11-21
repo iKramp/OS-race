@@ -1,13 +1,14 @@
-use std::{boxed::Box, string::ToString};
+use std::{sync::arc::Arc, boxed::Box, string::ToString, vec::Vec};
 
-use crate::{proc::{syscall::SyscallArgs, Pid}, task_runner, vfs::{self, file::FileFlags, InodeIdentifier}};
+use crate::{proc::{self, syscall::SyscallArgs, ProcessData}, task_runner, vfs::{self, file::FileFlags, InodeIdentifierChain}};
 
 
-pub fn fopen(args: &mut SyscallArgs, pid: Pid) {
+pub fn fopen(args: &mut SyscallArgs, proc: &Arc<ProcessData>) -> bool {
+    let pid = proc.pid();
     let c_path = unsafe { core::ffi::c_str::CStr::from_ptr(args.arg1 as *const i8) };
     let Ok(path) = c_path.to_str() else {
         args.syscall_number = u64::MAX;
-        return;
+        return false;
     };
     let path = path.to_string();
 
@@ -15,10 +16,17 @@ pub fn fopen(args: &mut SyscallArgs, pid: Pid) {
     let ftags = args.arg3;
     let _create_mode = args.arg4;
 
-    let file_source: Option<InodeIdentifier> = if fd == 0 {
+    let file_source: Option<InodeIdentifierChain> = if fd == 0 {
         None
     } else {
-        None //for now
+        let proc_mut = proc.get_mutable();
+        let Some(f_handle) = proc_mut.get_file_handle(fd) else {
+            args.syscall_number = u64::MAX;
+            return false;
+        };
+        let mut new_chain = Vec::from(f_handle.parent_chain.as_ref());
+        new_chain.push(f_handle.inode);
+        Some(new_chain.into_boxed_slice())
     };
 
     let task = async move {
@@ -46,7 +54,9 @@ pub fn fopen(args: &mut SyscallArgs, pid: Pid) {
                 proc_lock.set_syscall_return(u64::MAX, 1).unwrap();
             }
         }
+        proc::wake_process(pid)
     };
 
-    task_runner::add_task(Box::pin(task));
+    task_runner::add_task(Box::pin(task), Some(pid));
+    true
 }

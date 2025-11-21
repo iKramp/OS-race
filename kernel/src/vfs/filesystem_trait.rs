@@ -1,5 +1,5 @@
 use core::fmt::Debug;
-use std::{arc::Arc, boxed::Box, mem_utils::PhysAddr};
+use std::{sync::arc::Arc, boxed::Box, mem_utils::PhysAddr};
 
 use crate::drivers::disk::{DirEntry, MountedPartition};
 
