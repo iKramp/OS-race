@@ -44,7 +44,7 @@ impl VfsAdapterDevice {
 pub trait VfsAdapterTrait: Debug + Send + Sync {
     async fn read(&self, inode: InodeIndex, offset_bytes: u64, size_bytes: u64, buffer: &[PhysAddr]) -> u64;
     async fn read_dir(&self, inode: InodeIndex) -> Box<[DirEntry]>;
-    async fn write(&self, inode: InodeIndex, offset: u64, size: u64, buffer: &[PhysAddr]) -> Inode;
+    async fn write(&self, inode: InodeIndex, offset: u64, size: u64, buffer: &[PhysAddr]) -> (Inode, u64);
     async fn stat(&self, inode: InodeIndex) -> Inode;
 }
 
@@ -58,7 +58,7 @@ impl<T: VfsAdapterTrait> FileSystem for T {
         VfsAdapterTrait::read_dir(self, inode).await
     }
 
-    async fn write(&self, inode: InodeIndex, offset: u64, size: u64, buffer: &[PhysAddr]) -> Inode {
+    async fn write(&self, inode: InodeIndex, offset: u64, size: u64, buffer: &[PhysAddr]) -> (Inode, u64) {
         VfsAdapterTrait::write(self, inode, offset, size, buffer).await
     }
 

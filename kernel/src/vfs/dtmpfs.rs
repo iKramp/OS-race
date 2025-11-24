@@ -75,7 +75,7 @@ impl FileSystem for Dtmpfs {
         entries.into_boxed_slice()
     }
 
-    async fn write(&self, _inode: InodeIndex, _offset: u64, _size: u64, _buffer: &[std::mem_utils::PhysAddr]) -> super::Inode {
+    async fn write(&self, _inode: InodeIndex, _offset: u64, _size: u64, _buffer: &[std::mem_utils::PhysAddr]) -> (super::Inode, u64) {
         panic!("Writing is not supported in dtmpfs");
     }
 

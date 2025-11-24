@@ -114,14 +114,14 @@ extern "C" fn handler(args_rsp: u64) -> ! {
 
     #[allow(clippy::single_match)]
     let task_sleep = match args.syscall_number {
-        0 => todo!("implement illegal syscall"),
-        1 => syscall::handlers::console_write(args), //implement exit
+        0 => syscall::handlers::illegal(args, curr_proc),
+        1 => todo!("implement exit"),
         2 => todo!("implement exec"),
         3 => todo!("implement clone"),
         4 => syscall::handlers::fopen(args, curr_proc),
-        5 => todo!("implement fclose"),
+        5 => syscall::handlers::fclose(args, curr_proc),
         6 => syscall::handlers::fread(args, curr_proc),
-        7 => todo!("implement fwrite"),
+        7 => syscall::handlers::fwrite(args, curr_proc),
         8 => todo!("implement fseek"),
         9 => todo!("implement mmap"),
         10 => todo!("implement munmap"),

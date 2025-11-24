@@ -115,7 +115,7 @@ async fn mount_new_root(fs: &Arc<dyn FileSystem + Send>) {
 
     //root checks
     let root_dirs = fs.read_dir(inode_index).await;
-    let required_dirs = ["dev", "proc"];
+    let required_dirs = ["tty", "proc"];
     for required_dir in required_dirs.iter() {
         if !root_dirs.iter().any(|entry| entry.name.as_ref() == *required_dir) {
             //create the required directory
@@ -200,7 +200,7 @@ pub async fn create_file(parent_dir: &mut FileHandle, name: &str, inode_type: In
     Ok(())
 }
 
-pub async fn write_file(file_handle: &mut FileHandle, content: &[PhysAddr], offset: u64, size: u64) -> Result<(), String> {
+pub async fn write_file(file_handle: &mut FileHandle, content: &[PhysAddr], size: u64) -> Result<u64, String> {
     if !file_handle.file_flags.write() {
         return Err("File opened in read-only mode".to_string());
     }
@@ -216,17 +216,16 @@ pub async fn write_file(file_handle: &mut FileHandle, content: &[PhysAddr], offs
     let offset = if file_handle.file_flags.append() {
         inode.size
     } else {
-        file_handle.position + offset
+        file_handle.position
     };
 
-    fs.write(inode.index, offset, size, content).await;
+    let res = fs.write(inode.index, offset, size, content).await;
 
-    if file_handle.file_flags.append() {
-        return Ok(());
+    if !file_handle.file_flags.append() {
+        file_handle.position += size;
     }
 
-    file_handle.position += size;
-    Ok(())
+    Ok(res.1)
 }
 
 pub async fn read_file(file_handle: &mut FileHandle, buffer: &[PhysAddr], size: u64) -> Result<u64, String> {

@@ -1,9 +1,13 @@
-mod console_write;
 mod fopen;
 mod time;
 mod fread;
+mod fwrite;
+mod fclose;
+mod illegal;
 
-pub use console_write::console_write;
 pub use time::time;
 pub use fopen::fopen;
 pub use fread::fread;
+pub use fwrite::fwrite;
+pub use fclose::fclose;
+pub use illegal::illegal;

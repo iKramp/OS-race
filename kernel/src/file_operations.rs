@@ -144,7 +144,6 @@ impl WriteFileOperation {
         block_task(Box::pin(vfs::write_file(
             &mut file,
             &frames,
-            self.offset,
             self.content.len() as u64,
         )))
         .unwrap();

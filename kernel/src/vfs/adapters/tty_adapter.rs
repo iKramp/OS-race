@@ -71,23 +71,23 @@ impl VfsAdapterTrait for TtyAdapter {
         panic!("TTY does not support read_dir");
     }
 
-    async fn write(&self, _inode: crate::vfs::InodeIndex, _offset: u64, size: u64, buffer: &[std::mem_utils::PhysAddr]) -> crate::vfs::Inode {
+    async fn write(&self, _inode: crate::vfs::InodeIndex, _offset: u64, size: u64, buffer: &[std::mem_utils::PhysAddr]) -> (crate::vfs::Inode, u64) {
         for i in 0..(size / 4096) {
             let Some(phys_ptr) = buffer.get(i as usize) else {
-                return self.get_inode();
+                return (self.get_inode(), size);
             };
             let ptr = std::mem_utils::translate_phys_virt_addr(*phys_ptr).0 as *const u8;
             let str = unsafe { core::str::from_raw_parts(ptr, 4096) };
             print!("{}", str);
         }
         let Some(phys_ptr) = buffer.last() else {
-            return self.get_inode();
+            return (self.get_inode(), size);
         };
         let ptr = std::mem_utils::translate_phys_virt_addr(*phys_ptr).0 as *const u8;
         let str = unsafe { core::str::from_raw_parts(ptr, (size % 4096) as usize) };
         print!("{}", str);
 
-        self.get_inode()
+        (self.get_inode(), size)
     }
 
     async fn stat(&self, _inode: crate::vfs::InodeIndex) -> crate::vfs::Inode {

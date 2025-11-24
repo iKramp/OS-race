@@ -648,7 +648,7 @@ impl Rfs {
         ret_size
     }
 
-    pub async fn write_locked(&self, inode: InodeIndex, offset: u64, size: u64, buffer: &[PhysAddr]) -> vfs::Inode {
+    pub async fn write_locked(&self, inode: InodeIndex, offset: u64, size: u64, buffer: &[PhysAddr]) -> (vfs::Inode, u64) {
         let inode = inode as u32;
         assert!(offset % 4096 == 0);
         assert!(size.div_ceil(4096) <= buffer.len() as u64);
@@ -686,7 +686,7 @@ impl Rfs {
             self.partition.write(inode_block_index as usize * 8 + 1, 7, buffer).await;
             self.partition.write(inode_block_index as usize * 8, 1, &[inode_block]).await;
             unsafe { PAGE_TREE_ALLOCATOR.deallocate(inode_block_binding) };
-            return vfs_inode;
+            return (vfs_inode, size);
         }
 
         let mut pointers: Vec<u32> = std::Vec::new();
@@ -732,7 +732,7 @@ impl Rfs {
         }
         unsafe { PAGE_TREE_ALLOCATOR.deallocate(inode_block_binding) };
 
-        vfs_inode
+        (vfs_inode, size)
     }
 
     async fn link_locked(&self, inode_index: InodeIndex, parent_inode_index: InodeIndex, name: &str) -> vfs::Inode {
@@ -806,7 +806,7 @@ impl Rfs {
             unsafe { PAGE_TREE_ALLOCATOR.deallocate(second_block_binding) };
         }
         unsafe { PAGE_TREE_ALLOCATOR.deallocate(working_block_binding) };
-        vfs_inode
+        vfs_inode.0
     }
 
 }
@@ -825,7 +825,7 @@ impl FileSystem for Rfs {
         bytes_read
     }
 
-    async fn write(&self, inode: InodeIndex, offset: u64, size: u64, buffer: &[PhysAddr]) -> vfs::Inode {
+    async fn write(&self, inode: InodeIndex, offset: u64, size: u64, buffer: &[PhysAddr]) -> (vfs::Inode, u64) {
         let file_lock = self.get_file_lock(inode as u32);
         let _write_guard = file_lock.lock_write().await;
         let vfs_inode = self.write_locked(inode, offset, size, buffer).await;

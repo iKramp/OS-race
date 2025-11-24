@@ -36,7 +36,7 @@ impl VfsAdapterTrait for ProcAdapter {
         _offset: u64,
         _size: u64,
         _buffer: &[std::mem_utils::PhysAddr],
-    ) -> crate::vfs::Inode {
+    ) -> (crate::vfs::Inode, u64) {
         todo!()
     }
 
