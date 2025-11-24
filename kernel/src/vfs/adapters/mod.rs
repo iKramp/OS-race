@@ -6,11 +6,13 @@ use crate::drivers::disk::DirEntry;
 use super::{filesystem_trait::FileSystem, Inode, InodeIndex};
 
 mod proc_adapter;
+mod tty_adapter;
 
 const DEV_NAMESPACE: u64 = 0b00000000 << 56;
 const PROC_NAMESPACE: u64 = 0b00000001 << 56;
 const SYS_NAMESPACE: u64 = 0b00000010 << 56;
 const RUN_NAMESPACE: u64 = 0b00000011 << 56;
+const TTY_NAMESPACE: u64 = 0b00000100 << 56;
 const MASK: u64 = 0b11111111 << 56;
 
 #[derive(Debug)]
