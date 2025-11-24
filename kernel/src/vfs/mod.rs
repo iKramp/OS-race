@@ -38,6 +38,7 @@ impl DeviceId {
 
 pub type InodeIndex = u64;
 
+#[derive(Debug, Clone)]
 pub struct DeviceDetails {
     pub drive: Uuid,
     pub partition: Uuid,
@@ -56,7 +57,7 @@ pub struct Vfs {
     ///Map from disk guid to disk object (driver) and a list of partition guids
     disks: BTreeMap<Uuid, (Box<dyn BlockDevice + Send>, Vec<Uuid>)>,
     ///maps from filesystem type uuid to filesystem driver factory
-    filesystem_driver_factories: BTreeMap<Uuid, Box<dyn FileSystemFactory + Send>>,
+    filesystem_driver_factories: BTreeMap<Uuid, Arc<dyn FileSystemFactory + Send>>,
     ///maps from partition uuid to filesystem driver
     mounted_filesystems: BTreeMap<Uuid, Arc<dyn FileSystem + Send>>,
     ///maps from partition uuid to partition object
@@ -89,7 +90,7 @@ impl Vfs {
 pub fn init() {
     let mut vfs = lock_w_info!(VFS);
     vfs.filesystem_driver_factories
-        .insert(RfsFactory::UUID, Box::new(RfsFactory {}));
+        .insert(RfsFactory::UUID, Arc::new(RfsFactory {}));
     vfs.filesystem_driver_factories
-        .insert(DtmpfsFactory::UUID, Box::new(DtmpfsFactory {}));
+        .insert(DtmpfsFactory::UUID, Arc::new(DtmpfsFactory {}));
 }

@@ -28,15 +28,15 @@ impl VfsAdapterDevice {
         self.part_count.fetch_add(1, core::sync::atomic::Ordering::SeqCst) as u64
     }
 
-    pub fn allocate_device(&self, vfs: &mut Vfs) -> DeviceId {
+    pub fn allocate_device(&self, vfs: &mut Vfs) -> (DeviceId, DeviceDetails) {
         let new_part = self.get_partition();
         let device = vfs.allocate_device();
         let dev_details = DeviceDetails {
             drive: Uuid::nil(),
             partition: Uuid::from_u64_pair(0, new_part),
         };
-        vfs.devices.insert(device, dev_details);
-        device
+        vfs.devices.insert(device, dev_details.clone());
+        (device, dev_details)
     }
 }
 

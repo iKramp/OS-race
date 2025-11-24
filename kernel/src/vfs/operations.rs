@@ -1,5 +1,5 @@
 use std::{
-    boxed::Box, format, lock_w_info, mem_utils::PhysAddr, string::{String, ToString}, sync::arc::Arc, vec::Vec
+    boxed::Box, format, lock_w_info, mem_utils::PhysAddr, string::{String, ToString}, sync::{arc::Arc, no_int_spinlock::NoIntSpinlockGuard}, vec::Vec
 };
 
 use uuid::Uuid;
@@ -60,7 +60,7 @@ pub async fn mount_blkdev_partition(part_id: Uuid, mountpoint: ResolvedPath) -> 
     let disk = &raw mut *disk.0;
     let cloned_disk: &'static mut dyn BlockDevice = unsafe { &mut *disk };
 
-    let Some(fs_factory) = vfs.filesystem_driver_factories.get(&partition.fs_type) else {
+    let Some(fs_factory) = vfs.filesystem_driver_factories.get(&partition.fs_type).cloned() else {
         return Err(format!(
             "No filesystem driver loaded for \n
                 partition type: {}, \n
@@ -69,28 +69,30 @@ pub async fn mount_blkdev_partition(part_id: Uuid, mountpoint: ResolvedPath) -> 
         )
         .to_string());
     };
+    drop(vfs);
 
     let mounted_partition = MountedPartition {
         disk: cloned_disk,
         partition,
     };
     let fs = fs_factory.mount(mounted_partition).await;
-    if let Err(e) = mount_filesystem(mountpoint, &fs, &mut vfs).await {
+    if let Err(e) = mount_filesystem(mountpoint, fs.clone(), part_id).await {
         fs.unmount().await;
         Err(e)
     } else {
-        let fs: Arc<dyn FileSystem + Send> = fs;
-        vfs.mounted_filesystems.insert(part_id, fs);
         Ok(())
     }
 }
 
-async fn mount_filesystem(mountpoint: ResolvedPath, fs: &Arc<dyn FileSystem + Send>, vfs: &mut Vfs) -> Result<(), String> {
+async fn mount_filesystem(mountpoint: ResolvedPath, fs: Arc<dyn FileSystem + Send>, part_id: Uuid) -> Result<(), String> {
     let root = mountpoint.inner().is_empty();
     if root {
         //mounting root
-        mount_new_root(fs, vfs).await;
-        //anything else?
+        mount_new_root(&fs).await;
+        let fs: Arc<dyn FileSystem + Send> = fs;
+        let mut vfs = lock_w_info!(VFS);
+        vfs.mounted_filesystems.insert(part_id, fs);
+        mount_vfs_adapters(vfs).await;
     } else {
         let fs_root_inode = fs.stat(ROOT_INODE_INDEX).await;
         //we disallow the mounting of root failing so no checks :3
@@ -98,12 +100,15 @@ async fn mount_filesystem(mountpoint: ResolvedPath, fs: &Arc<dyn FileSystem + Se
             .await
             .ok_or("mountpoint not found")?;
         fs_tree::mount_inode(inode, fs_root_inode);
+        let fs: Arc<dyn FileSystem + Send> = fs;
+        let mut vfs = lock_w_info!(VFS);
+        vfs.mounted_filesystems.insert(part_id, fs);
     }
 
     Ok(())
 }
 
-async fn mount_new_root(fs: &Arc<dyn FileSystem + Send>, vfs: &mut Vfs) {
+async fn mount_new_root(fs: &Arc<dyn FileSystem + Send>) {
     let inode = fs.stat(ROOT_INODE_INDEX).await;
     let inode_index = inode.index;
     fs_tree::init(inode);
@@ -119,14 +124,17 @@ async fn mount_new_root(fs: &Arc<dyn FileSystem + Send>, vfs: &mut Vfs) {
         }
     }
 
-    let proc_dev = VFS_ADAPTER_DEVICE.allocate_device(vfs);
-    let tty_dev = VFS_ADAPTER_DEVICE.allocate_device(vfs);
+}
 
-    let proc_adapter: Arc<dyn FileSystem + Send> = Arc::new(crate::vfs::adapters::ProcAdapter::new(proc_dev));
-    let tty_adapter: Arc<dyn FileSystem + Send> = Arc::new(crate::vfs::adapters::TtyAdapter::new(tty_dev));
+async fn mount_vfs_adapters(mut vfs: NoIntSpinlockGuard<'_, Vfs>) {
+    let proc_dev = VFS_ADAPTER_DEVICE.allocate_device(&mut vfs);
+    let tty_dev = VFS_ADAPTER_DEVICE.allocate_device(&mut vfs);
+    drop(vfs);
 
-    Box::pin(mount_filesystem(resolve_path("/dev"), &tty_adapter, vfs)).await.expect("Failed to mount /dev"); //change this to a delegated dev adapter
-    Box::pin(mount_filesystem(resolve_path("/proc"), &proc_adapter, vfs)).await.expect("Failed to mount /proc");
+    let proc_adapter: Arc<dyn FileSystem + Send> = Arc::new(crate::vfs::adapters::ProcAdapter::new(proc_dev.0));
+    let tty_adapter: Arc<dyn FileSystem + Send> = Arc::new(crate::vfs::adapters::TtyAdapter::new(tty_dev.0));
+    Box::pin(mount_filesystem(resolve_path("/tty"), tty_adapter, tty_dev.1.partition)).await.expect("Failed to mount /tty");
+    Box::pin(mount_filesystem(resolve_path("/proc"), proc_adapter, proc_dev.1.partition)).await.expect("Failed to mount /proc");
 }
 
 pub async fn unmount(path: ResolvedPathBorrowed<'_>) -> Result<(), String> {

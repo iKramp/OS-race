@@ -7,7 +7,7 @@ use super::{Inode, InodeIndex, InodeType};
 
 
 #[async_trait::async_trait]
-pub trait FileSystemFactory {
+pub trait FileSystemFactory: Send + Sync {
     async fn mount(&self, partition: MountedPartition) -> Arc<dyn FileSystem + Send>;
 }
 

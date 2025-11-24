@@ -1,4 +1,10 @@
-use std::{boxed::Box, collections::btree_map::BTreeMap, lock_w_info, printlnc, sync::{lock_info::LockLocationInfo, no_int_spinlock::{NoIntSpinlock, NoIntSpinlockGuard}}, vec::Vec};
+use std::{
+    boxed::Box,
+    collections::btree_map::BTreeMap,
+    lock_w_info, printlnc,
+    sync::no_int_spinlock::{NoIntSpinlock, NoIntSpinlockGuard},
+    vec::Vec,
+};
 
 use super::{DeviceId, Inode, InodeIdentifier, InodeIdentifierChain, ResolvedPathBorrowed, VFS};
 
@@ -46,7 +52,10 @@ pub fn get_inode(inode_index: InodeIdentifier) -> Option<Inode> {
     cache.inodes.get(&inode_index).map(|(inode, _)| inode).cloned()
 }
 
-pub async fn get_unmount_inodes(path: ResolvedPathBorrowed<'_>, from: Option<InodeIdentifier>) -> Option<(InodeIdentifier, InodeIdentifier)> {
+pub async fn get_unmount_inodes(
+    path: ResolvedPathBorrowed<'_>,
+    from: Option<InodeIdentifier>,
+) -> Option<(InodeIdentifier, InodeIdentifier)> {
     let mut cache = Some(lock_w_info!(INODE_CACHE));
     let mut current = from.unwrap_or(cache.as_ref().expect("is some").root);
     for component in path.iter() {
@@ -79,14 +88,24 @@ pub async fn get_unmount_inodes(path: ResolvedPathBorrowed<'_>, from: Option<Ino
     Some((old, current))
 }
 
-pub async fn get_inode_chain(path: ResolvedPathBorrowed<'_>, from: Option<InodeIdentifierChain>) -> Option<(InodeIdentifier, InodeIdentifierChain)> {
+pub async fn get_inode_chain(
+    path: ResolvedPathBorrowed<'_>,
+    from: Option<InodeIdentifierChain>,
+) -> Option<(InodeIdentifier, InodeIdentifierChain)> {
     let mut cache_lock = Some(lock_w_info!(INODE_CACHE));
-    let mut current = from.unwrap_or(Box::new([cache_lock.as_ref().expect("is some").root])).to_vec();
+    let mut current = from
+        .unwrap_or(Box::new([cache_lock.as_ref().expect("is some").root]))
+        .to_vec();
     if current.is_empty() {
         panic!("Empty inode chain passed to get_inode_index");
     }
     for component in path.iter() {
-        while let Some(mount_point) = cache_lock.as_ref().expect("is some").mount_points.get(current.last().unwrap()) {
+        while let Some(mount_point) = cache_lock
+            .as_ref()
+            .expect("is some")
+            .mount_points
+            .get(current.last().unwrap())
+        {
             if mount_point == current.last().unwrap() {
                 printlnc!((0, 0, 255), "Detected mount loop at inode {:?}\n", current);
                 break;
@@ -118,7 +137,11 @@ pub async fn get_inode_chain(path: ResolvedPathBorrowed<'_>, from: Option<InodeI
     Some((file, current.into_boxed_slice()))
 }
 
-async fn find_child_no_mounts(current: InodeIdentifier, f_name: &str, cache: &mut Option<NoIntSpinlockGuard<'_, InodeCache>>) -> Option<InodeIdentifier> {
+async fn find_child_no_mounts(
+    current: InodeIdentifier,
+    f_name: &str,
+    cache: &mut Option<NoIntSpinlockGuard<'_, InodeCache>>,
+) -> Option<InodeIdentifier> {
     let current_node = cache.as_ref().expect("is some").inodes.get(&current)?;
     let child = current_node.1.children.iter().find(|(name, _)| **name == *f_name);
     if let Some(child) = child {
@@ -158,7 +181,11 @@ async fn load_dir(current: InodeIdentifier, cache: &mut Option<NoIntSpinlockGuar
             index: inode.index,
         };
         *cache = Some(lock_w_info!(INODE_CACHE)); //get lock back
-        cache.as_mut().expect("is some").inodes.insert(inode_index, (inode, FsTreeNode { children: Vec::new() }));
+        cache
+            .as_mut()
+            .expect("is some")
+            .inodes
+            .insert(inode_index, (inode, FsTreeNode { children: Vec::new() }));
         children.push((dir_entry.name.clone(), inode_index));
     }
     cache.as_mut().expect("is some").inodes.get_mut(&current).unwrap().1.children = children;
