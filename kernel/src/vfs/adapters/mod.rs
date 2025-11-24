@@ -1,73 +1,42 @@
-use core::fmt::Debug;
+use core::{fmt::Debug, sync::atomic::AtomicU32};
 use std::{boxed::Box, mem_utils::PhysAddr};
 
 use crate::drivers::disk::DirEntry;
 
-use super::{filesystem_trait::FileSystem, Inode, InodeIndex};
+use super::{filesystem_trait::FileSystem, DeviceDetails, DeviceId, Inode, InodeIndex, Vfs};
 
 mod proc_adapter;
 mod tty_adapter;
 
-const DEV_NAMESPACE: u64 = 0b00000000 << 56;
-const PROC_NAMESPACE: u64 = 0b00000001 << 56;
-const SYS_NAMESPACE: u64 = 0b00000010 << 56;
-const RUN_NAMESPACE: u64 = 0b00000011 << 56;
-const TTY_NAMESPACE: u64 = 0b00000100 << 56;
-const MASK: u64 = 0b11111111 << 56;
+pub use proc_adapter::ProcAdapter;
+pub use tty_adapter::TtyAdapter;
+use uuid::Uuid;
 
 #[derive(Debug)]
-struct VfsAdpater {
-    proc: proc_adapter::ProcAdapter,
+pub(super) struct VfsAdapterDevice {
+    part_count: AtomicU32,
 }
 
-impl VfsAdpater {
-    pub fn new() -> Self {
-        VfsAdpater {
-            proc: proc_adapter::ProcAdapter,
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl VfsAdapterTrait for VfsAdpater {
-    async fn read(&self, inode: super::InodeIndex, offset_bytes: u64, size_bytes: u64, buffer: &[std::mem_utils::PhysAddr]) -> u64 {
-        match inode & MASK {
-            PROC_NAMESPACE => FileSystem::read(&self.proc, inode, offset_bytes, size_bytes, buffer).await,
-            _ => unreachable!(),
+impl VfsAdapterDevice {
+    pub const fn new() -> Self {
+        Self {
+            part_count: AtomicU32::new(0),
         }
     }
 
-    async fn read_dir(&self, inode: super::InodeIndex) -> std::boxed::Box<[crate::drivers::disk::DirEntry]> {
-        match inode & MASK {
-            PROC_NAMESPACE => {
-                // let mut dir_entries = FileSystem::read_dir(&mut self.proc, inode);
-                // dir_entries = dir_entries.iter_mut().map(|entry| {
-                //     let mut new_entry = entry.clone();
-                //     new_entry.inode.index |= PROC_NAMESPACE;
-                //     new_entry
-                // }).collect();
-                unreachable!()
-            }
-            _ => unreachable!(),
-        }
+    fn get_partition(&self) -> u64 {
+        self.part_count.fetch_add(1, core::sync::atomic::Ordering::SeqCst) as u64
     }
 
-    async fn write(&self, inode: super::InodeIndex, offset: u64, size: u64, buffer: &[std::mem_utils::PhysAddr]) -> super::Inode {
-        match inode & MASK {
-            PROC_NAMESPACE => {
-                let mut inode = FileSystem::write(&self.proc, inode & !MASK, offset, size, buffer).await;
-                inode.index |= PROC_NAMESPACE;
-                inode
-            }
-            _ => unreachable!(),
-        }
-    }
-
-    async fn stat(&self, inode: super::InodeIndex) -> super::Inode {
-        match inode & MASK {
-            PROC_NAMESPACE => FileSystem::stat(&self.proc, inode & !MASK).await,
-            _ => unreachable!(),
-        }
+    pub fn allocate_device(&self, vfs: &mut Vfs) -> DeviceId {
+        let new_part = self.get_partition();
+        let device = vfs.allocate_device();
+        let dev_details = DeviceDetails {
+            drive: Uuid::nil(),
+            partition: Uuid::from_u64_pair(0, new_part),
+        };
+        vfs.devices.insert(device, dev_details);
+        device
     }
 }
 

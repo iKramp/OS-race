@@ -12,8 +12,6 @@ pub struct Inode {
     pub link_cnt: u16,
     pub uid: u16,
     pub gid: u16,
-    ///this is set to a device uuid if the inode represents a device
-    pub device_represented: Option<DeviceId>,
     ///len of a symlink is the length of the pathname
     pub size: u64,
     pub access_time: u32,

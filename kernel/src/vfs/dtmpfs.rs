@@ -3,7 +3,13 @@
 //!provides a directory structure for mounpoints
 
 use std::{
-    sync::arc::Arc, boxed::Box, collections::btree_map::BTreeMap, lock_w_info, string::{String, ToString}, sync::{lock_info::LockLocationInfo, no_int_spinlock::NoIntSpinlock}, vec::Vec
+    boxed::Box,
+    collections::btree_map::BTreeMap,
+    lock_w_info,
+    string::{String, ToString},
+    sync::arc::Arc,
+    sync::no_int_spinlock::NoIntSpinlock,
+    vec::Vec,
 };
 
 use uuid::Uuid;
@@ -82,7 +88,6 @@ impl FileSystem for Dtmpfs {
                 link_cnt: 0,
                 uid: 0,
                 gid: 0,
-                device_represented: Some(DeviceId(0)),
                 size: 0,
                 preferred_block_size: 0,
                 blocks: 0,

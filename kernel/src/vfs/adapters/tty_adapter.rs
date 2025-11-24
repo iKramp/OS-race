@@ -1,4 +1,4 @@
-use std::print;
+use std::{lock_w_info, print};
 use std::{sync::no_int_spinlock::NoIntSpinlock, vec::Vec};
 use std::boxed::Box;
 
@@ -9,14 +9,16 @@ use super::VfsAdapterTrait;
 
 
 #[derive(Debug)]
-pub(super) struct TtyAdapter {
+pub struct TtyAdapter { //for now whole /dev
+    device_id: DeviceId,
     buffered_input: NoIntSpinlock<Vec<u8>>,
     ready_input: NoIntSpinlock<Vec<u8>>,
 }
 
 impl TtyAdapter {
-    pub fn new() -> Self {
+    pub fn new(device_id: DeviceId) -> Self {
         TtyAdapter {
+            device_id,
             buffered_input: NoIntSpinlock::new(Vec::new()),
             ready_input: NoIntSpinlock::new(Vec::new()),
         }
@@ -25,13 +27,12 @@ impl TtyAdapter {
     fn get_inode(&self) -> crate::vfs::Inode {
         crate::vfs::Inode {
             index: 0,
-            device: DeviceId::new(0),
+            device: self.device_id,
             type_mode: InodeType::new_file(0o777),
             link_cnt: 1,
             uid: 0,
             gid: 0,
-            device_represented: None,
-            size: self.ready_input.lock().len() as u64,
+            size: lock_w_info!(self.ready_input).len() as u64,
             access_time: 0,
             modification_time: 0,
             stat_change_time: 0,
@@ -43,9 +44,10 @@ impl TtyAdapter {
 
 #[async_trait::async_trait]
 impl VfsAdapterTrait for TtyAdapter {
-    async fn read(&self, _inode: crate::vfs::InodeIndex, _offset_bytes: u64, size_bytes: u64, buffer: &[std::mem_utils::PhysAddr]) {
-        let mut ready_input = self.ready_input.lock();
+    async fn read(&self, _inode: crate::vfs::InodeIndex, _offset_bytes: u64, mut size_bytes: u64, buffer: &[std::mem_utils::PhysAddr]) -> u64 {
+        let mut ready_input = lock_w_info!(self.ready_input);
         let mut block = 0;
+        let mut read_size = 0;
         loop {
             if size_bytes == 0 || ready_input.is_empty() {
                 break;
@@ -59,7 +61,10 @@ impl VfsAdapterTrait for TtyAdapter {
             slice.copy_from_slice(&ready_input[..size_to_read as usize]);
             ready_input.drain(..size_to_read as usize);
             block += 1;
+            size_bytes -= size_to_read;
+            read_size += size_to_read;
         }
+        read_size
     }
 
     async fn read_dir(&self, _inode: crate::vfs::InodeIndex) -> std::boxed::Box<[crate::drivers::disk::DirEntry]> {

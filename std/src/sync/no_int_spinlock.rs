@@ -35,7 +35,7 @@ impl<T> NoIntSpinlock<T> {
 #[macro_export]
 macro_rules! lock_w_info {
     ($l:expr) => {
-        $l.lock(LockLocationInfo(file!(), line!(), column!()))
+        $l.lock($crate::sync::lock_info::LockLocationInfo(file!(), line!(), column!()))
     };
 }
 

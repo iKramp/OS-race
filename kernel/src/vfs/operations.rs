@@ -1,5 +1,5 @@
 use std::{
-    sync::arc::Arc, boxed::Box, format, lock_w_info, mem_utils::PhysAddr, string::{String, ToString}, sync::lock_info::LockLocationInfo, vec::Vec
+    boxed::Box, format, lock_w_info, mem_utils::PhysAddr, string::{String, ToString}, sync::arc::Arc, vec::Vec
 };
 
 use uuid::Uuid;
@@ -10,10 +10,7 @@ use crate::drivers::{
 };
 
 use super::{
-    DeviceDetails, InodeIdentifierChain, InodeType, ROOT_INODE_INDEX, ResolvedPath, ResolvedPathBorrowed, VFS,
-    file::{FileFlags, FileHandle},
-    filesystem_trait::FileSystem,
-    fs_tree::{self},
+    file::{FileFlags, FileHandle}, filesystem_trait::FileSystem, fs_tree::{self}, resolve_path, DeviceDetails, InodeIdentifierChain, InodeType, ResolvedPath, ResolvedPathBorrowed, Vfs, ROOT_INODE_INDEX, VFS, VFS_ADAPTER_DEVICE
 };
 
 pub async fn add_disk(mut disk: Box<dyn BlockDevice + Send>) {
@@ -78,7 +75,7 @@ pub async fn mount_blkdev_partition(part_id: Uuid, mountpoint: ResolvedPath) -> 
         partition,
     };
     let fs = fs_factory.mount(mounted_partition).await;
-    if let Err(e) = mount_filesystem(mountpoint, &fs).await {
+    if let Err(e) = mount_filesystem(mountpoint, &fs, &mut vfs).await {
         fs.unmount().await;
         Err(e)
     } else {
@@ -88,11 +85,11 @@ pub async fn mount_blkdev_partition(part_id: Uuid, mountpoint: ResolvedPath) -> 
     }
 }
 
-async fn mount_filesystem(mountpoint: ResolvedPath, fs: &Arc<dyn FileSystem + Send>) -> Result<(), String> {
+async fn mount_filesystem(mountpoint: ResolvedPath, fs: &Arc<dyn FileSystem + Send>, vfs: &mut Vfs) -> Result<(), String> {
     let root = mountpoint.inner().is_empty();
     if root {
         //mounting root
-        mount_new_root(fs).await;
+        mount_new_root(fs, vfs).await;
         //anything else?
     } else {
         let fs_root_inode = fs.stat(ROOT_INODE_INDEX).await;
@@ -106,7 +103,7 @@ async fn mount_filesystem(mountpoint: ResolvedPath, fs: &Arc<dyn FileSystem + Se
     Ok(())
 }
 
-async fn mount_new_root(fs: &Arc<dyn FileSystem + Send>) {
+async fn mount_new_root(fs: &Arc<dyn FileSystem + Send>, vfs: &mut Vfs) {
     let inode = fs.stat(ROOT_INODE_INDEX).await;
     let inode_index = inode.index;
     fs_tree::init(inode);
@@ -121,6 +118,15 @@ async fn mount_new_root(fs: &Arc<dyn FileSystem + Send>) {
                 .await;
         }
     }
+
+    let proc_dev = VFS_ADAPTER_DEVICE.allocate_device(vfs);
+    let tty_dev = VFS_ADAPTER_DEVICE.allocate_device(vfs);
+
+    let proc_adapter: Arc<dyn FileSystem + Send> = Arc::new(crate::vfs::adapters::ProcAdapter::new(proc_dev));
+    let tty_adapter: Arc<dyn FileSystem + Send> = Arc::new(crate::vfs::adapters::TtyAdapter::new(tty_dev));
+
+    Box::pin(mount_filesystem(resolve_path("/dev"), &tty_adapter, vfs)).await.expect("Failed to mount /dev"); //change this to a delegated dev adapter
+    Box::pin(mount_filesystem(resolve_path("/proc"), &proc_adapter, vfs)).await.expect("Failed to mount /proc");
 }
 
 pub async fn unmount(path: ResolvedPathBorrowed<'_>) -> Result<(), String> {

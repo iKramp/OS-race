@@ -3,7 +3,15 @@ use std::boxed::Box;
 
 
 #[derive(Debug)]
-pub(super) struct ProcAdapter;
+pub struct ProcAdapter {
+    device_id: crate::vfs::DeviceId,
+}
+
+impl ProcAdapter {
+    pub fn new(device_id: crate::vfs::DeviceId) -> Self {
+        ProcAdapter { device_id }
+    }
+}
 
 #[async_trait::async_trait]
 impl VfsAdapterTrait for ProcAdapter {

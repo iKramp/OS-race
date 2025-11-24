@@ -23,6 +23,7 @@ pub use path::*;
 //0 is unknown, 1 is bad blocks, 2 is root
 pub const ROOT_INODE_INDEX: u64 = 2;
 pub static VFS: NoIntSpinlock<Vfs> = NoIntSpinlock::new(Vfs::new());
+static VFS_ADAPTER_DEVICE: adapters::VfsAdapterDevice = adapters::VfsAdapterDevice::new();
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -54,11 +55,11 @@ pub type InodeIdentifierChain = Box<[InodeIdentifier]>;
 pub struct Vfs {
     ///Map from disk guid to disk object (driver) and a list of partition guids
     disks: BTreeMap<Uuid, (Box<dyn BlockDevice + Send>, Vec<Uuid>)>,
-    ///maps from filesystem type guid to filesystem driver factory
+    ///maps from filesystem type uuid to filesystem driver factory
     filesystem_driver_factories: BTreeMap<Uuid, Box<dyn FileSystemFactory + Send>>,
-    ///maps from partition guid to filesystem driver
+    ///maps from partition uuid to filesystem driver
     mounted_filesystems: BTreeMap<Uuid, Arc<dyn FileSystem + Send>>,
-    ///maps from partition guid to partition object
+    ///maps from partition uuid to partition object
     available_partitions: BTreeMap<Uuid, Partition>,
     ///maps from device id to partition and drive uuid
     devices: BTreeMap<DeviceId, DeviceDetails>,
