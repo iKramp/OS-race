@@ -1,5 +1,4 @@
 use std::arch::asm;
-use std::sync::lock_info::LockLocationInfo;
 use std::{lock_w_info, print, println, printlnc};
 
 use super::font::*;

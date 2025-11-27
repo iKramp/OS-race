@@ -1,3 +1,5 @@
+use std::error::ErrorCode;
+use std::vec;
 use std::{
     boxed::Box,
     collections::btree_map::BTreeMap,
@@ -55,7 +57,7 @@ pub fn get_inode(inode_index: InodeIdentifier) -> Option<Inode> {
 pub async fn get_unmount_inodes(
     path: ResolvedPathBorrowed<'_>,
     from: Option<InodeIdentifier>,
-) -> Option<(InodeIdentifier, InodeIdentifier)> {
+) -> Result<(InodeIdentifier, InodeIdentifier), ErrorCode> {
     let mut cache = Some(lock_w_info!(INODE_CACHE));
     let mut current = from.unwrap_or(cache.as_ref().expect("is some").root);
     for component in path.iter() {
@@ -66,12 +68,8 @@ pub async fn get_unmount_inodes(
             }
             current = *mount_point;
         }
-        let child = find_child_no_mounts(current, component, &mut cache).await;
-        if let Some(child) = child {
-            current = child;
-        } else {
-            return None;
-        }
+        let child = find_child_no_mounts(current, component, &mut cache).await?;
+        current = child;
     }
     let mut old = current;
     while let Some(mount_point) = cache.as_ref().expect("is some").mount_points.get(&current) {
@@ -83,35 +81,23 @@ pub async fn get_unmount_inodes(
         current = *mount_point;
     }
     if old == current {
-        return None;
+        return Err(ErrorCode::NotMounted);
     }
-    Some((old, current))
+    Ok((old, current))
 }
 
 pub async fn get_inode_chain(
     path: ResolvedPathBorrowed<'_>,
     from: Option<InodeIdentifierChain>,
-) -> Option<(InodeIdentifier, InodeIdentifierChain)> {
+) -> Result<(InodeIdentifier, InodeIdentifierChain), ErrorCode> {
     let mut cache_lock = Some(lock_w_info!(INODE_CACHE));
     let mut current = from
         .unwrap_or(Box::new([cache_lock.as_ref().expect("is some").root]))
         .to_vec();
     if current.is_empty() {
-        panic!("Empty inode chain passed to get_inode_index");
+        current = vec![cache_lock.as_ref().expect("is some").root];
     }
     for component in path.iter() {
-        while let Some(mount_point) = cache_lock
-            .as_ref()
-            .expect("is some")
-            .mount_points
-            .get(current.last().unwrap())
-        {
-            if mount_point == current.last().unwrap() {
-                printlnc!((0, 0, 255), "Detected mount loop at inode {:?}\n", current);
-                break;
-            }
-            *current.last_mut().unwrap() = *mount_point;
-        }
         if **component == *".." {
             if current.len() > 1 {
                 current.pop();
@@ -119,51 +105,79 @@ pub async fn get_inode_chain(
             continue;
         }
 
-        let child = find_child_no_mounts(*current.last().unwrap(), component, &mut cache_lock).await;
-        if let Some(child) = child {
-            current.push(child);
-        } else {
-            return None;
+        let current_last = *current.last().expect("current can't be empty");
+        while let Some(mount_point) = cache_lock.as_ref().expect("is some").mount_points.get(&current_last) {
+            if *mount_point == current_last {
+                printlnc!((0, 255, 255), "Detected mount loop at inode {:?}\n", current);
+                break;
+            }
+            *current.last_mut().expect("current can't be empty") = *mount_point;
         }
+
+        let child = find_child_no_mounts(*current.last().expect("current can't be empty"), component, &mut cache_lock).await?;
+        current.push(child);
     }
-    if let Some(mount_point) = cache_lock.expect("is some").mount_points.get(current.last().unwrap()) {
-        *current.last_mut().unwrap() = *mount_point;
+    if let Some(mount_point) = cache_lock
+        .expect("is some")
+        .mount_points
+        .get(current.last().expect("current can't be empty"))
+    {
+        *current.last_mut().expect("current can't be empty") = *mount_point;
     }
-    let file = *current.last().unwrap();
+    let file = *current.last().expect("current can't be empty");
     if current.len() > 1 {
         current.pop();
     }
 
-    Some((file, current.into_boxed_slice()))
+    Ok((file, current.into_boxed_slice()))
 }
 
 async fn find_child_no_mounts(
     current: InodeIdentifier,
     f_name: &str,
     cache: &mut Option<NoIntSpinlockGuard<'_, InodeCache>>,
-) -> Option<InodeIdentifier> {
-    let current_node = cache.as_ref().expect("is some").inodes.get(&current)?;
+) -> Result<InodeIdentifier, ErrorCode> {
+    let current_node = cache
+        .as_ref()
+        .expect("is some")
+        .inodes
+        .get(&current)
+        .ok_or(ErrorCode::InodeNotPresent)?;
     let child = current_node.1.children.iter().find(|(name, _)| **name == *f_name);
     if let Some(child) = child {
-        return Some(child.1);
+        return Ok(child.1);
     }
     // If the child is not found, we need to load the directory
-    load_dir(current, cache).await;
+    load_dir(current, cache).await?;
     // After loading, we check again
-    let current_node = cache.as_ref().expect("is some").inodes.get(&current)?;
+    let current_node = cache
+        .as_ref()
+        .expect("is some")
+        .inodes
+        .get(&current)
+        .ok_or(ErrorCode::InodeNotPresent)?;
     let child = current_node.1.children.iter().find(|(name, _)| **name == *f_name);
     if let Some(child) = child {
-        return Some(child.1);
+        return Ok(child.1);
     }
-    None
+    Err(ErrorCode::InodeNotPresent)
 }
 
-async fn load_dir(current: InodeIdentifier, cache: &mut Option<NoIntSpinlockGuard<'_, InodeCache>>) {
-    let inode = cache.as_ref().expect("is some").inodes.get(&current).unwrap();
+async fn load_dir(current: InodeIdentifier, cache: &mut Option<NoIntSpinlockGuard<'_, InodeCache>>) -> Result<(), ErrorCode> {
+    let inode = cache
+        .as_ref()
+        .expect("is some")
+        .inodes
+        .get(&current)
+        .ok_or(ErrorCode::InodeNotPresent)?;
     let mut vfs = lock_w_info!(VFS);
-    let device_details = vfs.devices.get(&inode.0.device).unwrap();
+    let device_details = vfs.devices.get(&inode.0.device).ok_or(ErrorCode::NoEntry)?;
     let partition_id = device_details.partition;
-    let fs = vfs.mounted_filesystems.get_mut(&partition_id).unwrap().clone();
+    let fs = vfs
+        .mounted_filesystems
+        .get_mut(&partition_id)
+        .ok_or(ErrorCode::NoEntry)?
+        .clone();
     drop(vfs);
     drop(cache.take()); //drop lock
 
@@ -171,7 +185,7 @@ async fn load_dir(current: InodeIdentifier, cache: &mut Option<NoIntSpinlockGuar
 
     let mut children = Vec::new();
     if dir.is_empty() {
-        return;
+        return Ok(());
     }
     for dir_entry in dir.iter() {
         drop(cache.take()); //drop in loop
@@ -188,23 +202,39 @@ async fn load_dir(current: InodeIdentifier, cache: &mut Option<NoIntSpinlockGuar
             .insert(inode_index, (inode, FsTreeNode { children: Vec::new() }));
         children.push((dir_entry.name.clone(), inode_index));
     }
-    cache.as_mut().expect("is some").inodes.get_mut(&current).unwrap().1.children = children;
+    cache
+        .as_mut()
+        .expect("is some")
+        .inodes
+        .get_mut(&current)
+        .ok_or(ErrorCode::InodeNotPresent)?
+        .1
+        .children = children;
+    Ok(())
 }
 
-pub fn update_inode(cache_num: InodeIdentifier, inode: Inode) {
+pub fn update_inode(cache_num: InodeIdentifier, inode: Inode) -> Result<(), ErrorCode> {
     let mut cache = lock_w_info!(INODE_CACHE);
-    cache.inodes.get_mut(&cache_num).unwrap().0 = inode;
+    cache.inodes.get_mut(&cache_num).ok_or(ErrorCode::InodeNotPresent)?.0 = inode;
+    Ok(())
 }
 
-pub fn insert_inode(parent_cache_num: InodeIdentifier, name: Box<str>, inode: Inode) {
+pub fn insert_inode(parent_cache_num: InodeIdentifier, name: Box<str>, inode: Inode) -> Result<(), ErrorCode> {
     let mut cache = lock_w_info!(INODE_CACHE);
     let inode_index = InodeIdentifier {
         device_id: inode.device,
         index: inode.index,
     };
     cache.inodes.insert(inode_index, (inode, FsTreeNode { children: Vec::new() }));
-    let parent = cache.inodes.get_mut(&parent_cache_num).unwrap();
-    parent.1.children.push((name, inode_index));
+    let parent_res = cache.inodes.get_mut(&parent_cache_num);
+    match parent_res {
+        None => {
+            cache.inodes.remove(&inode_index);
+            return Err(ErrorCode::InodeNotPresent);
+        },
+        Some(parent) => parent.1.children.push((name, inode_index)),
+    }
+    Ok(())
 }
 
 ///parent_cache_num refers to the mountpoint itself, on top of which the new inode will be mounted

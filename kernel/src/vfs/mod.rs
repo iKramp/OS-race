@@ -1,5 +1,7 @@
 use dtmpfs::DtmpfsFactory;
-use std::{sync::arc::Arc, boxed::Box, collections::btree_map::BTreeMap, lock_w_info, sync::{lock_info::LockLocationInfo, no_int_spinlock::NoIntSpinlock}, vec::Vec};
+use std::{
+    boxed::Box, collections::btree_map::BTreeMap, lock_w_info, sync::arc::Arc, sync::no_int_spinlock::NoIntSpinlock, vec::Vec,
+};
 use uuid::Uuid;
 
 use crate::drivers::{
@@ -9,12 +11,12 @@ use crate::drivers::{
 
 mod adapters;
 mod dtmpfs;
+pub mod file;
 mod filesystem_trait;
 mod fs_tree;
 mod inode;
 mod operations;
 mod path;
-pub mod file;
 pub use filesystem_trait::{FileSystem, FileSystemFactory};
 pub use inode::*;
 pub use operations::*;

@@ -44,7 +44,7 @@ fn main() {
     }
     cmd.arg("-device").arg("ahci,id=ahci");
     cmd.arg("-device").arg("ide-hd,drive=test_disk,bus=ahci.0");
-    let mut child = cmd.spawn().unwrap();
+    let mut child = cmd.spawn().expect("Failed to start QEMU");
 
     if debug {
         let _ = std::process::Command::new("kitty")
@@ -52,12 +52,12 @@ fn main() {
             .arg("-x")
             .arg("~/dev/meowOS/assets/gdb_commands.txt")
             .spawn()
-            .unwrap()
+            .expect("Failed to start GDB")
             .wait()
-            .unwrap();
+            .expect("Failed to wait for GDB");
     }
 
-    child.wait().unwrap();
+    child.wait().expect("Failed to wait on QEMU process");
 }
 
 #[test]

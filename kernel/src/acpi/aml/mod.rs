@@ -1,22 +1,24 @@
-mod aml_code;
-mod namespace;
-use std::vec::Vec;
+// mod aml_code;
+// mod namespace;
+// use std::vec::Vec;
+//
+// mod arg_local_obj;
+// mod data_object;
+// mod expression_opcodes;
+// mod name_objects;
+// mod named_objects;
+// mod namespace_modifier;
+// mod package;
+// mod statement_opcodes;
+// mod term_objects;
+//
+// ///test documetnation
+// struct Integer {
+//     val_64: u64,
+//     val_32: u32,
+//     a: Vec<u32>,
+// }
 
-mod arg_local_obj;
-mod data_object;
-mod expression_opcodes;
-mod name_objects;
-mod named_objects;
-mod namespace_modifier;
-mod package;
-mod statement_opcodes;
-mod term_objects;
-
-///test documetnation
-struct Integer {
-    val_64: u64,
-    val_32: u32,
-    a: Vec<u32>,
-}
+//commented because errors. Will return later
 
 //TODO: implement operations

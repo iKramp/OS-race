@@ -69,7 +69,7 @@ extern "C" fn _start() -> ! {
 
     interrupts::init_interrupts();
 
-    let cmd_args = cmd_args::CmdArgs::new(str.to_str().unwrap());
+    let cmd_args = cmd_args::CmdArgs::new(str.to_str().expect("Invalid UTF-8 in cmdline"));
     println!("cmd_args: {:?}", cmd_args);
 
     acpi::read_tables();

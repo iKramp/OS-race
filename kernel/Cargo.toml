@@ -12,6 +12,7 @@ static_mut_refs = "allow"
 needless_range_loop = "allow"
 comparison_chain = "allow"
 collapsible_else_if = "allow" #often it is not collapsed for conveying additional info
+unwrap_used = "deny"
 
 [[bin]]
 name = "kernel"

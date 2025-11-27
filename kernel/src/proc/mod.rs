@@ -10,7 +10,7 @@ use std::{
     mem_utils::{PhysAddr, VirtAddr},
     println,
     string::ToString,
-    sync::{arc::Arc, lock_info::LockLocationInfo, no_int_spinlock::NoIntSpinlock},
+    sync::{arc::Arc, no_int_spinlock::NoIntSpinlock},
     vec::Vec,
 };
 

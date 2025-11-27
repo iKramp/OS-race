@@ -3,7 +3,12 @@
 
 use core::{fmt::Debug, sync::atomic::AtomicU32, time::Duration};
 use std::{
-    boxed::Box, lock_w_info, mem_utils::{get_at_physical_addr, get_at_virtual_addr, memset_virtual_addr, PhysAddr, VirtAddr}, println, sync::{lock_info::LockLocationInfo, no_int_spinlock::NoIntSpinlock}, vec::Vec
+    boxed::Box,
+    lock_w_info,
+    mem_utils::{PhysAddr, VirtAddr, get_at_physical_addr, get_at_virtual_addr, memset_virtual_addr},
+    println,
+    sync::no_int_spinlock::NoIntSpinlock,
+    vec::Vec,
 };
 
 use bitfield::bitfield;
@@ -526,7 +531,8 @@ impl BlockDevice for VirtualPort {
         CommandWaiter {
             port: self,
             command_index: read_cmd_index,
-        }.await;
+        }
+        .await;
 
         self.clean_command(read_cmd_index);
         self.release_command_index(read_cmd_index);
@@ -577,7 +583,8 @@ impl BlockDevice for VirtualPort {
         CommandWaiter {
             port: self,
             command_index: write_cmd_index,
-        }.await;
+        }
+        .await;
 
         self.clean_command(write_cmd_index);
         self.release_command_index(write_cmd_index);

@@ -6,7 +6,6 @@ use crate::proc::SCHEDULER;
 use std::lock_w_info;
 use std::string::ToString;
 use std::sync::arc::Arc;
-use std::sync::lock_info::LockLocationInfo;
 use std::{
     mem_utils::{self, VirtAddr, memset_physical_addr},
     println,

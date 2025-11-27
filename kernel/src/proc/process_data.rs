@@ -1,9 +1,23 @@
-use std::{boxed::Box, collections::btree_map::BTreeMap, lock_w_info, sync::{arc::Arc, lock_info::LockLocationInfo, no_int_spinlock::{NoIntSpinlock, NoIntSpinlockGuard}}};
+use std::{
+    boxed::Box,
+    collections::btree_map::BTreeMap,
+    lock_w_info,
+    sync::{
+        arc::Arc,
+        no_int_spinlock::{NoIntSpinlock, NoIntSpinlockGuard},
+    },
+};
 
-use crate::{interrupts::InterruptProcessorState, memory::paging::PageTree, vfs::{file::{FileDescriptor, FileHandle}, InodeIdentifier}};
+use crate::{
+    interrupts::InterruptProcessorState,
+    memory::paging::PageTree,
+    vfs::{
+        InodeIdentifier,
+        file::{FileDescriptor, FileHandle},
+    },
+};
 
-use super::{syscall::SyscallCpuState, MemoryContext, Pid};
-
+use super::{MemoryContext, Pid, syscall::SyscallCpuState};
 
 ///Describes the process metadata like memory mapping, open files, etc.
 #[derive(Debug)]
@@ -26,7 +40,7 @@ pub struct ProcessDataMutable {
 pub enum CpuStateType {
     Interrupt(InterruptProcessorState),
     Syscall((SyscallCpuState, u64)), //cpu state + userspace stack pointer
-    None, //is currently running, was taken
+    None,                            //is currently running, was taken
 }
 
 pub enum StackCpuStateData<'a> {
@@ -78,8 +92,7 @@ impl ProcessData {
             syscall_state.rax = val;
             syscall_state.rdx = err;
             Ok(())
-        }
-        else {
+        } else {
             Err(())
         }
     }

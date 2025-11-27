@@ -1,12 +1,16 @@
 use core::{
-    cell::UnsafeCell, ops::{Deref, DerefMut}, pin::Pin, sync::atomic::{AtomicU8, Ordering::*}, task::{Context, Poll}
+    cell::UnsafeCell,
+    ops::{Deref, DerefMut},
+    pin::Pin,
+    sync::atomic::{AtomicU8, Ordering::*},
+    task::{Context, Poll},
 };
 
 use alloc::boxed::Box;
 
 use crate::lock_w_info;
 
-use super::{lock_info::LockLocationInfo, no_int_spinlock::NoIntSpinlock};
+use super::no_int_spinlock::NoIntSpinlock;
 
 #[derive(Debug)]
 pub struct AsyncSpinlock<T: ?Sized> {

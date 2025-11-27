@@ -1,4 +1,3 @@
-use std::sync::lock_info::LockLocationInfo;
 use std::{lock_w_info, mem_utils::*};
 use std::sync::no_int_spinlock::NoIntSpinlock;
 

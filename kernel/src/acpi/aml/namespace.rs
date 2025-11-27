@@ -129,7 +129,6 @@ impl Namespace {
                     .root
                     .search_node(&current_path[..(current_path.len() - prefix_path.0 as usize)])?;
 
-                #[allow(invalid_reference_casting)]
                 let node = unsafe { &mut *(node as *const NamespaceNode as *mut NamespaceNode) };
 
                 let seg_slice: &[NameSeg] = (&prefix_path.1).into();
@@ -142,7 +141,6 @@ impl Namespace {
                 let current_path = self.get_namespace_sequence();
                 let node = self.root.search_node(current_path)?;
 
-                #[allow(invalid_reference_casting)]
                 let node = unsafe { &mut *(node as *const NamespaceNode as *mut NamespaceNode) };
 
                 let seg_slice: &[NameSeg] = (name_path).into();

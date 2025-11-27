@@ -15,13 +15,16 @@ use std::{
 use uuid::Uuid;
 
 use super::{
-    DeviceId, InodeIndex, InodeType,
-    filesystem_trait::{FileSystem, FileSystemFactory},
+    filesystem_trait::{FileSystem, FileSystemFactory}, DeviceId, InodeIndex, InodeType, ROOT_INODE_INDEX
 };
 
 #[derive(Debug)]
 pub(super) struct Dtmpfs {
-    global_lock: NoIntSpinlock<()>,
+    global_lock: NoIntSpinlock<DtmpfsInner>,
+}
+
+#[derive(Debug)]
+struct DtmpfsInner {
     root: u64,
     inodes: BTreeMap<u64, DtmpfsNode>,
     inode_index: u64,
@@ -41,13 +44,15 @@ impl DtmpfsFactory {
 #[async_trait::async_trait]
 impl FileSystemFactory for DtmpfsFactory {
     async fn mount(&self, _partition: crate::drivers::disk::MountedPartition) -> Arc<dyn FileSystem + Send> {
-        let mut fs = Dtmpfs {
-            global_lock: NoIntSpinlock::new(()),
-            root: 2, // Root inode index
-            inodes: BTreeMap::new(),
-            inode_index: 3,
+        let mut inodes = BTreeMap::new();
+        inodes.insert(ROOT_INODE_INDEX, DtmpfsNode { children: Vec::new() });
+        let fs = Dtmpfs {
+            global_lock: NoIntSpinlock::new(DtmpfsInner {
+                root: ROOT_INODE_INDEX, // Root inode index
+                inodes,
+                inode_index: 3,
+            }),
         };
-        fs.inodes.insert(fs.root, DtmpfsNode { children: Vec::new() });
         Arc::new(fs)
     }
 }
@@ -61,9 +66,9 @@ impl FileSystem for Dtmpfs {
     }
 
     async fn read_dir(&self, inode: InodeIndex) -> std::boxed::Box<[crate::drivers::disk::DirEntry]> {
-        let lock = lock_w_info!(self.global_lock);
+        let inner = lock_w_info!(self.global_lock);
         let mut entries = Vec::new();
-        if let Some(node) = self.inodes.get(&inode) {
+        if let Some(node) = inner.inodes.get(&inode) {
             for (name, child_inode) in &node.children {
                 entries.push(crate::drivers::disk::DirEntry {
                     name: name.clone().into_boxed_str(),
@@ -71,7 +76,7 @@ impl FileSystem for Dtmpfs {
                 });
             }
         }
-        drop(lock);
+        drop(inner);
         entries.into_boxed_slice()
     }
 
@@ -110,30 +115,25 @@ impl FileSystem for Dtmpfs {
         _uid: u16,
         _gid: u16,
     ) -> (super::Inode, super::Inode) {
-        let lock = lock_w_info!(self.global_lock);
-        #[allow(invalid_reference_casting)]
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
-        let inode_index = self.inode_index;
-        self_mut.inode_index += 1;
-        self_mut.inodes.insert(inode_index, DtmpfsNode { children: Vec::new() });
+        let mut inner = lock_w_info!(self.global_lock);
+        let inode_index = inner.inode_index;
+        inner.inode_index += 1;
+        inner.inodes.insert(inode_index, DtmpfsNode { children: Vec::new() });
 
-        let Some(parent_inode) = self_mut.inodes.get_mut(&parent_dir) else {
+        let Some(parent_inode) = inner.inodes.get_mut(&parent_dir) else {
             panic!("Parent directory inode {} not found", parent_dir);
         };
 
         parent_inode.children.push((name.to_string(), inode_index));
-        drop(lock);
+        drop(inner);
         (self.stat(parent_dir).await, self.stat(inode_index).await)
     }
 
     async fn unlink(&self, parent_inode: InodeIndex, name: &str) {
-        let lock = lock_w_info!(self.global_lock);
-        #[allow(invalid_reference_casting)]
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
-        if let Some(parent_node) = self_mut.inodes.get_mut(&parent_inode) {
+        let mut inner = lock_w_info!(self.global_lock);
+        if let Some(parent_node) = inner.inodes.get_mut(&parent_inode) {
             parent_node.children.retain(|(n, _)| n != name);
         }
-        drop(lock);
     }
 
     async fn link(&self, _inode: InodeIndex, _parent_dir: InodeIndex, _name: &str) -> super::Inode {
@@ -145,10 +145,8 @@ impl FileSystem for Dtmpfs {
     }
 
     async fn rename(&self, inode: InodeIndex, parent_inode: InodeIndex, name: &str) {
-        let lock = lock_w_info!(self.global_lock);
-        #[allow(invalid_reference_casting)]
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
-        let Some(parent_node) = self_mut.inodes.get_mut(&parent_inode) else {
+        let mut inner = lock_w_info!(self.global_lock);
+        let Some(parent_node) = inner.inodes.get_mut(&parent_inode) else {
             return;
         };
         if let Some((_, child_inode)) = parent_node.children.iter_mut().find(|(n, _)| n == name) {
@@ -156,6 +154,5 @@ impl FileSystem for Dtmpfs {
         } else {
             parent_node.children.push((name.to_string(), inode));
         }
-        drop(lock);
     }
 }

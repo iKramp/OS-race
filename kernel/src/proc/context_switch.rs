@@ -1,4 +1,4 @@
-use std::{lock_w_info, sync::lock_info::LockLocationInfo};
+use std::lock_w_info;
 
 use crate::{acpi::cpu_locals::CpuLocals, task_runner};
 

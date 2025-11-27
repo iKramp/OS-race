@@ -9,7 +9,6 @@ use core::{
 use alloc::boxed::Box;
 use crate::lock_w_info;
 use super::no_int_spinlock::NoIntSpinlock;
-use crate::sync::lock_info::LockLocationInfo;
 
 #[derive(Debug)]
 pub struct AsyncRWlock<T: ?Sized> {

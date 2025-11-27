@@ -22,7 +22,7 @@ impl<T> Rc<T> {
             count: Cell::new(1),
         })) as usize;
         Self {
-            inner: NonNull::new(address as *mut RcInner<T>).unwrap(),
+            inner: NonNull::new(address as *mut RcInner<T>).expect("OOM"),
         }
     }
 }

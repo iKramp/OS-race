@@ -1,5 +1,10 @@
 use std::{
-    boxed::Box, lock_w_info, mem_utils::{get_at_virtual_addr, translate_virt_phys_addr, PhysAddr}, println, string::String, sync::lock_info::LockLocationInfo, vec::Vec
+    boxed::Box,
+    lock_w_info,
+    mem_utils::{PhysAddr, get_at_virtual_addr, translate_virt_phys_addr},
+    println,
+    string::String,
+    vec::Vec,
 };
 
 use uuid::Uuid;

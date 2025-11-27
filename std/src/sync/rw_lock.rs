@@ -40,13 +40,13 @@ impl<T> RWSpinlock<T> {
 #[macro_export]
 macro_rules! r_lock_w_info {
     ($l:expr) => {
-        $l.lock_read(LockLocationInfo(file!(), line!(), column!()))
+        $l.lock_read($crate::sync::lock_info::LockLocationInfo(file!(), line!(), column!()))
     };
 }
 #[macro_export]
 macro_rules! w_lock_w_info {
     ($l:expr) => {
-        $l.lock_write(LockLocationInfo(file!(), line!(), column!()))
+        $l.lock_write($crate::sync::lock_info::LockLocationInfo(file!(), line!(), column!()))
     };
 }
 

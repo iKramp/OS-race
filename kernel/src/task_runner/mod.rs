@@ -2,14 +2,19 @@ use core::{
     pin::Pin,
     task::{Context, Poll, RawWaker, RawWakerVTable, Waker},
 };
-use std::{sync::arc::Arc, boxed::Box, collections::btree_map::BTreeMap, lock_w_info, sync::{lock_info::LockLocationInfo, no_int_spinlock::NoIntSpinlock}, vec::Vec};
-
-use crate::{
-    acpi::cpu_locals::CpuLocals, interrupts::{disable_interrupts, enable_interrupts}, memory::paging, proc::{self, switch_to_generic_mem_tree, Pid, ProcessData}
+use std::{
+    boxed::Box, collections::btree_map::BTreeMap, lock_w_info, sync::arc::Arc, sync::no_int_spinlock::NoIntSpinlock, vec::Vec,
 };
 
-fn nop(_:*const ()) {}
-fn nop_clone(_:*const ()) -> RawWaker {
+use crate::{
+    acpi::cpu_locals::CpuLocals,
+    interrupts::{disable_interrupts, enable_interrupts},
+    memory::paging,
+    proc::{self, Pid, ProcessData, switch_to_generic_mem_tree},
+};
+
+fn nop(_: *const ()) {}
+fn nop_clone(_: *const ()) -> RawWaker {
     RawWaker::new(core::ptr::null(), &RawWakerVTable::new(nop_clone, nop, nop, nop))
 }
 fn nop_waker() -> Waker {

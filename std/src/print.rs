@@ -1,6 +1,6 @@
 use core::fmt::{Arguments, Write};
 
-use crate::{lock_w_info, sync::{lock_info::LockLocationInfo, no_int_spinlock::*}};
+use crate::{lock_w_info, sync::no_int_spinlock::*};
 
 pub static mut PRINT: Option<&mut NoIntSpinlock<dyn Print>> = None;
 
@@ -15,7 +15,12 @@ pub trait Print: Write {
     fn set_fg_color(&mut self, color: (u8, u8, u8));
     fn reset_color(&mut self);
     fn print(&mut self, args: core::fmt::Arguments) {
-        self.write_fmt(args).unwrap();
+        let res = self.write_fmt(args).is_ok();
+        if !res {
+            self.set_fg_color((0, 0, 255));
+            let _ = self.write_str("[print error]");
+            self.reset_color();
+        }
     }
 }
 
@@ -62,18 +67,18 @@ macro_rules! printlncl {
 
 #[doc(hidden)]
 pub fn _print(args: core::fmt::Arguments) {
-    let mut lock = unsafe { lock_w_info!(PRINT.as_mut().unwrap()) };
+    let mut lock = unsafe { lock_w_info!(PRINT.as_mut().expect("printer was not set before printing")) };
     _print_locked(&mut lock, args);
 }
 
 #[doc(hidden)]
 pub fn _print_locked(lock: &mut NoIntSpinlockGuard<dyn Print>, args: core::fmt::Arguments) {
-    lock.write_fmt(args).unwrap();
+    lock.print(args);
 }
 
 #[doc(hidden)]
 pub fn _print_colored(fg: (u8, u8, u8), args: core::fmt::Arguments) {
-    let mut lock = unsafe { lock_w_info!(PRINT.as_mut().unwrap()) };
+    let mut lock = unsafe { lock_w_info!(PRINT.as_mut().expect("printer was not set before printing")) };
     lock.set_fg_color(fg);
     _print_locked(&mut lock, args);
     lock.reset_color();
@@ -91,9 +96,10 @@ pub fn _print_colored_locked(fg: (u8, u8, u8), lock: &mut NoIntSpinlockGuard<dyn
 pub fn _format(args: Arguments<'_>) -> crate::String {
     fn format_inner(args: Arguments<'_>) -> crate::String {
         let mut output = crate::String::new();
-        output
-            .write_fmt(args)
-            .expect("a formatting trait implementation returned an error when the underlying stream did not");
+        let res = output.write_fmt(args);
+        if res.is_err() {
+            output.push_str("[format error]");
+        }
         output
     }
 

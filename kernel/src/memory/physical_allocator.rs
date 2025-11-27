@@ -1,5 +1,4 @@
 use std::lock_w_info;
-use std::sync::lock_info::LockLocationInfo;
 use std::sync::no_int_spinlock::NoIntSpinlock;
 
 use crate::memory::{heap::log2_rounded_up, printlnc};

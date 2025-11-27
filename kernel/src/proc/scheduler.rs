@@ -1,9 +1,17 @@
 use crate::{acpi::cpu_locals::CpuLocals, interrupts::InterruptProcessorState, proc::Pid};
 use std::{
-    collections::{btree_map::BTreeMap, btree_set::BTreeSet}, lock_w_info, sync::{arc::Arc, lock_info::LockLocationInfo}, vec::Vec
+    collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+    lock_w_info,
+    sync::arc::Arc,
+    vec::Vec,
 };
 
-use super::{process_data::{CpuStateType, StackCpuStateData}, switch_to_generic_mem_tree, syscall::SyscallCpuState, ProcessData};
+use super::{
+    ProcessData,
+    process_data::{CpuStateType, StackCpuStateData},
+    switch_to_generic_mem_tree,
+    syscall::SyscallCpuState,
+};
 
 pub enum SleepCondition {
     Time(u64),
@@ -114,7 +122,10 @@ impl Scheduler {
     }
 
     fn save_syscalled(old_proc: &ProcessData, syscall_data: &SyscallCpuState) {
-        old_proc.set_cpu_data(CpuStateType::Syscall((syscall_data.clone(), CpuLocals::get().userspace_stack_base)));
+        old_proc.set_cpu_data(CpuStateType::Syscall((
+            syscall_data.clone(),
+            CpuLocals::get().userspace_stack_base,
+        )));
     }
 
     pub fn get_proc(&mut self, pid: Pid) -> Option<Arc<ProcessData>> {
@@ -122,11 +133,7 @@ impl Scheduler {
     }
 }
 
-pub fn save_and_release_current(
-    old_proc: &Arc<ProcessData>,
-    on_stack_data: &StackCpuStateData,
-    sleep: Option<SleepCondition>,
-) {
+pub fn save_and_release_current(old_proc: &Arc<ProcessData>, on_stack_data: &StackCpuStateData, sleep: Option<SleepCondition>) {
     let scheduler_lock = &mut lock_w_info!(super::SCHEDULER);
     let scheduler = unsafe { scheduler_lock.assume_init_mut() };
     scheduler.save_current_proc(old_proc, on_stack_data);

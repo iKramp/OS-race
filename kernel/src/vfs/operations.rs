@@ -1,5 +1,5 @@
 use std::{
-    boxed::Box, format, lock_w_info, mem_utils::PhysAddr, string::{String, ToString}, sync::{arc::Arc, no_int_spinlock::NoIntSpinlockGuard}, vec::Vec
+    boxed::Box, error::ErrorCode, lock_w_info, mem_utils::PhysAddr, printlnc, string::{String, ToString}, sync::{arc::Arc, no_int_spinlock::NoIntSpinlockGuard}, vec::Vec
 };
 
 use uuid::Uuid;
@@ -40,34 +40,74 @@ pub async fn add_disk(mut disk: Box<dyn BlockDevice + Send>) {
 //called after unmounting all partitions or when it was forcibly removed
 fn remove_disk(uuid: Uuid) {
     let mut vfs = lock_w_info!(VFS);
-    for partition in vfs.disks.remove(&uuid).unwrap().1.iter() {
-        vfs.available_partitions.remove(partition);
+    let Some(partitions) = vfs.disks.remove(&uuid) else {
+        //slow path
+        remove_disk_slow(uuid, vfs);
+        return;
+    };
+    for partition in partitions.1.iter() {
+        let part = vfs.available_partitions.remove(partition);
+        if let Some(part) = part {
+            let was_mounted = vfs.mounted_filesystems.remove(partition);
+            let had_device = vfs.devices.remove(&part.device);
+            debug_assert!(was_mounted.is_none(), "Inconsistent VFS state detected when removing disk: had mounted partitions");
+            printlnc!((0, 255, 255), "Inconsistent VFS state detected when removing disk: had mounted partitions");
+            debug_assert!(had_device.is_some(), "Inconsistent VFS state detected when removing disk: missing device for partition {}", partition);
+            printlnc!((0, 255, 255), "Inconsistent VFS state detected when removing disk: missing device for partition {}", partition);
+        } else {
+            debug_assert!(false, "Inconsistent VFS state detected when removing disk: missing partition {}", partition);
+            printlnc!((0, 255, 255), "Inconsistent VFS state detected when removing disk: missing partition {}", partition);
+        }
     }
 }
 
-pub async fn mount_blkdev_partition(part_id: Uuid, mountpoint: ResolvedPath) -> Result<(), String> {
+fn remove_disk_slow(uuid: Uuid, mut vfs: NoIntSpinlockGuard<'_, Vfs>) {
+    debug_assert!(false, "Warning: attempting to remove non existent disk {}", uuid);
+    printlnc!((0, 255, 255), "Warning: attempting to remove non existent disk {}", uuid);
+    let Vfs { 
+        available_partitions,
+        devices,
+        mounted_filesystems,
+        ..
+    } = &mut *vfs;
+    available_partitions.retain(|part_id, part| {
+        let device = devices.get(&part.device);
+        debug_assert!(device.is_some(), "Inconsistent VFS state detected when removing disk: device is none");
+        printlnc!((0, 255, 255), "Inconsistent VFS state detected when removing disk: device is none");
+        let retain = if let Some(device) = device {
+            device.drive != uuid
+        } else {
+            false //no device behind a partition, remove it
+        };
+        if retain {
+            return true;
+        }
+        let was_mounted = mounted_filesystems.remove(part_id);
+        debug_assert!(was_mounted.is_none(), "Inconsistent VFS state detected when removing disk: had mounted partitions");
+        printlnc!((0, 255, 255), "Inconsistent VFS state detected when removing disk: had mounted partitions");
+        false
+    });
+}
+
+pub async fn mount_blkdev_partition(part_id: Uuid, mountpoint: ResolvedPath) -> Result<(), ErrorCode> {
     let mut vfs = lock_w_info!(VFS);
     let Some(partition) = vfs.available_partitions.get(&part_id) else {
-        return Err("Partition not found".to_string());
+        return Err(ErrorCode::NoEntry);
     };
     let partition = partition.clone();
 
-    let device_detail = vfs.devices.get(&partition.device).unwrap();
+    let Some(device_detail) = vfs.devices.get(&partition.device) else {
+        return Err(ErrorCode::InternalFSError);
+    };
     let drive_id = device_detail.drive;
     let Some(disk) = vfs.disks.get_mut(&drive_id) else {
-        return Err("Disk not found".to_string());
+        return Err(ErrorCode::NoEntry);
     };
     let disk = &raw mut *disk.0;
     let cloned_disk: &'static mut dyn BlockDevice = unsafe { &mut *disk };
 
     let Some(fs_factory) = vfs.filesystem_driver_factories.get(&partition.fs_type).cloned() else {
-        return Err(format!(
-            "No filesystem driver loaded for \n
-                partition type: {}, \n
-                partition: {}",
-            partition.fs_type, part_id
-        )
-        .to_string());
+        return Err(ErrorCode::UnsupportedFilesystem);
     };
     drop(vfs);
 
@@ -84,7 +124,7 @@ pub async fn mount_blkdev_partition(part_id: Uuid, mountpoint: ResolvedPath) -> 
     }
 }
 
-async fn mount_filesystem(mountpoint: ResolvedPath, fs: Arc<dyn FileSystem + Send>, part_id: Uuid) -> Result<(), String> {
+async fn mount_filesystem(mountpoint: ResolvedPath, fs: Arc<dyn FileSystem + Send>, part_id: Uuid) -> Result<(), ErrorCode> {
     let root = mountpoint.inner().is_empty();
     if root {
         //mounting root
@@ -96,9 +136,7 @@ async fn mount_filesystem(mountpoint: ResolvedPath, fs: Arc<dyn FileSystem + Sen
     } else {
         let fs_root_inode = fs.stat(ROOT_INODE_INDEX).await;
         //we disallow the mounting of root failing so no checks :3
-        let (inode, _parent_inode_chain) = fs_tree::get_inode_chain((&mountpoint).into(), None)
-            .await
-            .ok_or("mountpoint not found")?;
+        let (inode, _parent_inode_chain) = fs_tree::get_inode_chain((&mountpoint).into(), None).await?;
         fs_tree::mount_inode(inode, fs_root_inode);
         let fs: Arc<dyn FileSystem + Send> = fs;
         let mut vfs = lock_w_info!(VFS);
@@ -137,8 +175,8 @@ async fn mount_vfs_adapters(mut vfs: NoIntSpinlockGuard<'_, Vfs>) {
     Box::pin(mount_filesystem(resolve_path("/proc"), proc_adapter, proc_dev.1.partition)).await.expect("Failed to mount /proc");
 }
 
-pub async fn unmount(path: ResolvedPathBorrowed<'_>) -> Result<(), String> {
-    let inodes = fs_tree::get_unmount_inodes(path, None).await.ok_or("Not a mount point")?;
+pub async fn unmount(path: ResolvedPathBorrowed<'_>) -> Result<(), ErrorCode> {
+    let inodes = fs_tree::get_unmount_inodes(path, None).await?;
     let last_part_mount = fs_tree::unmount_inode(inodes.0);
     if last_part_mount {
         let mut vfs = lock_w_info!(VFS);
@@ -158,9 +196,9 @@ pub async fn open_file(
     path: ResolvedPathBorrowed<'_>,
     from: Option<InodeIdentifierChain>,
     mut open_mode: FileFlags,
-) -> Result<FileHandle, String> {
-    let (inode_index, inode_chain) = fs_tree::get_inode_chain(path, from).await.ok_or("Path not found")?;
-    let inode = fs_tree::get_inode(inode_index).ok_or("Inode not found")?;
+) -> Result<FileHandle, ErrorCode> {
+    let (inode_index, inode_chain) = fs_tree::get_inode_chain(path, from).await?;
+    let inode = fs_tree::get_inode(inode_index).ok_or(ErrorCode::InodeNotPresent)?;
     open_mode.set_dir(inode.type_mode.is_dir());
     //TODO: check permissions
     Ok(FileHandle {
@@ -182,21 +220,24 @@ pub async fn get_dir_entries(file_handle: &FileHandle) -> Result<Box<[DirEntry]>
     Ok(fs.read_dir(file_handle.inode.index).await)
 }
 
-pub async fn create_file(parent_dir: &mut FileHandle, name: &str, inode_type: InodeType) -> Result<(), String> {
-    if !parent_dir.file_flags.dir() || !parent_dir.file_flags.write() {
-        return Err("Parent directory not opened in write mode".to_string());
+pub async fn create_file(parent_dir: &mut FileHandle, name: &str, inode_type: InodeType) -> Result<(), ErrorCode> {
+    if !parent_dir.file_flags.write() {
+        return Err(ErrorCode::InsufficientPermissions);
+    }
+    if !parent_dir.file_flags.dir() {
+        return Err(ErrorCode::UnsupportedOperation);
     }
 
-    let parent_inode = fs_tree::get_inode(parent_dir.inode).ok_or("Inode not found")?;
+    let parent_inode = fs_tree::get_inode(parent_dir.inode).ok_or(ErrorCode::InodeNotPresent)?;
     let mut vfs = lock_w_info!(VFS);
-    let device_details = vfs.devices.get(&parent_inode.device).ok_or("Device not found")?;
+    let device_details = vfs.devices.get(&parent_inode.device).ok_or(ErrorCode::InodeNotPresent)?;
     let partition_id = device_details.partition;
-    let fs = vfs.mounted_filesystems.get_mut(&partition_id).ok_or("FS not found")?;
+    let fs = vfs.mounted_filesystems.get_mut(&partition_id).ok_or(ErrorCode::InodeNotPresent)?;
     let fs = fs.clone();
     drop(vfs);
     let (file_inode, parent_inode) = fs.create(name, parent_inode.index, inode_type, 0, 0).await;
-    fs_tree::update_inode(parent_dir.inode, parent_inode);
-    fs_tree::insert_inode(parent_dir.inode, name.to_string().into_boxed_str(), file_inode);
+    fs_tree::update_inode(parent_dir.inode, parent_inode)?;
+    fs_tree::insert_inode(parent_dir.inode, name.to_string().into_boxed_str(), file_inode)?;
     Ok(())
 }
 
