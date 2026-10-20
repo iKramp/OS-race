@@ -48,8 +48,9 @@ fn fopen(args: &SyscallCpuState, proc: &Arc<ProcessData>) {
     let namespace_id = args.get_namespace_id();
     let path_len = args.get_arg(0);
     let path_ptr = args.get_arg(1);
-    let fd = args.get_arg(2);
+    let fd_rel = args.get_arg(2);
     let flags = OpenFlags(args.get_arg(3));
+    let fd = args.get_arg(4);
 
     let Some(path) = string_from_args(path_ptr, path_len) else {
         println!("fopen: invalid path pointer or length");
@@ -63,16 +64,18 @@ fn fopen(args: &SyscallCpuState, proc: &Arc<ProcessData>) {
         .get_namespace::<FilesystemNamespace>(namespace_id)
         .expect("default fs namespace must exist");
 
-    let file_source: InodeIdentifierChain = if fd == 0 {
+    let file_source: InodeIdentifierChain = if fd_rel == u64::MAX {
         fs_namespace.get_cwd_chain()
     } else {
-        let Some(f_chain) = fs_namespace.get_whole_chain(fd) else {
-            println!("fopen: invalid fd {fd}");
+        let Some(f_chain) = fs_namespace.get_whole_chain(fd_rel) else {
+            println!("fopen: invalid fd {fd_rel}");
             proc.set_syscall_return(&[u64::MAX]);
             return;
         };
         f_chain
     };
+
+    let fd = if fd == u64::MAX { None } else { Some(fd) };
 
     let pid = proc.pid();
 
@@ -90,7 +93,7 @@ fn fopen(args: &SyscallCpuState, proc: &Arc<ProcessData>) {
                 let fs_namespace = namespaces
                     .get_namespace::<FilesystemNamespace>(namespace_id)
                     .expect("default fs namespace must exist");
-                let f_descriptor = fs_namespace.open_file_handle(handle);
+                let f_descriptor = fs_namespace.open_file_handle(handle, fd);
                 drop(proc_mut);
                 proc.set_syscall_return(&[f_descriptor]);
             }

@@ -194,7 +194,7 @@ async fn make_new_root_checks(fs: &Arc<dyn FileSystem + Send>) -> Result<(), Ker
 
     //root checks
     let root_dirs = fs.read_dir(ROOT_INODE_INDEX).await?;
-    let required_dirs = ["tty", "proc", "net"];
+    let required_dirs = ["tty", "proc", "net", "null"];
     for required_dir in required_dirs.iter() {
         if !root_dirs.iter().any(|entry| entry.name.as_ref() == *required_dir) {
             println!("Root filesystem is missing required directory {required_dir}, creating it");
@@ -223,17 +223,20 @@ async fn mount_vfs_adapters(fs: &Arc<dyn FileSystem + Send>) {
     let proc_adapter_partition_id = proc_adapter.partition_id();
     let tty_adapter = crate::vfs::adapters::TtyAdapter::get();
     let tty_adapter_partition_id = tty_adapter.partition_id();
-
-    let mut vfs = lock_w_info!(VFS);
-    vfs.mounted_filesystems
-        .insert(proc_adapter_partition_id, proc_adapter.clone());
-    vfs.mounted_filesystems.insert(tty_adapter_partition_id, tty_adapter.clone());
-    drop(vfs);
+    let null_adapter = crate::vfs::adapters::NullAdapter::get();
+    let null_adapter_partition_id = null_adapter.partition_id();
 
     let adapters = [
         ("tty", tty_adapter, tty_adapter_partition_id),
         ("proc", proc_adapter, proc_adapter_partition_id),
+        ("null", null_adapter, null_adapter_partition_id),
     ];
+
+    let mut vfs = lock_w_info!(VFS);
+    for (_mountpoint, adapter, partition_id) in adapters.iter() {
+        vfs.mounted_filesystems.insert(*partition_id, adapter.clone());
+    }
+    drop(vfs);
 
     let dir_entries = fs.read_dir(ROOT_INODE_INDEX).await.expect("Failed to read root dir");
 

@@ -6,9 +6,11 @@ use crate::{drivers::block_device::disk::DirEntry, memory::addresses::PhysAddr, 
 use super::{DeviceDetails, DeviceId, Inode, InodeIndex, Vfs, filesystem_trait::FileSystem};
 
 mod net_adapter;
+mod null_adapter;
 mod proc_adapter;
 mod tty_adapter;
 
+pub use null_adapter::NullAdapter;
 pub use proc_adapter::ProcAdapter;
 pub use tty_adapter::TtyAdapter;
 use uuid::Uuid;

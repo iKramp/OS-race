@@ -20,8 +20,9 @@
 #### Args:
 1. u64 path_len - length of the path in bytes
 1. *u8 path - path to the file, absolute or relative to current working directory
-1. u64 fd - if set and path is relative, it will be relative to fd, not cwd
+1. u64 rel_fd - if set (not -1) and path is relative, it will be relative to fd, not cwd
 1. u64 flags - open mode flags
+1. u64 fd - if set (not -1) and fd is not used, this fd will be used for the new file descriptor
 #### Return Value:
  - On success, returns a non-negative file descriptor
  - On failure, returns -1
@@ -39,6 +40,7 @@ bitfield! {
 #### Description:
 Opens the file at the given path with the specified flags. If the path is absolute, it will go from root.
 If it is relative, it will either go from cwd (fd is 0) or from the directory represented by fd.
+Returns an error if fd is set and already used
 
 ### Syscall 1: fclose
 #### Args:
