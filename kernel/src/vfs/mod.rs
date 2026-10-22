@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::drivers::block_device::disk::{BlockDevice, Partition};
 
-mod adapters;
+pub mod adapters;
 mod dtmpfs;
 pub mod file;
 mod filesystem_trait;
